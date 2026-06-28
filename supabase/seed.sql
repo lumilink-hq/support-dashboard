@@ -283,3 +283,46 @@ exception
   when undefined_table or invalid_schema_name or undefined_function then
     raise notice 'Supabase Vault not available; skipped secret seed (get_client_integration_secrets demo).';
 end $$;
+
+-- 1. Create auth.users row (authentication)
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
+                        email_confirmed_at, created_at, updated_at,
+                        raw_app_meta_data, raw_user_meta_data,
+                        confirmation_token, recovery_token,
+                        email_change, email_change_token_new)
+values (
+  '00000000-0000-0000-0000-000000000000',
+  '66666666-0000-0000-0000-000000000002',  -- unique UUID for this demo user
+  'authenticated','authenticated','demo2@acme.com',
+  crypt('demo_password', gen_salt('bf')),  -- change password as needed
+  now(), now(), now(),
+  '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
+  '', '', '', ''
+)
+on conflict (id) do nothing;
+
+-- 2. Create auth.identities row (required for email/password login)
+insert into auth.identities (id, provider_id, user_id, identity_data, provider,
+                             last_sign_in_at, created_at, updated_at)
+values (
+  gen_random_uuid(),
+  '66666666-0000-0000-0000-000000000002',
+  '66666666-0000-0000-0000-000000000002',
+  jsonb_build_object(
+    'sub', '66666666-0000-0000-0000-000000000002',
+    'email', 'demo2@acme.com',
+    'email_verified', true,
+    'phone_verified', false
+  ),
+  'email', now(), now(), now()
+)
+on conflict do nothing;
+
+-- 3. Create public.users row (links user to client/tenant)
+insert into public.users (id, client_id, email, full_name, role, is_active)
+values (
+  '66666666-0000-0000-0000-000000000002',
+  '11111111-0000-0000-0000-000000000001',  -- client UUID from your tenant
+  'demo2@acme.com', 'Demo Agent', 'agent', true
+)
+on conflict (id) do nothing;
