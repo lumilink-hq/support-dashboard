@@ -31,6 +31,17 @@ export async function signup(formData: FormData) {
     (hdrs.get("origin") ||
       `https://${hdrs.get("host") ?? "localhost:3000"}`);
 
+  // Guard against the most common misconfiguration: missing public env vars,
+  // which otherwise produces an empty/unhelpful error from the Supabase client.
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  ) {
+    fail(
+      "Server isn't configured: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are missing.",
+    );
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signUp({
     email,
@@ -42,7 +53,16 @@ export async function signup(formData: FormData) {
   });
 
   if (error) {
-    fail(error.message || "Sign-up failed. Please try again.");
+    // Log the full error server-side (visible in the `next dev` terminal) and
+    // show the user a readable message even when `message` is empty.
+    console.error("[signup] auth.signUp failed:", error);
+    const detail =
+      error.message ||
+      [error.name, error.status && `status ${error.status}`]
+        .filter(Boolean)
+        .join(" ") ||
+      "Sign-up failed. Please try again.";
+    fail(detail);
   }
 
   redirect("/signup?confirm=1");
