@@ -30,6 +30,23 @@ export async function updateClientSettings(formData: FormData) {
     fail("Only admins can edit settings.");
   }
 
+  // Current settings JSON, so we merge rather than clobber unrelated keys.
+  const { data: existing } = await supabase
+    .from("clients")
+    .select("settings")
+    .eq("id", profile.client_id)
+    .maybeSingle();
+  const currentSettings =
+    (existing?.settings as Record<string, unknown> | null) ?? {};
+
+  // Support emails: comma-separated -> array. First becomes the primary
+  // support_email column (kept for the existing pipeline); full list lives in
+  // settings.support_emails.
+  const supportEmails = String(formData.get("support_emails") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   // Parse business hours JSON before touching anything else.
   const businessHoursRaw = String(formData.get("business_hours") ?? "").trim();
   let businessHours: unknown = {};
@@ -56,7 +73,7 @@ export async function updateClientSettings(formData: FormData) {
 
   const payload = {
     name: String(formData.get("name") ?? "").trim(),
-    support_email: String(formData.get("support_email") ?? "").trim() || null,
+    support_email: supportEmails[0] ?? null,
     store_platform: storePlatform || null, // enum: empty -> null
     store_base_url: String(formData.get("store_base_url") ?? "").trim() || null,
     brand_tone_config: {
@@ -69,6 +86,7 @@ export async function updateClientSettings(formData: FormData) {
       stale_after_hours: staleRaw ? staleHours : 24,
     },
     business_hours: businessHours,
+    settings: { ...currentSettings, support_emails: supportEmails },
   };
 
   const { error } = await supabase

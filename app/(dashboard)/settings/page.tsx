@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { updateClientSettings } from "./actions";
+import { CopyField } from "@/components/copy-field";
 import type { ClientRow } from "@/lib/types";
 
 const inputCls =
@@ -69,6 +70,21 @@ export default async function SettingsPage({
   const staleHours =
     typeof rules.stale_after_hours === "number" ? rules.stale_after_hours : 24;
 
+  // Inbound routing. The forwarding address is derived from the client's slug;
+  // the domain is the inbox the email-agent Zap watches.
+  const inboundDomain =
+    process.env.NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN ?? "your-domain.com";
+  const forwardingAddress = `proc+${client.slug}@${inboundDomain}`;
+
+  // Support emails the client forwards FROM. Stored as an array in settings;
+  // fall back to the legacy single support_email column.
+  const settings = (client.settings ?? {}) as { support_emails?: unknown };
+  const supportEmails = Array.isArray(settings.support_emails)
+    ? (settings.support_emails as string[])
+    : client.support_email
+      ? [client.support_email]
+      : [];
+
   return (
     <div className="max-w-2xl">
       <div className="flex items-baseline justify-between">
@@ -108,25 +124,49 @@ export default async function SettingsPage({
               className={inputCls}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Slug
-              </label>
-              <input value={client.slug} disabled className={inputCls} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Support email
-              </label>
-              <input
-                name="support_email"
-                type="email"
-                defaultValue={client.support_email ?? ""}
-                disabled={!canEdit}
-                className={inputCls}
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Slug
+            </label>
+            <input value={client.slug} disabled className={inputCls} />
+            <p className="mt-1 text-xs text-gray-400">
+              Your unique handle. It can&apos;t be changed here because your
+              inbound email address is built from it.
+            </p>
+          </div>
+        </Section>
+
+        <Section
+          title="Inbound email"
+          description="How customer emails reach the agent for this client."
+        >
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Your forwarding address
+            </label>
+            <CopyField value={forwardingAddress} />
+            <p className="mt-1 text-xs text-gray-500">
+              Forward your support inbox to this address. The agent reads the
+              <span className="font-mono"> +{client.slug}</span> tag to route
+              mail to your workspace, so keep it intact.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Your support email(s)
+            </label>
+            <input
+              name="support_emails"
+              defaultValue={supportEmails.join(", ")}
+              placeholder="support@yourstore.com, help@yourstore.com"
+              disabled={!canEdit}
+              className={inputCls}
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Comma-separated. The address(es) your customers write to and that
+              you forward into the address above. The first is used as your
+              primary reply-from.
+            </p>
           </div>
         </Section>
 
