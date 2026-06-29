@@ -6,7 +6,7 @@
 -- columns stay NULL here. When you move to Vault later, set them to the secret names.
 --
 -- Idempotent: re-running updates the row (conflict on the unique `slug`).
--- Replace the <PLACEHOLDER> values, then run. The final SELECT returns the
+-- Replace the <PLACEHOLDER> values, then run. The final SELECT returns thedb
 -- client_id you paste into each Zap's p_client_id.
 -- =============================================================================
 
