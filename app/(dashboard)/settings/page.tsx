@@ -268,6 +268,29 @@ export default async function SettingsPage({
         </Section>
 
         <Section
+          title="Agent instructions"
+          description="Your master prompt. Extra guidance the AI follows when drafting replies — policies, phrasing, what to emphasize or avoid."
+        >
+          <div>
+            <textarea
+              name="custom_instructions"
+              rows={10}
+              defaultValue={(tone.custom_instructions as string) ?? ""}
+              placeholder={
+                "e.g. Always thank the customer for their order. Our standard shipping is 3–5 business days. Never promise refunds or discounts — tell the customer a team member will follow up. Mention our 30-day return policy when relevant."
+              }
+              disabled={!canEdit}
+              className={inputCls}
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              This guidance refines tone and content, but it can&apos;t override
+              the agent&apos;s safety rules (it won&apos;t invent order details,
+              expose internal flags, or make commitments on flagged orders).
+            </p>
+          </div>
+        </Section>
+
+        <Section
           title="Escalation rules"
           description="When the agent flags an order for human review."
         >

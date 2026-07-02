@@ -80,6 +80,9 @@ export async function updateClientSettings(formData: FormData) {
       voice: String(formData.get("voice") ?? "").trim(),
       sign_off: String(formData.get("sign_off") ?? "").trim(),
       use_emoji: formData.get("use_emoji") === "on",
+      custom_instructions: String(
+        formData.get("custom_instructions") ?? "",
+      ).trim(),
     },
     abnormal_status_rules: {
       abnormal_statuses: abnormalStatuses,
