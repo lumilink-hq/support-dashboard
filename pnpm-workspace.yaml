@@ -1,0 +1,7 @@
+# pnpm settings. In pnpm v11 the "pnpm" field in package.json is no longer read;
+# build-script approvals live here now (migrated from package.json's
+# pnpm.onlyBuiltDependencies). These native packages need their install scripts
+# to run: sharp (image processing) and unrs-resolver (used by eslint-config-next).
+allowBuilds:
+  sharp: true
+  unrs-resolver: true
