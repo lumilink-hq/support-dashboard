@@ -7,8 +7,10 @@ type NavItem = { href: string; label: string; soon?: boolean };
 
 const NAV: NavItem[] = [
   { href: "/conversations", label: "Conversations" },
+  { href: "/appointments", label: "Appointments" },
+  { href: "/leads", label: "Leads" },
   { href: "/review-queue", label: "Review Queue" },
-  { href: "/appointments", label: "Appointments", soon: true },
+  { href: "/services", label: "Services" },
   { href: "/knowledge-base", label: "Knowledge base", soon: true },
   { href: "/settings", label: "Settings" },
 ];

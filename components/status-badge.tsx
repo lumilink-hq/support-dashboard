@@ -42,3 +42,31 @@ export function ChannelBadge({ channel }: { channel: string }) {
     </span>
   );
 }
+
+const APPT_STATUS_STYLES: Record<string, string> = {
+  booked: "bg-blue-50 text-blue-700",
+  confirmed: "bg-green-50 text-green-700",
+  rescheduled: "bg-amber-50 text-amber-700",
+  cancelled: "bg-gray-100 text-gray-500",
+  completed: "bg-green-50 text-green-700",
+  no_show: "bg-red-50 text-red-700",
+};
+
+export function ApptStatusBadge({ status }: { status: string }) {
+  const cls = APPT_STATUS_STYLES[status] ?? "bg-gray-100 text-gray-600";
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${cls}`}
+    >
+      {humanize(status)}
+    </span>
+  );
+}
+
+export function EmergencyChip() {
+  return (
+    <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+      🔥 Emergency
+    </span>
+  );
+}
