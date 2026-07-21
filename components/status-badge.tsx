@@ -26,3 +26,19 @@ export function FlagChip({ reason }: { reason: string | null }) {
     </span>
   );
 }
+
+// Channel indicator for the unified inbox (email + voice share the same tables).
+export function ChannelBadge({ channel }: { channel: string }) {
+  const isVoice = channel === "voice";
+  const cls = isVoice
+    ? "bg-violet-50 text-violet-700"
+    : "bg-blue-50 text-blue-700";
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium ${cls}`}
+    >
+      <span aria-hidden>{isVoice ? "☎" : "✉"}</span>
+      {isVoice ? "Voice" : "Email"}
+    </span>
+  );
+}

@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const NAV = [
+type NavItem = { href: string; label: string; soon?: boolean };
+
+const NAV: NavItem[] = [
   { href: "/conversations", label: "Conversations" },
   { href: "/review-queue", label: "Review Queue" },
+  { href: "/appointments", label: "Appointments", soon: true },
+  { href: "/knowledge-base", label: "Knowledge base", soon: true },
   { href: "/settings", label: "Settings" },
 ];
 
@@ -25,6 +29,21 @@ export function Sidebar({ clientName }: { clientName: string }) {
 
       <nav className="flex-1 space-y-1 p-3">
         {NAV.map((item) => {
+          if (item.soon) {
+            return (
+              <div
+                key={item.href}
+                aria-disabled="true"
+                title="Coming soon"
+                className="flex cursor-not-allowed select-none items-center justify-between rounded-md px-3 py-2 text-sm font-medium text-gray-400"
+              >
+                <span>{item.label}</span>
+                <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                  Soon
+                </span>
+              </div>
+            );
+          }
           const active =
             pathname === item.href || pathname.startsWith(item.href + "/");
           return (
@@ -43,9 +62,12 @@ export function Sidebar({ clientName }: { clientName: string }) {
         })}
       </nav>
 
-      <div className="border-t border-gray-200 px-5 py-3">
+      <div className="flex flex-wrap gap-1.5 border-t border-gray-200 px-5 py-3">
         <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-          Email channel
+          Email
+        </span>
+        <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
+          Voice
         </span>
       </div>
     </aside>

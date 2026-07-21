@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { StatusBadge, FlagChip } from "@/components/status-badge";
+import { StatusBadge, FlagChip, ChannelBadge } from "@/components/status-badge";
 import { OrderPanel } from "@/components/order-panel";
 import { formatDateTime, humanize } from "@/lib/format";
 import type { ConversationRow, MessageRow, OrderRow } from "@/lib/types";
@@ -34,7 +34,17 @@ function MessageBubble({ message }: { message: MessageRow }) {
           {message.model ? <span>· {message.model}</span> : null}
           <span>· {formatDateTime(message.created_at)}</span>
         </div>
-        <p className="whitespace-pre-wrap text-sm">{message.body || ""}</p>
+        {message.body ? (
+          <p className="whitespace-pre-wrap text-sm">{message.body}</p>
+        ) : null}
+        {message.audio_url ? (
+          <audio
+            controls
+            preload="none"
+            src={message.audio_url}
+            className="mt-2 w-64 max-w-full"
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -60,6 +70,7 @@ export default async function ConversationDetailPage({
     notFound();
   }
   const conversation = conv as ConversationRow;
+  const isVoice = conversation.channel === "voice";
 
   const { data: messageData } = await supabase
     .from("messages")
@@ -80,6 +91,17 @@ export default async function ConversationDetailPage({
     order = (orderData as OrderRow | null) ?? null;
   }
 
+  // Voice calls have no subject; give the thread a sensible title.
+  const title =
+    conversation.subject ||
+    (isVoice
+      ? `Call with ${conversation.customer_name || conversation.customer_identifier || "caller"}`
+      : "(no subject)");
+
+  const emptyLabel = isVoice
+    ? "No transcript for this call yet."
+    : "No messages in this thread.";
+
   return (
     <div>
       <Link
@@ -90,9 +112,8 @@ export default async function ConversationDetailPage({
       </Link>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <h1 className="text-lg font-semibold text-gray-900">
-          {conversation.subject || "(no subject)"}
-        </h1>
+        <ChannelBadge channel={conversation.channel} />
+        <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
         <StatusBadge status={conversation.status} />
         {conversation.flagged ? (
           <FlagChip reason={conversation.flag_reason} />
@@ -109,7 +130,7 @@ export default async function ConversationDetailPage({
       <div className="mt-6 flex flex-col gap-6 lg:flex-row">
         <div className="min-w-0 flex-1 space-y-3">
           {messages.length === 0 ? (
-            <p className="text-sm text-gray-400">No messages in this thread.</p>
+            <p className="text-sm text-gray-400">{emptyLabel}</p>
           ) : (
             messages.map((m) => <MessageBubble key={m.id} message={m} />)
           )}

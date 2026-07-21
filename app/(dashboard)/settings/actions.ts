@@ -71,9 +71,16 @@ export async function updateClientSettings(formData: FormData) {
 
   const storePlatform = String(formData.get("store_platform") ?? "").trim();
 
+  // Voice/phone: phone_number is a column (call-routing key); transfer_number
+  // and recording live in settings.
+  const phoneNumber = String(formData.get("phone_number") ?? "").trim();
+  const transferNumber = String(formData.get("transfer_number") ?? "").trim();
+  const recordingEnabled = formData.get("recording_enabled") === "on";
+
   const payload = {
     name: String(formData.get("name") ?? "").trim(),
     support_email: supportEmails[0] ?? null,
+    phone_number: phoneNumber || null,
     store_platform: storePlatform || null, // enum: empty -> null
     store_base_url: String(formData.get("store_base_url") ?? "").trim() || null,
     brand_tone_config: {
@@ -89,7 +96,12 @@ export async function updateClientSettings(formData: FormData) {
       stale_after_hours: staleRaw ? staleHours : 24,
     },
     business_hours: businessHours,
-    settings: { ...currentSettings, support_emails: supportEmails },
+    settings: {
+      ...currentSettings,
+      support_emails: supportEmails,
+      transfer_number: transferNumber || null,
+      recording: recordingEnabled ? "on" : "off",
+    },
   };
 
   const { error } = await supabase
