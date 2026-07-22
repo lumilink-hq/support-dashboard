@@ -9,6 +9,11 @@
 // Source of truth is Supabase (the app renders its own calendar); no external
 // calendar in the MVP. Auth: x-voice-tool-secret header, same as the other tools.
 //
+// Tenant routing is symmetric across channels: PHONE resolves the tenant from the
+// dialed number (called_number); WEB (the /demo widget) has no dialed number, so
+// it passes client_ref (the client slug) instead. Slug routing is limited to
+// is_demo clients so the public widget can never book against a real client.
+//
 // Env: SUPABASE_URL, SUPABASE_SECRET_KEYS (["default"] = service role),
 //      VOICE_TOOL_SECRET.
 // =============================================================================
@@ -32,6 +37,7 @@ if (!SERVICE_ROLE_SECRET) {
 type Body = {
   action?: "check_availability" | "book" | "capture_lead";
   called_number?: string;
+  client_ref?: string; // web tenant key (client slug) when there's no dialed number
   caller_number?: string;
   call_sid?: string;
   service_name?: string;
@@ -47,6 +53,8 @@ type Body = {
   from_date?: string; // ISO date to start scanning (optional)
   // capture_lead:
   issue?: string;
+  // diagnostics:
+  debug?: boolean;
 };
 
 function json(payload: unknown, status = 200) {
@@ -87,27 +95,53 @@ Deno.serve(async (req) => {
   }
 
   const calledNumber = body.called_number?.trim();
-  if (!calledNumber) return json({ error: "Missing called_number" }, 400);
+  const clientRef = body.client_ref?.trim();
+  if (!calledNumber && !clientRef) {
+    return json({ error: "Missing called_number or client_ref" }, 400);
+  }
 
   const supabase = createClient(SUPABASE_URL!, SERVICE_ROLE_SECRET, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // Resolve tenant from the dialed number.
-  const { data: clientId, error: resolveErr } = await supabase.rpc(
-    "resolve_client_by_number",
-    { p_called_number: calledNumber },
-  );
-  if (resolveErr) return json({ error: resolveErr.message }, 400);
+  // Resolve tenant. Phone → dialed number. Web → client_ref (slug), but ONLY for
+  // demo clients, so the public widget can never touch a real client's calendar.
+  let clientId: string | null = null;
+  if (calledNumber) {
+    const { data, error } = await supabase.rpc("resolve_client_by_number", {
+      p_called_number: calledNumber,
+    });
+    if (error) return json({ error: error.message }, 400);
+    clientId = (data as string | null) ?? null;
+  } else if (clientRef) {
+    const { data } = await supabase
+      .from("clients")
+      .select("id, settings")
+      .eq("slug", clientRef)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (data) {
+      let s: any = data.settings;
+      if (typeof s === "string") {
+        try { s = JSON.parse(s); } catch { s = {}; }
+      }
+      if (s?.is_demo) clientId = data.id as string;
+    }
+  }
   if (!clientId) return json({ found: false, unknown_number: true });
 
-  // Client scheduling config.
+  // Client scheduling config. Parse defensively in case `settings` comes back as
+  // a JSON string rather than a parsed object in the edge runtime.
   const { data: client } = await supabase
     .from("clients")
     .select("name, settings")
     .eq("id", clientId)
     .maybeSingle();
-  const cfg = readSchedulingConfig(client?.settings);
+  let settings: any = client?.settings ?? {};
+  if (typeof settings === "string") {
+    try { settings = JSON.parse(settings); } catch { settings = {}; }
+  }
+  const cfg = readSchedulingConfig(settings);
 
   // Resolve the service (by name) when one is relevant.
   async function resolveService(name?: string) {
@@ -158,6 +192,25 @@ Deno.serve(async (req) => {
       days: 14,
       limit: 6,
     });
+    let _debug: unknown = undefined;
+    if (body.debug) {
+      const { count: clientsVisible } = await supabase
+        .from("clients").select("id", { count: "exact", head: true });
+      const { count: servicesVisible } = await supabase
+        .from("services").select("id", { count: "exact", head: true });
+      _debug = {
+        client: client?.name ?? null,
+        client_id_raw: clientId,
+        client_id_type: typeof clientId,
+        clients_visible: clientsVisible,   // 0 => the function's key can't read tables (RLS/key)
+        services_visible: servicesVisible,
+        hours_days: Object.keys(cfg.hours),
+        service_found: Boolean(svc),
+        busy_count: busy.length,
+        now: new Date(nowMs).toISOString(),
+      };
+    }
+
     return json({
       ok: true,
       service: svc?.name ?? body.service_name ?? null,
@@ -167,6 +220,7 @@ Deno.serve(async (req) => {
       message: slots.length
         ? "Offer the caller 2-3 of these times."
         : "No open slots in the next two weeks — offer a callback.",
+      ...(_debug ? { _debug } : {}),
     });
   }
 
