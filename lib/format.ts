@@ -1,3 +1,10 @@
+// Business timezone used for all human-facing timestamps.
+// Server components render on the server (UTC), so we must format explicitly
+// in the business's timezone or wall-clock times come out 7-8h ahead.
+// Override with NEXT_PUBLIC_BUSINESS_TIMEZONE if the business relocates.
+const BUSINESS_TZ =
+  process.env.NEXT_PUBLIC_BUSINESS_TIMEZONE || "America/Los_Angeles";
+
 export function timeAgo(iso: string | null): string {
   if (!iso) return "—";
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -8,12 +15,12 @@ export function timeAgo(iso: string | null): string {
   if (hr < 24) return `${hr}h ago`;
   const day = Math.round(hr / 24);
   if (day < 30) return `${day}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return new Date(iso).toLocaleDateString("en-US", { timeZone: BUSINESS_TZ });
 }
 
 export function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString();
+  return new Date(iso).toLocaleString("en-US", { timeZone: BUSINESS_TZ });
 }
 
 export function formatMoney(
