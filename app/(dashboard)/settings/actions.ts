@@ -71,24 +71,22 @@ export async function updateClientSettings(formData: FormData) {
 
   const storePlatform = String(formData.get("store_platform") ?? "").trim();
 
-  // Voice/phone: phone_number is a column (call-routing key); transfer_number
-  // and recording live in settings.
-  const phoneNumber = String(formData.get("phone_number") ?? "").trim();
-  const transferNumber = String(formData.get("transfer_number") ?? "").trim();
-  const recordingEnabled = formData.get("recording_enabled") === "on";
-
   const payload = {
     name: String(formData.get("name") ?? "").trim(),
     support_email: supportEmails[0] ?? null,
-    phone_number: phoneNumber || null,
     store_platform: storePlatform || null, // enum: empty -> null
     store_base_url: String(formData.get("store_base_url") ?? "").trim() || null,
     brand_tone_config: {
       voice: String(formData.get("voice") ?? "").trim(),
       sign_off: String(formData.get("sign_off") ?? "").trim(),
       use_emoji: formData.get("use_emoji") === "on",
+      // Email-only guidance (consumed by the email agent via get_client_config).
       custom_instructions: String(
         formData.get("custom_instructions") ?? "",
+      ).trim(),
+      // Phone-only guidance (consumed by voice-personalization's prompt builder).
+      voice_instructions: String(
+        formData.get("voice_instructions") ?? "",
       ).trim(),
     },
     abnormal_status_rules: {
@@ -96,12 +94,7 @@ export async function updateClientSettings(formData: FormData) {
       stale_after_hours: staleRaw ? staleHours : 24,
     },
     business_hours: businessHours,
-    settings: {
-      ...currentSettings,
-      support_emails: supportEmails,
-      transfer_number: transferNumber || null,
-      recording: recordingEnabled ? "on" : "off",
-    },
+    settings: { ...currentSettings, support_emails: supportEmails },
   };
 
   const { error } = await supabase

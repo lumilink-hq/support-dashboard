@@ -9,11 +9,6 @@
 // Source of truth is Supabase (the app renders its own calendar); no external
 // calendar in the MVP. Auth: x-voice-tool-secret header, same as the other tools.
 //
-// Tenant routing is symmetric across channels: PHONE resolves the tenant from the
-// dialed number (called_number); WEB (the /demo widget) has no dialed number, so
-// it passes client_ref (the client slug) instead. Slug routing is limited to
-// is_demo clients so the public widget can never book against a real client.
-//
 // Env: SUPABASE_URL, SUPABASE_SECRET_KEYS (["default"] = service role),
 //      VOICE_TOOL_SECRET.
 // =============================================================================
@@ -37,7 +32,6 @@ if (!SERVICE_ROLE_SECRET) {
 type Body = {
   action?: "check_availability" | "book" | "capture_lead";
   called_number?: string;
-  client_ref?: string; // web tenant key (client slug) when there's no dialed number
   caller_number?: string;
   call_sid?: string;
   service_name?: string;
@@ -95,39 +89,18 @@ Deno.serve(async (req) => {
   }
 
   const calledNumber = body.called_number?.trim();
-  const clientRef = body.client_ref?.trim();
-  if (!calledNumber && !clientRef) {
-    return json({ error: "Missing called_number or client_ref" }, 400);
-  }
+  if (!calledNumber) return json({ error: "Missing called_number" }, 400);
 
   const supabase = createClient(SUPABASE_URL!, SERVICE_ROLE_SECRET, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // Resolve tenant. Phone → dialed number. Web → client_ref (slug), but ONLY for
-  // demo clients, so the public widget can never touch a real client's calendar.
-  let clientId: string | null = null;
-  if (calledNumber) {
-    const { data, error } = await supabase.rpc("resolve_client_by_number", {
-      p_called_number: calledNumber,
-    });
-    if (error) return json({ error: error.message }, 400);
-    clientId = (data as string | null) ?? null;
-  } else if (clientRef) {
-    const { data } = await supabase
-      .from("clients")
-      .select("id, settings")
-      .eq("slug", clientRef)
-      .eq("is_active", true)
-      .maybeSingle();
-    if (data) {
-      let s: any = data.settings;
-      if (typeof s === "string") {
-        try { s = JSON.parse(s); } catch { s = {}; }
-      }
-      if (s?.is_demo) clientId = data.id as string;
-    }
-  }
+  // Resolve tenant from the dialed number.
+  const { data: clientId, error: resolveErr } = await supabase.rpc(
+    "resolve_client_by_number",
+    { p_called_number: calledNumber },
+  );
+  if (resolveErr) return json({ error: resolveErr.message }, 400);
   if (!clientId) return json({ found: false, unknown_number: true });
 
   // Client scheduling config. Parse defensively in case `settings` comes back as
@@ -178,8 +151,17 @@ Deno.serve(async (req) => {
   if (action === "check_availability") {
     const svc = await resolveService(body.service_name);
     const durationMin = svc?.default_duration_min ?? 60;
-    const fromMs = body.from_date ? Date.parse(body.from_date) : nowMs;
-    const busy = await busyRanges(Number.isNaN(fromMs) ? nowMs : fromMs, 14);
+    // Optional from_date. A date-only value (YYYY-MM-DD) is anchored to noon UTC
+    // so it lands on the intended LOCAL day — a bare date parses as UTC midnight,
+    // which is the previous day in US timezones. Never scan into the past.
+    let fromMs = nowMs;
+    if (body.from_date) {
+      const raw = body.from_date.trim();
+      const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T12:00:00Z` : raw;
+      const parsed = Date.parse(iso);
+      if (!Number.isNaN(parsed)) fromMs = Math.max(parsed, nowMs);
+    }
+    const busy = await busyRanges(fromMs, 14);
     const slots = generateSlots({
       hours: cfg.hours,
       timeZone: cfg.timezone,
@@ -188,7 +170,7 @@ Deno.serve(async (req) => {
       minNoticeMin: cfg.min_notice_minutes,
       nowMs,
       busy,
-      fromMs: Number.isNaN(fromMs) ? nowMs : fromMs,
+      fromMs,
       days: 14,
       limit: 6,
     });

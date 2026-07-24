@@ -31,6 +31,7 @@ export type ClientConfig = {
   serviceArea: string | null;
   hoursHuman: string | null; // human-readable business hours
   transferNumber: string | null;
+  extraInstructions: string; // phone-only free-form guidance from the dashboard
   isDemo: boolean;
 };
 
@@ -84,6 +85,12 @@ export function readClientConfig(row: {
     serviceArea: (scheduling.service_area as string) ?? null,
     hoursHuman: hoursHuman || null,
     transferNumber: (settings.transfer_number as string) ?? null,
+    // Phone-only free-form guidance. `voice_instructions` is the phone analog of
+    // `custom_instructions` (which stays email-only); tolerate either being unset.
+    extraInstructions:
+      typeof brand.voice_instructions === "string"
+        ? brand.voice_instructions.trim()
+        : "",
     isDemo: Boolean(settings.is_demo),
   };
 }
@@ -151,6 +158,13 @@ export function buildSystemPrompt(
     ? "During business hours you may warm-transfer to a human using the transfer tool. Outside business hours, take a message and capture the lead instead."
     : "There is no live human line, so when you cannot help, capture the caller's details as a lead and tell them the team will follow up.";
 
+  // Phone-only guidance the business typed in the dashboard. It refines what the
+  // agent says but must not override the flow/guardrails, so it goes near the end,
+  // clearly framed as additional guidance.
+  const extraBlock = cfg.extraInstructions
+    ? `\n\nAdditional instructions from ${cfg.name} (follow these unless they conflict with the rules above):\n${cfg.extraInstructions}\n`
+    : "";
+
   return `You are ${cfg.persona}, the phone scheduling assistant for ${cfg.name}. You are speaking out loud on a live call, so keep replies short, natural, and one idea at a time. Never read out URLs, IDs, JSON, or internal fields.
 ${demoNote}
 Your tone is ${cfg.brandVoice}.
@@ -175,7 +189,7 @@ Flow:
 4. If the requested time was just taken, apologize briefly and offer another slot.
 5. Emergencies (no heat/AC out, safety issues): treat as urgent, prefer the soonest slot, and set the emergency flag when booking. ${transferLine}
 6. If they're done or you've booked, close politely and end the call.
-
+${extraBlock}
 Never promise a specific technician, an exact arrival minute, or a price the service menu doesn't list. Stay warm and concise.`;
 }
 

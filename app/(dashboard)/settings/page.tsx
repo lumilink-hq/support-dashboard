@@ -78,22 +78,12 @@ export default async function SettingsPage({
 
   // Support emails the client forwards FROM. Stored as an array in settings;
   // fall back to the legacy single support_email column.
-  const settings = (client.settings ?? {}) as {
-    support_emails?: unknown;
-    transfer_number?: unknown;
-    recording?: unknown;
-  };
+  const settings = (client.settings ?? {}) as { support_emails?: unknown };
   const supportEmails = Array.isArray(settings.support_emails)
     ? (settings.support_emails as string[])
     : client.support_email
       ? [client.support_email]
       : [];
-
-  // Voice/phone config. phone_number is a column (the call-routing key);
-  // transfer_number + recording live in settings.
-  const transferNumber =
-    typeof settings.transfer_number === "string" ? settings.transfer_number : "";
-  const recordingEnabled = settings.recording === "on";
 
   return (
     <div className="max-w-2xl">
@@ -178,61 +168,6 @@ export default async function SettingsPage({
               primary reply-from.
             </p>
           </div>
-        </Section>
-
-        <Section
-          title="Voice &amp; phone"
-          description="How phone calls reach the agent and where escalations go."
-        >
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Inbound phone number
-            </label>
-            <input
-              name="phone_number"
-              defaultValue={client.phone_number ?? ""}
-              placeholder="+14155550123"
-              disabled={!canEdit}
-              className={inputCls}
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              The number customers call. Store it in E.164 (e.g.
-              <span className="font-mono"> +14155550123</span>) — it routes
-              incoming calls to this workspace, so it must match the number
-              connected in your voice provider.
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Warm-transfer number
-            </label>
-            <input
-              name="transfer_number"
-              defaultValue={transferNumber}
-              placeholder="+14155559876"
-              disabled={!canEdit}
-              className={inputCls}
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              Where the agent transfers callers during business hours when an
-              order is flagged or the caller asks for a person. Leave blank to
-              always take a callback instead.
-            </p>
-          </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              name="recording_enabled"
-              defaultChecked={recordingEnabled}
-              disabled={!canEdit}
-              className="h-4 w-4 rounded border-gray-300"
-            />
-            Record calls
-          </label>
-          <p className="-mt-2 text-xs text-gray-400">
-            Stores call audio on the conversation. Consent requirements vary by
-            state — keep this off unless your greeting discloses recording.
-          </p>
         </Section>
 
         <Section
@@ -333,8 +268,8 @@ export default async function SettingsPage({
         </Section>
 
         <Section
-          title="Agent instructions"
-          description="Your master prompt. Extra guidance the AI follows when drafting replies — policies, phrasing, what to emphasize or avoid."
+          title="Email instructions"
+          description="Extra guidance the email agent follows when drafting replies — policies, phrasing, what to emphasize or avoid. Applies to email only; the phone agent has its own box below."
         >
           <div>
             <textarea
@@ -351,6 +286,29 @@ export default async function SettingsPage({
               This guidance refines tone and content, but it can&apos;t override
               the agent&apos;s safety rules (it won&apos;t invent order details,
               expose internal flags, or make commitments on flagged orders).
+            </p>
+          </div>
+        </Section>
+
+        <Section
+          title="Phone instructions"
+          description="Extra guidance the phone agent follows on live calls, on top of the built-in booking flow. Applies to voice only; it doesn't change the email agent."
+        >
+          <div>
+            <textarea
+              name="voice_instructions"
+              rows={10}
+              defaultValue={(tone.voice_instructions as string) ?? ""}
+              placeholder={
+                "e.g. Greet callers by mentioning our same-day service. If someone asks about financing, tell them we offer 12-month plans and a team member will go over details. Never quote a repair total over the phone — the price is confirmed on site."
+              }
+              disabled={!canEdit}
+              className={inputCls}
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              This refines what the phone agent says, but it can&apos;t override
+              its safety rules or booking logic (it won&apos;t invent
+              availability, prices, or confirmations).
             </p>
           </div>
         </Section>
