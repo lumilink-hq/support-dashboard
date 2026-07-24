@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { LumiWidget } from "@/components/lumi-widget";
 
 export const metadata: Metadata = {
   title: "Meet Lumi — the AI receptionist that books jobs 24/7 | LumiLink",
@@ -7,10 +6,9 @@ export const metadata: Metadata = {
     "Try Lumi, the AI phone receptionist for home-service companies. Book a service visit with our demo HVAC company — by phone or in your browser.",
 };
 
-// Set NEXT_PUBLIC_ELEVENLABS_AGENT_ID in the environment to enable the browser
-// widget. Until then it renders with a placeholder id (the call-in link works
-// regardless).
-const AGENT_ID = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID ?? "YOUR_AGENT_ID";
+// The browser widget is disabled for now — it can't book because a browser call
+// has no dialed number to resolve the client (see docs/client-onboarding.md).
+// The call-in demo below is the live path.
 const PHONE_DISPLAY = "(213) 533-2469";
 const PHONE_TEL = "+12135332469";
 
@@ -89,8 +87,7 @@ export default function DemoPage() {
             </a>
           </div>
           <p className="mt-4 text-sm text-blue-200">
-            Or tap the <strong>chat button in the bottom corner</strong> to talk to Lumi in your
-            browser.
+            Call from any phone — Lumi answers live and books the visit.
           </p>
         </section>
 
@@ -98,8 +95,8 @@ export default function DemoPage() {
         <section id="try" className="mt-12 scroll-mt-6">
           <h2 className="text-2xl font-semibold tracking-tight">Try it — a few things to say</h2>
           <p className="mt-1.5 max-w-[60ch] text-slate-500">
-            Call the number or use the on-page widget, then try one of these. Lumi checks real
-            availability and books into a live demo calendar.
+            Call the demo line, then try one of these. Lumi checks real availability and books
+            into a live demo calendar.
           </p>
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {PROMPTS.map((p) => (
@@ -161,8 +158,6 @@ export default function DemoPage() {
           </div>
         </footer>
       </div>
-
-      <LumiWidget agentId={AGENT_ID} />
     </div>
   );
 }
