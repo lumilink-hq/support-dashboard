@@ -83,9 +83,35 @@ Deno.serve(async (req) => {
   }
 
   const f = extractCallFields(payload);
-  if (!f.callSid || !f.calledNumber) {
+
+  // Diagnostic: surface where the phone fields actually live in the payload, so
+  // Supabase → Edge Functions → voice-call-logger → Logs shows the real shape.
+  console.log(
+    "voice-call-logger:",
+    JSON.stringify({
+      type: payload?.type,
+      data_keys: Object.keys(payload?.data ?? {}),
+      metadata_keys: Object.keys((payload?.data as any)?.metadata ?? {}),
+      phone_call: (payload?.data as any)?.metadata?.phone_call ?? null,
+      dv_keys: Object.keys(
+        payload?.data?.conversation_initiation_client_data
+          ?.dynamic_variables ?? {},
+      ),
+      transcript_len: (payload?.data?.transcript ?? []).length,
+      extracted: f,
+    }),
+  );
+
+  // Use the Twilio call SID when present, else fall back to ElevenLabs'
+  // conversation id (web/SIP calls have no call SID). Either serves as the
+  // conversation's external_ref.
+  const ref = f.callSid ?? f.elevenConversationId;
+  if (!ref || !f.calledNumber) {
     return json(
-      { error: "Missing system__call_sid / system__called_number in payload" },
+      {
+        error:
+          "Could not extract a call reference or dialed number from the payload",
+      },
       400,
     );
   }
@@ -101,14 +127,14 @@ Deno.serve(async (req) => {
   );
   if (resolveErr) return json({ error: resolveErr.message }, 400);
   if (!clientId) {
-    return json({ ok: false, unknown_number: true, call_sid: f.callSid });
+    return json({ ok: false, unknown_number: true, call_ref: ref });
   }
 
   // 2) Ensure the conversation exists (idempotent; the lookup tool usually made
   //    it already). Returns the conversation id we log turns against.
   const { data: convId, error: convErr } = await supabase.rpc("ingest_call", {
     p_client_id: clientId,
-    p_call_sid: f.callSid,
+    p_call_sid: ref,
     p_caller_identifier: f.callerId,
     p_caller_name: null,
     p_order_number: null, // preserve any order number set mid-call (coalesced)
@@ -117,7 +143,7 @@ Deno.serve(async (req) => {
 
   // 3) Append transcript turns. The final turn advances status to 'resolved';
   //    an escalation below may override it to 'flagged'.
-  const turns = buildTurns(payload?.data?.transcript, f.callSid);
+  const turns = buildTurns(payload?.data?.transcript, ref);
   let logged = 0;
   for (let i = 0; i < turns.length; i++) {
     const isLast = i === turns.length - 1;

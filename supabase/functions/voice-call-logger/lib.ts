@@ -18,6 +18,9 @@ export type PostCallPayload = {
     conversation_id?: string;
     status?: string;
     transcript?: ElevenTurn[];
+    // Phone-call metadata for Twilio/SIP calls lives here in the post-call
+    // payload (call_sid + numbers), separate from the live-call dynamic vars.
+    metadata?: Record<string, any>;
     conversation_initiation_client_data?: {
       dynamic_variables?: Record<string, unknown>;
     };
@@ -45,22 +48,57 @@ export function mapRole(role: string | undefined): "customer" | "agent" {
   return role === "user" ? "customer" : "agent";
 }
 
-// Pull the phone identifiers out of the post-call payload. They live in the
-// call's system dynamic variables; fall back to the ElevenLabs conversation id
-// for the id field.
+// Pull the phone identifiers out of the post-call payload. Different ElevenLabs
+// payload shapes carry these in different places, so we check the call's system
+// dynamic variables AND the metadata.phone_call block (where Twilio/SIP call
+// info actually lands post-call), trying several known key spellings.
 export function extractCallFields(payload: PostCallPayload): CallFields {
+  const data = payload?.data ?? {};
   const dv =
-    payload?.data?.conversation_initiation_client_data?.dynamic_variables ?? {};
+    (data.conversation_initiation_client_data?.dynamic_variables ?? {}) as Record<
+      string,
+      unknown
+    >;
+  const meta = (data.metadata ?? {}) as Record<string, any>;
+  const phone = (meta.phone_call ?? {}) as Record<string, any>;
   const str = (v: unknown) =>
     typeof v === "string" && v.length > 0 ? v : null;
+
+  const first = (...vals: unknown[]) => {
+    for (const v of vals) {
+      const s = str(v);
+      if (s) return s;
+    }
+    return null;
+  };
+
   return {
-    callSid: str(dv["system__call_sid"]),
-    calledNumber: str(dv["system__called_number"]),
-    callerId: str(dv["system__caller_id"]),
-    elevenConversationId:
-      str(dv["system__conversation_id"]) ??
-      str(payload?.data?.conversation_id),
-    status: str(payload?.data?.status),
+    callSid: first(
+      dv["system__call_sid"],
+      phone.call_sid,
+      phone.callSid,
+      meta.call_sid,
+    ),
+    calledNumber: first(
+      dv["system__called_number"],
+      phone.agent_number,
+      phone.called_number,
+      phone.to_number,
+      phone.to,
+      meta.called_number,
+    ),
+    callerId: first(
+      dv["system__caller_id"],
+      phone.external_number,
+      phone.caller_number,
+      phone.from_number,
+      phone.from,
+    ),
+    elevenConversationId: first(
+      dv["system__conversation_id"],
+      data.conversation_id,
+    ),
+    status: str(data.status),
   };
 }
 
