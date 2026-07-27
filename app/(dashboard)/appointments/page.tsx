@@ -2,6 +2,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { ApptStatusBadge, EmergencyChip } from "@/components/status-badge";
 import { formatMoney } from "@/lib/format";
+import { featureGate } from "@/lib/entitlements";
+import { FeatureLock } from "@/components/feature-lock";
 import type { AppointmentRow } from "@/lib/types";
 
 const DEFAULT_TZ = "America/Los_Angeles";
@@ -70,6 +72,11 @@ export default async function AppointmentsPage({
 }) {
   const { week } = await searchParams;
   const weekOffset = Number.isFinite(Number(week)) ? parseInt(week ?? "0", 10) : 0;
+
+  // Voice/scheduling is a paid feature. When enforcement is on, a tenant without
+  // it sees the upsell instead of the calendar. (No-op while enforcement is off.)
+  const gate = await featureGate("voice");
+  if (gate.locked) return <FeatureLock feature="voice" state={gate.state} />;
 
   const supabase = await createClient();
 

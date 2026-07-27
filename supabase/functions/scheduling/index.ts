@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
-import { formatLabel, generateSlots } from "./lib.ts";
+import { formatLabel, generateSlots, isWithinHours } from "./lib.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const rawSecrets = Deno.env.get("SUPABASE_SECRET_KEYS");
@@ -22,6 +22,13 @@ const VOICE_TOOL_SECRET = Deno.env.get("VOICE_TOOL_SECRET");
 
 if (!SUPABASE_URL) throw new Error("SUPABASE_URL is required");
 if (!rawSecrets) throw new Error("SUPABASE_SECRET_KEYS is required");
+// Fail CLOSED: this endpoint writes bookings into tenant calendars, so a missing
+// tool secret must refuse to boot — never silently serve an unauthenticated,
+// internet-reachable endpoint. (Previously the header check was skipped when the
+// secret was unset, which quietly opened the endpoint.)
+if (!VOICE_TOOL_SECRET) {
+  throw new Error("VOICE_TOOL_SECRET is required (endpoint refuses to run open).");
+}
 const SERVICE_ROLE_SECRET = (JSON.parse(rawSecrets) as Record<string, string>)[
   "default"
 ];
@@ -30,12 +37,18 @@ if (!SERVICE_ROLE_SECRET) {
 }
 
 type Body = {
-  action?: "check_availability" | "book" | "capture_lead";
+  action?:
+    | "check_availability"
+    | "book"
+    | "capture_lead"
+    | "find_appointment"
+    | "cancel"
+    | "reschedule";
   called_number?: string;
   caller_number?: string;
   call_sid?: string;
   service_name?: string;
-  // book:
+  // book / reschedule:
   appointment_start?: string; // ISO 8601 with offset
   customer_name?: string;
   customer_email?: string;
@@ -43,6 +56,9 @@ type Body = {
   service_address?: string;
   is_emergency?: boolean;
   notes?: string;
+  // find_appointment / cancel / reschedule:
+  appointment_id?: string;
+  reason?: string;
   // check_availability:
   from_date?: string; // ISO date to start scanning (optional)
   // capture_lead:
@@ -77,7 +93,8 @@ function readSchedulingConfig(settings: any): SchedulingConfig {
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
-  if (VOICE_TOOL_SECRET && req.headers.get("x-voice-tool-secret") !== VOICE_TOOL_SECRET) {
+  // VOICE_TOOL_SECRET is guaranteed present (boot check above), so always enforce.
+  if (req.headers.get("x-voice-tool-secret") !== VOICE_TOOL_SECRET) {
     return json({ error: "Unauthorized" }, 401);
   }
 
@@ -147,6 +164,35 @@ Deno.serve(async (req) => {
   const action = body.action ?? "check_availability";
   const nowMs = Date.now();
 
+  // Reject agent-proposed times that are in the past, inside the min-notice
+  // window, or outside business hours. The DB exclusion constraint only guards
+  // double-booking; these are the other ways a hallucinated/misheard time slips
+  // through. Returns a caller-facing error, or null when the start is valid.
+  function validateStart(
+    startMs: number,
+    durationMin: number,
+  ): { reason: string; message: string } | null {
+    if (Number.isNaN(startMs) || startMs <= nowMs) {
+      return {
+        reason: "past_time",
+        message: "That time is in the past — offer an upcoming slot from check_availability.",
+      };
+    }
+    if (startMs < nowMs + cfg.min_notice_minutes * 60_000) {
+      return {
+        reason: "too_soon",
+        message: "That's inside the minimum-notice window — offer a later slot.",
+      };
+    }
+    if (!isWithinHours(startMs, durationMin, cfg.hours, cfg.timezone)) {
+      return {
+        reason: "outside_hours",
+        message: "That's outside business hours — offer a slot from check_availability instead.",
+      };
+    }
+    return null;
+  }
+
   // ---------------------------------------------------------------------------
   if (action === "check_availability") {
     const svc = await resolveService(body.service_name);
@@ -215,6 +261,11 @@ Deno.serve(async (req) => {
     const svc = await resolveService(body.service_name);
     const durationMin = svc?.default_duration_min ?? 60;
     const startMs = Date.parse(startIso);
+
+    // Guard past / too-soon / outside-hours before we touch the DB.
+    const invalid = validateStart(startMs, durationMin);
+    if (invalid) return json({ ok: false, ...invalid });
+
     const endIso = new Date(startMs + durationMin * 60_000).toISOString();
 
     // Link the conversation (voice) if we have a call SID.
@@ -266,17 +317,19 @@ Deno.serve(async (req) => {
 
   // ---------------------------------------------------------------------------
   if (action === "capture_lead") {
-    let convId: string | null = null;
-    if (body.call_sid) {
-      const { data: cid } = await supabase.rpc("ingest_call", {
-        p_client_id: clientId,
-        p_call_sid: body.call_sid,
-        p_caller_identifier: body.caller_number ?? null,
-        p_caller_name: body.customer_name ?? null,
-        p_order_number: null,
-      });
-      convId = cid ?? null;
-    }
+    // A phone call carries a call_sid; a web/widget lead does not. Synthesize a
+    // stable ref for the web case so ingest_call still creates a conversation —
+    // otherwise the lead was silently dropped (the old code returned ok:true while
+    // persisting nothing whenever call_sid was absent).
+    const callSid = body.call_sid ?? `web-${crypto.randomUUID()}`;
+    const { data: cid } = await supabase.rpc("ingest_call", {
+      p_client_id: clientId,
+      p_call_sid: callSid,
+      p_caller_identifier: body.caller_number ?? body.customer_phone ?? null,
+      p_caller_name: body.customer_name ?? null,
+      p_order_number: null,
+    });
+    const convId = cid ?? null;
     if (convId) {
       await supabase.rpc("capture_lead", {
         p_conversation_id: convId,
@@ -285,7 +338,113 @@ Deno.serve(async (req) => {
         p_outcome: "lead_only",
       });
     }
-    return json({ ok: true, message: "Lead saved. A team member will follow up." });
+    return json({
+      ok: Boolean(convId),
+      message: convId
+        ? "Lead saved. A team member will follow up."
+        : "Couldn't save the lead just now — take the caller's details and follow up manually.",
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // find_appointment — look up the caller's upcoming appointment(s) so they can be
+  // cancelled or rescheduled. Phone-first (the number they're calling from), name
+  // as a fallback. The agent confirms which one before acting.
+  if (action === "find_appointment") {
+    const phone = body.customer_phone ?? body.caller_number ?? null;
+    const { data, error } = await supabase.rpc("find_appointments", {
+      p_client_id: clientId,
+      p_customer_phone: phone,
+      p_customer_name: body.customer_name ?? null,
+    });
+    if (error) return json({ ok: false, error: error.message }, 400);
+    const rows = (data ?? []) as Array<Record<string, any>>;
+    const appointments = rows.map((a) => ({
+      appointment_id: a.appointment_id,
+      service: a.service_name,
+      when: formatLabel(a.starts_at, a.timezone ?? cfg.timezone),
+      start: a.starts_at,
+      status: a.status,
+      address: a.service_address ?? null,
+    }));
+    return json({
+      ok: true,
+      count: appointments.length,
+      appointments,
+      message: appointments.length === 0
+        ? "No upcoming appointment found for that caller — offer to book one or take a message."
+        : appointments.length === 1
+        ? "One appointment found. Read it back and confirm it's the right one before changing it."
+        : "Several appointments — read them out and let the caller pick which one.",
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // cancel — cancel an appointment found via find_appointment. Frees the slot.
+  if (action === "cancel") {
+    const id = body.appointment_id?.trim();
+    if (!id) {
+      return json({ ok: false, reason: "missing_id", message: "Call find_appointment first, then cancel by appointment_id." });
+    }
+    const { data, error } = await supabase.rpc("cancel_appointment", {
+      p_client_id: clientId,
+      p_appointment_id: id,
+      p_reason: body.reason ?? body.notes ?? null,
+    });
+    if (error) return json({ ok: false, error: error.message }, 400);
+    if (!data?.ok) {
+      return json({ ok: false, reason: data?.reason ?? "unknown", message: "Couldn't find that appointment to cancel — re-check with find_appointment." });
+    }
+    return json({
+      ok: true,
+      service: data.service_name,
+      when: formatLabel(data.starts_at, cfg.timezone),
+      message: "Cancelled. Confirm to the caller and ask if there's anything else.",
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // reschedule — move an appointment (found via find_appointment) to a new start
+  // from check_availability. Same duration; a clash returns slot_unavailable.
+  if (action === "reschedule") {
+    const id = body.appointment_id?.trim();
+    const startIso = body.appointment_start?.trim();
+    if (!id) {
+      return json({ ok: false, reason: "missing_id", message: "Call find_appointment first, then reschedule by appointment_id." });
+    }
+    if (!startIso || Number.isNaN(Date.parse(startIso))) {
+      return json({ ok: false, reason: "bad_start", message: "Need a valid new appointment_start (an ISO start from check_availability)." });
+    }
+    // Same past / too-soon / outside-hours guard as book. Duration is derived in
+    // the RPC, so validate that the new start lands inside the open window.
+    const invalidResched = validateStart(Date.parse(startIso), 0);
+    if (invalidResched) return json({ ok: false, ...invalidResched });
+    const { data, error } = await supabase.rpc("reschedule_appointment", {
+      p_client_id: clientId,
+      p_appointment_id: id,
+      p_new_starts_at: startIso,
+    });
+    if (error) return json({ ok: false, error: error.message }, 400);
+    if (!data?.ok) {
+      const reason = data?.reason ?? "unknown";
+      const messages: Record<string, string> = {
+        slot_unavailable: "That new time was just taken — offer another slot and try again.",
+        already_started: "That appointment has already passed — don't move it; offer to book a new visit instead.",
+        past_time: "The new time must be in the future — offer an upcoming slot from check_availability.",
+        not_found: "Couldn't find that appointment to reschedule — re-check with find_appointment.",
+      };
+      return json({
+        ok: false,
+        reason,
+        message: messages[reason] ?? "Couldn't reschedule — re-check with find_appointment.",
+      });
+    }
+    return json({
+      ok: true,
+      service: data.service_name,
+      when: formatLabel(data.starts_at, cfg.timezone),
+      message: "Rescheduled. Confirm the new time to the caller.",
+    });
   }
 
   return json({ error: `Unknown action: ${action}` }, 400);

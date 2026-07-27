@@ -13,6 +13,7 @@ const NAV: NavItem[] = [
   { href: "/services", label: "Services" },
   { href: "/knowledge-base", label: "Knowledge base", soon: true },
   { href: "/settings", label: "Settings" },
+  { href: "/billing", label: "Plans & billing" },
 ];
 
 export function Sidebar({ clientName }: { clientName: string }) {

@@ -35,9 +35,14 @@ export type ClientConfig = {
   isDemo: boolean;
 };
 
-// ElevenLabs conversation-initiation response. `dynamic_variables` is required
-// (must include every variable the agent references); the override is optional.
+// ElevenLabs conversation-initiation response. The top-level `type` discriminator
+// is REQUIRED — ElevenLabs uses it to recognize the body as conversation-initiation
+// client data. Omit it and ElevenLabs answers 200 but silently discards the
+// dynamic_variables AND the override (the agent then uses its base prompt and the
+// conversation's "Client Overrides" shows empty). `dynamic_variables` must include
+// every variable the agent references; the override is optional.
 export type PersonalizationResponse = {
+  type: "conversation_initiation_client_data";
   dynamic_variables: Record<string, string>;
   conversation_config_override: {
     agent: {
@@ -66,12 +71,15 @@ export function readClientConfig(row: {
   const persona =
     (scheduling.persona as string) || (brand.persona as string) || "Lumi";
 
-  const hoursHuman =
-    typeof businessHours.hours === "string"
+  // Prefer the structured weekly hours (the same source the booking engine uses),
+  // rendered in the readable §3 style; fall back to a free-form business_hours
+  // string if that's all a client has.
+  const structuredHours = (scheduling.hours as Record<string, string[]>) ?? {};
+  const hoursHuman = hasStructuredHours(structuredHours)
+    ? formatWeeklyHours(structuredHours)
+    : typeof businessHours.hours === "string"
       ? (businessHours.hours as string)
-      : formatStructuredHours(
-          (scheduling.hours as Record<string, string[]>) ?? {},
-        );
+      : "";
 
   return {
     name: row.name ?? "our team",
@@ -120,21 +128,73 @@ export function formatStructuredHours(
   return parts.join(", ");
 }
 
-/** Human-readable, speakable service menu the agent can quote prices from. */
+/** "08:00" -> "8 AM", "18:30" -> "6:30 PM". */
+function to12h(hm: string): string {
+  const [hRaw, mRaw] = hm.split(":");
+  const h = parseInt(hRaw, 10);
+  const m = parseInt(mRaw ?? "0", 10) || 0;
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return m === 0 ? `${h12} ${period}` : `${h12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+/** True when a structured weekly-hours object has at least one open day. */
+export function hasStructuredHours(hours: Record<string, string[]>): boolean {
+  return Object.values(hours ?? {}).some(
+    (w) => Array.isArray(w) && w.length === 2,
+  );
+}
+
+/**
+ * Speakable weekly hours in the §3 style — 12-hour, closed days named, and
+ * consecutive days that share a window grouped:
+ *   "Mon–Fri 8 AM–6 PM, Sat 9 AM–2 PM, Sun closed"
+ */
+export function formatWeeklyHours(hours: Record<string, string[]>): string {
+  const spans = DAY_ORDER.map((key) => {
+    const w = hours?.[key];
+    const text =
+      Array.isArray(w) && w.length === 2
+        ? `${to12h(w[0])}–${to12h(w[1])}`
+        : "closed";
+    return { label: DAY_LABEL[key], text };
+  });
+
+  const groups: { start: string; end: string; text: string }[] = [];
+  for (const s of spans) {
+    const last = groups[groups.length - 1];
+    if (last && last.text === s.text) last.end = s.label;
+    else groups.push({ start: s.label, end: s.label, text: s.text });
+  }
+
+  return groups
+    .map((g) => {
+      const days = g.start === g.end ? g.start : `${g.start}–${g.end}`;
+      return g.text === "closed" ? `${days} closed` : `${days} ${g.text}`;
+    })
+    .join(", ");
+}
+
+/**
+ * Speakable service menu in the §3 style, one line per service:
+ *   "- AC Tune-Up — $99 flat"
+ *   "- Service Call / Diagnostic — $89 call-out fee, final price quoted on site (emergency-eligible)"
+ *   "- New System Estimate — free"
+ */
 export function formatServices(services: ServiceRow[]): string {
   if (!services.length) return "No services are configured yet.";
   return services
     .map((s) => {
       let price: string;
       if (s.price_type === "fixed" && s.price != null) {
-        price = s.price === 0 ? "free" : `$${s.price}`;
+        price = s.price === 0 ? "free" : `$${s.price} flat`;
       } else if (s.callout_fee != null) {
-        price = `$${s.callout_fee} service call, then quoted`;
+        price = `$${s.callout_fee} call-out fee, final price quoted on site`;
       } else {
-        price = "quoted after diagnosis";
+        price = "final price quoted on site";
       }
-      const emerg = s.emergency_eligible ? " (available for emergencies)" : "";
-      return `- ${s.name}: ${price}${emerg}`;
+      const emerg = s.emergency_eligible ? " (emergency-eligible)" : "";
+      return `- ${s.name} — ${price}${emerg}`;
     })
     .join("\n");
 }
@@ -150,52 +210,77 @@ export function buildSystemPrompt(
   cfg: ClientConfig,
   services: ServiceRow[],
 ): string {
+  // Optional demo disclaimer (voice-personalization serves the public /demo line too).
   const demoNote = cfg.isDemo
-    ? "\nThis is a DEMONSTRATION line for a sample business. If asked, you can say you are a demo assistant; appointments booked here are for demonstration only.\n"
+    ? "\nThis is a DEMONSTRATION line for a sample business; if asked, you can say you are a demo assistant, and any appointments booked here are for demonstration only.\n"
     : "";
 
+  // Service-area clauses, only when the client has one configured.
+  const identityArea = cfg.serviceArea ? `, serving ${cfg.serviceArea}` : "";
+  const areaStep = cfg.serviceArea
+    ? `Service area: ${cfg.name} covers ${cfg.serviceArea}. If the address is outside that, don't book — offer a callback and capture the lead.`
+    : `If the caller is outside the service area, don't book — offer a callback and capture the lead.`;
+
+  // Emergency handling can transfer to a human line when one is configured.
   const transferLine = cfg.transferNumber
-    ? "During business hours you may warm-transfer to a human using the transfer tool. Outside business hours, take a message and capture the lead instead."
-    : "There is no live human line, so when you cannot help, capture the caller's details as a lead and tell them the team will follow up.";
+    ? "Offer to warm-transfer to a person when asked, or for an emergency that needs immediate help."
+    : "There's no live transfer line, so if they need a person, capture the caller's details as a lead and tell them the team will follow up.";
 
   // Phone-only guidance the business typed in the dashboard. It refines what the
   // agent says but must not override the flow/guardrails, so it goes near the end,
   // clearly framed as additional guidance.
   const extraBlock = cfg.extraInstructions
-    ? `\n\nAdditional instructions from ${cfg.name} (follow these unless they conflict with the rules above):\n${cfg.extraInstructions}\n`
+    ? `\n\n# Additional instructions from ${cfg.name} (follow these unless they conflict with the rules above)\n${cfg.extraInstructions}\n`
     : "";
 
-  return `You are ${cfg.persona}, the phone scheduling assistant for ${cfg.name}. You are speaking out loud on a live call, so keep replies short, natural, and one idea at a time. Never read out URLs, IDs, JSON, or internal fields.
+  return `# Identity
+You are ${cfg.persona}, the phone receptionist for ${cfg.name}${identityArea}. ${cfg.name} operates in ${cfg.timezone} time. You are ${cfg.brandVoice}. You are on a live phone call — keep replies short and natural, one idea at a time. Never read out URLs, IDs, JSON, or internal fields.
 ${demoNote}
-Your tone is ${cfg.brandVoice}.
+# Current time
+The current time in UTC is {{system__time_utc}}. ${cfg.name} is in the ${cfg.timezone} time zone. Work out every relative date ("tomorrow", "Wednesday at 2") from this anchor in that local time — never guess the day of the week.
 
-You help callers check availability, book appointments, and answer basic questions about services and pricing. You NEVER invent availability, prices, or booking confirmations — you only state what the tools return.
-
-Services offered:
+# Services and pricing
 ${formatServices(services)}
+Business hours: ${cfg.hoursHuman || "see the team"}.
 
-Business hours: ${cfg.hoursHuman ?? "see the team"}.${cfg.serviceArea ? ` Service area: ${cfg.serviceArea}.` : ""}
-The current date and time is {{system__time}} in the ${cfg.timezone} timezone. Interpret "today", "tomorrow", and "this week" against that.
+# What you do
+Help callers book, reschedule, cancel, or ask about a service visit. You book against REAL availability — always call check_availability before offering or confirming any time. Never invent open slots, prices, or confirmations; only state what the tools return.
 
-Tools:
-- check_availability: find open appointment slots. Pass the service the caller wants and, if they mention one, a date to start from.
-- book: book a specific slot. Before calling it you MUST have: the service, a specific start time you offered from check_availability, the caller's name, a callback phone number, and the service address. Ask for anything missing, one item at a time.
-- capture_lead: use when the caller can't or won't book now (no good time, wants to think, or you can't help) so the team can follow up.
+# Booking flow
+1. Greet briefly: "Thanks for calling ${cfg.name}, this is ${cfg.persona} — how can I help?"
+2. Find out what they need. If it's an emergency (no heat, no cooling, gas smell, water leak), set is_emergency and get them the soonest slot — or offer to transfer if they need someone right now.
+3. Confirm the service, then collect: name, the service address, and a callback number (usually the number they're calling from). If they'd like to share an email so the office can reach them, take it — but it's optional; don't insist. Only ask for what you don't already have.
+4. ${areaStep}
+5. Call check_availability for the service. If the caller named a day or timeframe (e.g. "Monday afternoon"), work out that calendar date from the current time and pass it as from_date (format YYYY-MM-DD) so the times you offer are on the day they asked for. Read back 2–3 real options in plain local time (e.g. "Monday, July 27 at 2:00 PM"). Let them choose.
+6. Confirm once, in one sentence: "Confirming: {service} for {name} on {day} at {time}. Book it?"
+7. On "yes", call the book tool with the chosen slot's ISO start time.
+   - Booked: "You're all set — you're booked in. Anything else?"
+   - slot_unavailable: apologize briefly, offer the next options, reconfirm, book.
+8. If they change a detail, update and reconfirm once, then book.
 
-Flow:
-1. Greet, then find out what they need and which service fits.
-2. Call check_availability and offer the caller 2-3 specific times. Do not list more than three.
-3. When they pick a time, collect any missing booking details, then call book. Read the confirmed time back to them.
-4. If the requested time was just taken, apologize briefly and offer another slot.
-5. Emergencies (no heat/AC out, safety issues): treat as urgent, prefer the soonest slot, and set the emergency flag when booking. ${transferLine}
-6. If they're done or you've booked, close politely and end the call.
-${extraBlock}
-Never promise a specific technician, an exact arrival minute, or a price the service menu doesn't list. Stay warm and concise.`;
+# If you can't book
+If the caller won't or can't book (just pricing questions, out of area, wants a person, or noncommittal), call capture_lead with their name and number so the team can follow up. ${transferLine}
+
+# Changing or cancelling an appointment
+If a caller wants to move or cancel an existing appointment:
+1. Call find_appointment — it looks up the number they're calling from. If nothing comes back, ask what name the appointment is under and try again with that name.
+2. If one appointment comes back, read it back and confirm it's the right one ("I see an AC Tune-Up on Monday, July 27 at 2 PM — is that the one?"). If several come back, read them out and let the caller choose. Never change or cancel an appointment you haven't found with find_appointment and confirmed with the caller.
+3. To cancel: once they confirm, call cancel with that appointment_id, then tell them it's cancelled.
+4. To reschedule: confirm the service, call check_availability for it, offer 2–3 real new times, then call reschedule with that appointment_id and the chosen slot's ISO start. If it comes back slot_unavailable, apologize and offer another time. Confirm the new time once it's done.
+5. If find_appointment turns up nothing — or the caller is describing a visit that has already happened — you have no upcoming appointment on file to change. Say so plainly ("I don't see an upcoming appointment under that number"), then offer to book a new visit, or take their name and number so the team can follow up. Never try to move or cancel a visit that's already passed; book a fresh one instead.
+
+# Guardrails
+- Do not collect payment or card information.
+- Only cancel or move an appointment you've looked up with find_appointment and confirmed with the caller — never act on a guessed or unconfirmed appointment.
+- For call-out + quote services, say the final price is confirmed on site after the diagnostic; don't quote a repair total.
+- Confirm details once only; don't repeat unless something changed.
+- Always say dates/times in plain local language derived from the times you booked.
+- Never promise a specific technician, an exact arrival minute, or a price the service menu doesn't list.${extraBlock}`;
 }
 
 /** The opening line the agent speaks first. */
 export function buildFirstMessage(cfg: ClientConfig): string {
-  return `Thanks for calling ${cfg.name}, this is ${cfg.persona}. How can I help you today?`;
+  return `Thanks for calling ${cfg.name}, this is ${cfg.persona} — how can I help?`;
 }
 
 /**
@@ -230,6 +315,7 @@ export function buildResponse(
   services: ServiceRow[],
 ): PersonalizationResponse {
   return {
+    type: "conversation_initiation_client_data",
     dynamic_variables: buildDynamicVariables(cfg, services),
     conversation_config_override: {
       agent: {
@@ -250,6 +336,7 @@ export function buildFallbackResponse(): PersonalizationResponse {
   const generic =
     "You are a friendly phone assistant. This line isn't fully set up yet, so you can't look up availability or book appointments. Apologize briefly, offer to take the caller's name and number so someone can call them back, then end the call.";
   return {
+    type: "conversation_initiation_client_data",
     dynamic_variables: {
       client_slug: "",
       store_name: "our team",

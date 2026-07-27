@@ -175,4 +175,27 @@ export function isSlotFree(
   return !overlaps(startMs, startMs + durationMin * 60_000, busy);
 }
 
+// Does [start, start+duration) fall entirely within the client's open window for
+// that local day? Guards against the agent booking outside business hours (e.g.
+// 3 AM) — the DB exclusion constraint only prevents double-booking, not this.
+// durationMin = 0 checks only that `start` lands inside the open window (used by
+// reschedule, where the duration is derived server-side in the RPC).
+export function isWithinHours(
+  startMs: number,
+  durationMin: number,
+  hours: WeeklyHours,
+  timeZone: string,
+): boolean {
+  const start = new Date(startMs);
+  const win = hours[weekdayKey(start, timeZone)];
+  if (!win || win.length < 2) return false; // closed that day
+  const { y, mo, d } = localParts(start, timeZone);
+  const [oh, om] = parseHM(win[0]);
+  const [ch, cm] = parseHM(win[1]);
+  const openMs = zonedWallClockToUtc(y, mo, d, oh, om, timeZone).getTime();
+  const closeMs = zonedWallClockToUtc(y, mo, d, ch, cm, timeZone).getTime();
+  const endMs = startMs + durationMin * 60_000;
+  return startMs >= openMs && endMs <= closeMs;
+}
+
 export const _internal = { DAY_KEYS };
