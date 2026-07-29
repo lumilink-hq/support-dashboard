@@ -55,6 +55,17 @@ export type ReviewConversationRef = {
   status: string;
 } | null;
 
+// Callback lifecycle (0014). 'none' = a flag with no callback attached, which is
+// every row created by the email agent's apply_flag().
+export type CallbackStatus =
+  | "none"
+  | "scheduled"
+  | "attempted"
+  | "completed"
+  | "failed";
+
+export type TicketPriority = "low" | "normal" | "high" | "urgent";
+
 export type ReviewItemRow = {
   id: string;
   reason: string;
@@ -63,8 +74,39 @@ export type ReviewItemRow = {
   created_at: string;
   resolved_at: string | null;
   conversation_id: string | null;
+  // --- Ticket columns, added in 0014 ---
+  // Human-speakable reference the voice agent reads back to the caller.
+  ticket_no: number | null;
+  priority: TicketPriority;
+  channel: Channel | null;
+  callback_number: string | null;
+  callback_window: string | null;
+  callback_due_at: string | null;
+  callback_status: CallbackStatus;
+  callback_attempts: number;
+  last_attempt_at: string | null;
   // Embedded via the conversation_id FK.
   conversations: ReviewConversationRef;
+};
+
+// The `callbacks_due` view (0014 §5): pending tickets still awaiting a call,
+// with the conversation fields flattened and `overdue` computed in SQL.
+export type CallbackDueRow = {
+  id: string;
+  ticket_no: number | null;
+  priority: TicketPriority;
+  status: string;
+  callback_number: string | null;
+  callback_window: string | null;
+  callback_due_at: string | null;
+  callback_status: CallbackStatus;
+  callback_attempts: number;
+  details: string | null;
+  created_at: string;
+  customer_name: string | null;
+  order_number: string | null;
+  conversation_id: string | null;
+  overdue: boolean;
 };
 
 export type OrderLineItem = {
