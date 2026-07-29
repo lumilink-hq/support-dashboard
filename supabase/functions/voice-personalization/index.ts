@@ -28,10 +28,12 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import {
+  buildDeflectResponse,
   buildFallbackResponse,
   buildResponse,
   extractClientRef,
   readClientConfig,
+  shouldDeflect,
   verifySignature,
   type ServiceRow,
 } from "./lib.ts";
@@ -59,13 +61,26 @@ function json(payload: unknown, status = 200) {
   });
 }
 
-/** True when a client's settings mark it a demo (settings may be a JSON string). */
-function isDemoClient(settings: unknown): boolean {
+/**
+ * True when a client has opted in to slug (web widget) routing.
+ *
+ * MUST match voice-order-lookup and voice-ticket, which accept
+ * `web_lookup_enabled === true || is_demo === true`. This function previously
+ * checked `is_demo` alone, which silently broke the real web widget: the plan is
+ * to enable Tsunami with `web_lookup_enabled` and explicitly NOT `is_demo` (that
+ * flag marks sandbox tenants and disables the guard keeping the public widget
+ * away from real customer data). The result was a browser call that could look
+ * up orders but got generic fallback personalization — no store name, no policies.
+ *
+ * `settings` may arrive as a JSON string in the edge runtime.
+ */
+function webRoutingAllowed(settings: unknown): boolean {
   let s = settings;
   if (typeof s === "string") {
     try { s = JSON.parse(s); } catch { return false; }
   }
-  return Boolean((s as Record<string, unknown> | null)?.is_demo);
+  const o = (s ?? {}) as Record<string, unknown>;
+  return o.web_lookup_enabled === true || o.is_demo === true;
 }
 
 Deno.serve(async (req) => {
@@ -114,7 +129,8 @@ Deno.serve(async (req) => {
   });
 
   // 1) Resolve the tenant. Phone → by dialed number. Web → by slug, but ONLY for
-  //    demo clients, so the public widget can never reach a real client's data.
+  //    clients that opted in to web routing, so the public widget can never
+  //    reach a client who didn't ask for it.
   let clientId: string | null = null;
   if (calledNumber) {
     const { data, error } = await supabase.rpc("resolve_client_by_number", {
@@ -132,14 +148,16 @@ Deno.serve(async (req) => {
       .eq("slug", clientSlug)
       .eq("is_active", true)
       .maybeSingle();
-    if (data && isDemoClient(data.settings)) clientId = data.id as string;
+    if (data && webRoutingAllowed(data.settings)) clientId = data.id as string;
   }
   if (!clientId) return json(buildFallbackResponse());
 
   // 2) Load the client row (non-secret config) + active services.
   const { data: clientRow, error: clientErr } = await supabase
     .from("clients")
-    .select("name, slug, brand_tone_config, business_hours, settings")
+    // support_email feeds the over-cap deflect message (layer 1). It's optional —
+    // buildDeflectResponse drops the "email us at …" clause cleanly without it.
+    .select("name, slug, brand_tone_config, business_hours, settings, support_email")
     .eq("id", clientId)
     .maybeSingle();
   if (clientErr || !clientRow) {
@@ -169,6 +187,40 @@ Deno.serve(async (req) => {
   const cfg = readClientConfig(clientData);
   const services = (serviceRows ?? []) as ServiceRow[];
 
-  // 3) Return per-tenant personalization for this call.
+  // 3) Usage limiter, layer 1 — the pre-call gate.
+  //    This is the cheapest possible place to stop an over-cap call: ElevenLabs
+  //    asks for personalization BEFORE the agent picks up, so deflecting costs
+  //    ~8 seconds of minutes instead of a 2-3 minute conversation.
+  let allowance: unknown = null;
+  {
+    const { data, error } = await supabase.rpc("check_voice_allowance", {
+      p_client_id: clientId,
+    });
+    if (error) {
+      // Fail OPEN. A few cents of overage beats a caller who thinks the
+      // business hung up on them — and layers 2-4 still bound the damage.
+      // Note supabase-js returns errors in `error` rather than throwing, so
+      // this branch (not a try/catch) is what actually catches an RPC failure.
+      console.error("check_voice_allowance failed (allowing call):", error.message);
+    } else {
+      allowance = data;
+    }
+  }
+
+  if (shouldDeflect(allowance)) {
+    const a = allowance as { reason?: string; minutes_used?: number };
+    console.log("voice cap reached", {
+      client: cfg.slug,
+      reason: a?.reason,
+      minutes_used: a?.minutes_used,
+    });
+    return json(
+      buildDeflectResponse(cfg, services, {
+        supportEmail: (clientData.support_email as string | null) ?? null,
+      }),
+    );
+  }
+
+  // 4) Return per-tenant personalization for this call.
   return json(buildResponse(cfg, services));
 });

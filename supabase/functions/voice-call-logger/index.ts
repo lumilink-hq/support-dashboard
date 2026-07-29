@@ -23,6 +23,8 @@ import {
   buildTurns,
   detectHumanHandoff,
   extractCallFields,
+  extractDurationSecs,
+  usageKeyFor,
   verifySignature,
   type PostCallPayload,
 } from "./lib.ts";
@@ -48,13 +50,24 @@ function json(payload: unknown, status = 200) {
   });
 }
 
-/** True when a client's settings flag it as a demo (settings may be a JSON string). */
-function isDemoClient(settings: unknown): boolean {
+/**
+ * True when a client has opted in to slug (web widget) routing.
+ *
+ * MUST match voice-order-lookup and voice-ticket, which accept
+ * `web_lookup_enabled === true || is_demo === true`. Checking `is_demo` alone
+ * (as this did) meant a real web-widget client was rejected as unknown_tenant —
+ * so the call was never logged AND never metered, which quietly defeats the
+ * usage cap on the one channel where an unattended public embed makes it matter.
+ *
+ * `settings` may arrive as a JSON string in the edge runtime.
+ */
+function webRoutingAllowed(settings: unknown): boolean {
   let s = settings;
   if (typeof s === "string") {
     try { s = JSON.parse(s); } catch { return false; }
   }
-  return Boolean((s as Record<string, unknown> | null)?.is_demo);
+  const o = (s ?? {}) as Record<string, unknown>;
+  return o.web_lookup_enabled === true || o.is_demo === true;
 }
 
 Deno.serve(async (req) => {
@@ -132,8 +145,9 @@ Deno.serve(async (req) => {
   });
 
   // 1) Resolve the tenant. Phone → by dialed number. Web widget → by slug, but
-  //    ONLY for demo clients (mirrors the scheduling + personalization guard), so
-  //    a public browser session can never attach to a real client's records.
+  //    ONLY for clients that opted in to web routing (mirrors voice-order-lookup
+  //    and voice-ticket), so a public browser session can never attach to a
+  //    client who didn't ask for it.
   let clientId: string | null = null;
   if (f.calledNumber) {
     const { data, error } = await supabase.rpc("resolve_client_by_number", {
@@ -148,7 +162,7 @@ Deno.serve(async (req) => {
       .eq("slug", f.clientSlug)
       .eq("is_active", true)
       .maybeSingle();
-    if (data && isDemoClient(data.settings)) clientId = data.id as string;
+    if (data && webRoutingAllowed(data.settings)) clientId = data.id as string;
   }
   if (!clientId) {
     return json({ ok: false, unknown_tenant: true, call_ref: ref });
@@ -229,11 +243,61 @@ Deno.serve(async (req) => {
     });
   }
 
+  // 5) Usage limiter, layer 4 — the meter.
+  //    This is what makes layers 1 and 3 able to decide anything: without it the
+  //    caps sit in the database and nothing ever counts toward them. Runs last
+  //    and never fails the request — a metering problem must not cost us the
+  //    transcript we already wrote.
+  let metered = false;
+  const usageKey = usageKeyFor(f);
+  if (usageKey) {
+    const durationSecs = extractDurationSecs(payload);
+    const { data: usage, error: usageErr } = await supabase.rpc(
+      "record_call_usage",
+      {
+        p_client_id: clientId,
+        p_call_sid: usageKey,
+        p_duration_secs: durationSecs,
+        // Cost is derived server-side from duration x the client's rate.
+        p_est_cost_usd: null,
+        p_started_at: null,
+        p_source: "post_call",
+      },
+    );
+
+    if (usageErr) {
+      console.error("record_call_usage failed:", usageErr.message);
+    } else if (usage?.duplicate) {
+      // Expected on a webhook retry, and worth seeing: a silent double-count
+      // would falsely trip the cap and take the client's line down.
+      console.log("usage already recorded for", usageKey);
+      metered = true;
+    } else {
+      metered = true;
+      if (usage?.crossed_warning) {
+        // True on exactly one call — the one that crosses 80%. This is the hook
+        // for the "someone should decide whether to raise the cap" alert; it
+        // wants to become an email alongside the ticket notifications.
+        console.warn("VOICE CAP 80%", {
+          client_id: clientId,
+          minutes_used: usage.minutes_used,
+          minutes_cap: usage.minutes_cap,
+        });
+      }
+    }
+  } else {
+    // Neither a Twilio call SID nor an ElevenLabs conversation id — the call is
+    // unmeterable. Shouldn't happen (we bailed earlier without a `ref`), so log
+    // loudly rather than silently under-counting against the cap.
+    console.error("no usage key for call; not metered", { conversation_id: convId });
+  }
+
   return json({
     ok: true,
     conversation_id: convId,
     turns_logged: logged,
     flagged,
     flag_reason: flagReason,
+    metered,
   });
 });
