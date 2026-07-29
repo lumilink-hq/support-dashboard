@@ -453,3 +453,103 @@ export async function verifySignature(params: {
     ? { valid: true }
     : { valid: false, reason: "signature mismatch" };
 }
+
+// =============================================================================
+// Usage limiter — LAYER 1 of 4: the pre-call gate.
+//
+// This is the cheapest place in the whole system to stop an over-cap call.
+// ElevenLabs asks us for personalization BEFORE the agent picks up, so
+// answering with a short "we're unavailable" persona costs ~8 seconds of
+// billed minutes instead of a full 2-3 minute conversation. It is also the only
+// layer that can act before any cost is incurred at all.
+//
+// Deliberately NOT a hard rejection: returning an error or a non-200 here makes
+// ElevenLabs fail the call, and the caller hears dead air or a carrier error.
+// A caller who is told what to do instead is strictly better than one who
+// thinks the business's phone is broken.
+// =============================================================================
+
+/** Why a call is being turned away — mirrors check_voice_allowance's `reason`. */
+export type AllowanceReason =
+  | "ok"
+  | "unknown_client"
+  | "client_inactive"
+  | "client_disabled"
+  | "global_pause"
+  | "over_monthly_minutes"
+  | "over_monthly_cost"
+  | "over_daily_minutes";
+
+export type Allowance = {
+  allowed: boolean;
+  reason?: AllowanceReason | string;
+  [k: string]: unknown;
+};
+
+/**
+ * The over-cap conversation, as a personalization override.
+ *
+ * If the client has a human line configured we hand the caller to it: a person
+ * is strictly better than "email us", and a transferred call costs no further
+ * AI minutes. Only when there's no line do we fall back to deflection.
+ */
+export function buildDeflectResponse(
+  cfg: ClientConfig,
+  services: ServiceRow[],
+  opts: { supportEmail?: string | null } = {},
+): PersonalizationResponse {
+  const email = (opts.supportEmail ?? "").trim();
+  const canTransfer = Boolean(cfg.transferNumber && cfg.transferNumber.trim());
+
+  const firstMessage = canTransfer
+    ? `Thanks for calling ${cfg.name}. Let me put you through to someone who can help.`
+    : `Thanks for calling ${cfg.name}. Our phone support isn't available right now${
+        email ? `, but you can email us at ${email} and the team will get right back to you` : ""
+      }.`;
+
+  const prompt = canTransfer
+    ? [
+        `You are answering the phone for ${cfg.name}. This line has reached its usage limit for now, so you must NOT attempt to help with anything.`,
+        `Say exactly one short sentence letting the caller know you're connecting them to someone, then immediately use transfer_to_number to reach ${cfg.transferNumber}.`,
+        `Do not look anything up. Do not ask questions. Do not offer to take a message unless the transfer fails — if it does, apologize briefly and use end_call.`,
+      ].join(" ")
+    : [
+        `You are answering the phone for ${cfg.name}. This line has reached its usage limit for now, so you must NOT attempt to help with anything.`,
+        `Politely say that phone support isn't available at the moment${
+          email ? ` and that they can email ${email}` : ""
+        }, in one or two short sentences.`,
+        `Do not look anything up, do not ask for an order number, do not promise a callback, and do not offer alternatives. Then use end_call immediately.`,
+        `Be warm and brief — this should take under ten seconds. Match this tone: ${cfg.brandVoice}.`,
+      ].join(" ");
+
+  return {
+    type: "conversation_initiation_client_data",
+    dynamic_variables: {
+      ...buildDynamicVariables(cfg, services),
+      // The agent's own prompt can branch on this, and it shows up in the
+      // post-call payload so an over-cap call is identifiable in the logs.
+      over_cap: "true",
+    },
+    conversation_config_override: {
+      agent: {
+        prompt: { prompt },
+        first_message: firstMessage,
+        language: "en",
+      },
+    },
+  };
+}
+
+/**
+ * Should the pre-call gate deflect this call?
+ *
+ * FAIL OPEN, deliberately. If check_voice_allowance errored, timed out, or
+ * returned something unexpected, we let the call through. The cost of wrongly
+ * allowing a call is a few cents of overage; the cost of wrongly blocking one
+ * is a customer who thinks the business hung up on them — and layers 2-4 still
+ * bound the damage.
+ */
+export function shouldDeflect(allowance: unknown): boolean {
+  if (!allowance || typeof allowance !== "object") return false;
+  return (allowance as Allowance).allowed === false;
+}

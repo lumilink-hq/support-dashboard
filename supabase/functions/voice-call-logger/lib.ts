@@ -32,6 +32,9 @@ export type CallFields = {
   calledNumber: string | null;
   callerId: string | null;
   elevenConversationId: string | null;
+  // Web widget sessions have no dialed number; they carry the tenant slug as a
+  // dynamic variable instead (set by the widget and echoed by personalization).
+  clientSlug: string | null;
   status: string | null;
 };
 
@@ -98,6 +101,7 @@ export function extractCallFields(payload: PostCallPayload): CallFields {
       dv["system__conversation_id"],
       data.conversation_id,
     ),
+    clientSlug: first(dv["client_slug"], (meta as any).client_slug),
     status: str(data.status),
   };
 }
@@ -195,4 +199,61 @@ export async function verifySignature(params: {
   return timingSafeEqual(expected, v0)
     ? { valid: true }
     : { valid: false, reason: "signature mismatch" };
+}
+// =============================================================================
+// Usage limiter — LAYER 4 of 4: the meter.
+//
+// After every call we record what it actually consumed, which is what makes
+// layers 1 and 3 able to decide anything. Without this the caps exist in the
+// database and nothing ever increments toward them.
+// =============================================================================
+
+/**
+ * Pull the call duration out of the post-call payload.
+ *
+ * ElevenLabs has moved this field around between payload shapes, and a browser
+ * session carries different metadata from a Twilio call, so we try the known
+ * spellings and then fall back to the transcript itself — the last turn's
+ * time_in_call_secs is a lower bound on the call length and is far better than
+ * recording zero. Under-counting slightly is fine; recording nothing is not,
+ * because a silently-zero meter means the cap never trips.
+ */
+export function extractDurationSecs(payload: PostCallPayload): number {
+  const data = payload?.data ?? {};
+  const meta = (data.metadata ?? {}) as Record<string, any>;
+  const phone = (meta.phone_call ?? {}) as Record<string, any>;
+
+  const candidates = [
+    meta.call_duration_secs,
+    meta.call_duration_seconds,
+    meta.call_duration,
+    meta.duration_secs,
+    meta.duration_seconds,
+    phone.call_duration_secs,
+    phone.duration_secs,
+  ];
+  for (const c of candidates) {
+    const n = typeof c === "string" ? Number(c) : c;
+    if (typeof n === "number" && Number.isFinite(n) && n >= 0) return Math.round(n);
+  }
+
+  // Fallback: furthest point reached in the transcript.
+  let maxTurn = 0;
+  for (const t of data.transcript ?? []) {
+    const s = t?.time_in_call_secs;
+    if (typeof s === "number" && Number.isFinite(s) && s > maxTurn) maxTurn = s;
+  }
+  return Math.round(maxTurn);
+}
+
+/**
+ * The idempotency key for record_call_usage.
+ *
+ * A phone call is keyed by its Twilio SID. A BROWSER call has no SID at all, so
+ * the ElevenLabs conversation id is the stable per-session identifier — without
+ * this fallback every web call would be unmeterable, and a public web widget is
+ * exactly the traffic most likely to run away.
+ */
+export function usageKeyFor(fields: CallFields): string | null {
+  return fields.callSid ?? fields.elevenConversationId ?? null;
 }

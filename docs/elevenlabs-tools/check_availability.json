@@ -1,0 +1,97 @@
+{
+  "type": "webhook",
+  "name": "check_availability",
+  "description": "Check open appointment times for a service. Always call before offering or confirming a time.",
+  "disable_interruptions": false,
+  "interruption_mode": "allow",
+  "force_pre_tool_speech": false,
+  "pre_tool_speech": "auto",
+  "tool_call_sound": null,
+  "tool_call_sound_behavior": "auto",
+  "tool_error_handling_mode": "auto",
+  "execution_mode": "immediate",
+  "api_schema": {
+    "url": "https://xqsxjxrzpxhosedkmufg.functions.supabase.co/scheduling",
+    "method": "POST",
+    "path_params_schema": [],
+    "query_params_schema": [],
+    "request_body_schema": {
+      "id": "body",
+      "type": "object",
+      "description": "Availability request",
+      "required": true,
+      "properties": [
+        {
+          "id": "action",
+          "type": "string",
+          "value_type": "constant",
+          "description": "",
+          "dynamic_variable": "",
+          "constant_value": "check_availability",
+          "enum": null,
+          "is_system_provided": false,
+          "required": true
+        },
+        {
+          "id": "called_number",
+          "type": "string",
+          "value_type": "dynamic_variable",
+          "description": "",
+          "dynamic_variable": "system__called_number",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": false
+        },
+        {
+          "id": "client_ref",
+          "type": "string",
+          "value_type": "dynamic_variable",
+          "description": "Web widget: the demo tenant slug (empty on phone calls, which route by called_number)",
+          "dynamic_variable": "client_slug",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": false
+        },
+        {
+          "id": "service_name",
+          "type": "string",
+          "value_type": "llm_prompt",
+          "description": "The service the caller wants, e.g. AC Tune-Up",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": true
+        },
+        {
+          "id": "from_date",
+          "type": "string",
+          "value_type": "llm_prompt",
+          "description": "Optional. A date in YYYY-MM-DD to start looking from, when the caller asks for a specific day or timeframe (e.g. 'Monday', 'next week'). Work it out from the current date in Pacific time; 'next week' starts the coming Monday. Leave empty for the soonest availability.",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": false
+        }
+      ]
+    },
+    "request_headers": [
+      {
+        "type": "secret",
+        "name": "x-voice-tool-secret",
+        "secret_id": "5BmqMzQ5V5mn7yw69e3s"
+      }
+    ],
+    "content_type": "application/json",
+    "auth_connection": null
+  },
+  "assignments": [],
+  "response_timeout_secs": 20,
+  "dynamic_variables": {
+    "dynamic_variable_placeholders": {}
+  },
+  "response_mocks": []
+}

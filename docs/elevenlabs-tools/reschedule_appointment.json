@@ -1,0 +1,97 @@
+{
+  "type": "webhook",
+  "name": "reschedule_appointment",
+  "description": "Move an appointment you already found with find_appointment to a new time. First call check_availability for the service and offer the caller real open times, then call this with the appointment_id and the chosen slot's ISO start. The visit keeps its original length.",
+  "disable_interruptions": false,
+  "interruption_mode": "allow",
+  "force_pre_tool_speech": false,
+  "pre_tool_speech": "auto",
+  "tool_call_sound": null,
+  "tool_call_sound_behavior": "auto",
+  "tool_error_handling_mode": "auto",
+  "execution_mode": "immediate",
+  "api_schema": {
+    "url": "https://xqsxjxrzpxhosedkmufg.functions.supabase.co/scheduling",
+    "method": "POST",
+    "path_params_schema": [],
+    "query_params_schema": [],
+    "request_body_schema": {
+      "id": "body",
+      "type": "object",
+      "description": "Reschedule request",
+      "required": true,
+      "properties": [
+        {
+          "id": "action",
+          "type": "string",
+          "value_type": "constant",
+          "description": "",
+          "dynamic_variable": "",
+          "constant_value": "reschedule",
+          "enum": null,
+          "is_system_provided": false,
+          "required": true
+        },
+        {
+          "id": "called_number",
+          "type": "string",
+          "value_type": "dynamic_variable",
+          "description": "",
+          "dynamic_variable": "system__called_number",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": false
+        },
+        {
+          "id": "client_ref",
+          "type": "string",
+          "value_type": "dynamic_variable",
+          "description": "Web widget: the demo tenant slug (empty on phone calls, which route by called_number)",
+          "dynamic_variable": "client_slug",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": false
+        },
+        {
+          "id": "appointment_id",
+          "type": "string",
+          "value_type": "llm_prompt",
+          "description": "The appointment_id returned by find_appointment for the appointment being moved",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": true
+        },
+        {
+          "id": "appointment_start",
+          "type": "string",
+          "value_type": "llm_prompt",
+          "description": "The ISO 8601 start time of the new slot the caller chose (the 'start' value returned by check_availability)",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": true
+        }
+      ]
+    },
+    "request_headers": [
+      {
+        "type": "secret",
+        "name": "x-voice-tool-secret",
+        "secret_id": "5BmqMzQ5V5mn7yw69e3s"
+      }
+    ],
+    "content_type": "application/json",
+    "auth_connection": null
+  },
+  "assignments": [],
+  "response_timeout_secs": 20,
+  "dynamic_variables": {
+    "dynamic_variable_placeholders": {}
+  },
+  "response_mocks": []
+}

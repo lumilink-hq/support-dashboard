@@ -18,12 +18,19 @@ There are two kinds of `{{...}}` in a prompt, and only one is automatic:
   `system__time` renders in `system__timezone`, which is user-provided, so on an inbound phone
   call it may come through as UTC — so we use `system__time_utc` and state the business zone in
   the prompt. The booking tools convert to the client's zone server-side anyway.
-- **Custom variables (persona, business name, service list, …) are NOT automatic.** They only
-  get values if you inject them at conversation start (ElevenLabs `dynamic_variables`). For a
-  single demo agent that's unnecessary overhead — **just hardcode the values** (section 3).
-  You only need injection when one agent serves many clients (section 6).
+- **Custom variables (persona, business name, service list, …) are NOT automatic.** They get
+  values injected at conversation start. That injection is exactly what the `voice-personalization`
+  webhook does (section 6): it resolves the client by dialed number and returns their prompt,
+  greeting, and variables per call. For a quick single-agent test you can instead hardcode the
+  values in the base prompt (section 3), but the multi-client path is built and preferred.
 
-## 3. Demo agent system prompt — PASTE THIS (Comfort Air, hardcoded)
+## 3. Demo agent system prompt (Comfort Air, hardcoded)
+
+> **Note (multi-tenant is now BUILT):** once the `voice-personalization` webhook is wired
+> (section 6), the agent's live prompt + greeting are **injected per call** from each client's DB
+> config — you don't paste a per-client prompt at all. The prompt below is still useful as the
+> agent's **base/fallback prompt** (used if the webhook is off or a number doesn't resolve), and as
+> a reference for the Comfort Air demo's content. See `voice-personalization-multitenant.md`.
 
 Only `system__*` remain as variables; everything else is a literal value.
 
@@ -63,8 +70,11 @@ invent open slots.
    already have.
 4. Service area: Comfort Air covers within 25 miles of San Francisco. If the address is outside
    that, don't book — offer a callback and capture the lead.
-5. Call check_availability for the service and read back 2–3 real options in plain Pacific time
-   (e.g. "Tuesday, September 9 at 2:00 PM"). Let them choose.
+5. Call check_availability for the service. If the caller named a day or timeframe (e.g.
+   "Monday afternoon"), work out that calendar date from the current time and pass it as
+   from_date (format YYYY-MM-DD) so the times you offer are on the day they asked for. Read
+   back 2–3 real options in plain Pacific time (e.g. "Monday, July 27 at 2:00 PM"). Let them
+   choose.
 6. Confirm once, in one sentence: "Confirming: {service} for {name} on {day} at {time}. Book it?"
 7. On "yes", call the book tool with the chosen slot's ISO start time.
    - Booked: "You're all set — you'll get a confirmation shortly. Anything else?"
@@ -122,23 +132,28 @@ Keep the `voice-call-logger` post-call webhook — it logs the transcript. The b
 `booking_outcome = 'booked'` (or capture_lead set `lead_only`), so Appointments and Leads
 populate from the call.
 
-## 6. Going multi-client (later) — conversation-initiation webhook
+## 6. Multi-client — conversation-initiation webhook (BUILT: `voice-personalization`)
 
-When one agent serves many HVAC clients, replace the hardcoded values in section 3 with custom
-variables (`{{business_name}}`, `{{service_list}}`, `{{service_area}}`, `{{persona}}`) and feed
-them per call:
+This is done. The `supabase/functions/voice-personalization` edge function is the
+conversation-initiation (personalization) webhook: ElevenLabs POSTs the dialed number when a call
+starts, the function resolves the client (`resolve_client_by_number`), loads their `clients` row +
+active `services`, and returns their **full per-tenant system prompt + first message** (via
+`conversation_config_override`) plus `dynamic_variables`. One shared agent then speaks as whatever
+business was dialed — onboarding a client is just DB rows, no new agent or deploy.
 
-- Configure a **conversation-initiation webhook** on the agent. ElevenLabs calls it when a call
-  begins, passing the call context (including the dialed number).
-- The webhook (a small edge function, e.g. `voice-agent-init`) resolves the client by the dialed
-  number (`resolve_client_by_number`), builds the service-list string from the `services` table,
-  and returns `dynamic_variables` for that client.
-- Response shape is ElevenLabs' conversation-initiation client data (`dynamic_variables` map,
-  optional config overrides) — confirm exact field names against their conversation-initiation
-  webhook docs when you build it.
+Canonical setup + onboarding checklist: **`voice-personalization-multitenant.md`**. In short:
 
-Nothing about the tools or the `scheduling` function changes — only where the persona/catalog
-come from. This is Phase 2; the demo doesn't need it.
+1. `supabase functions deploy voice-personalization --no-verify-jwt`
+2. In the agent's **Security** tab, **enable overrides** for `System prompt`, `First message`, and
+   `Language` (off by default — a call that overrides a disabled field errors), then add the
+   **conversation-initiation / fetch initiation client data** webhook pointing at
+   `https://<ref>.functions.supabase.co/voice-personalization`.
+3. Smoke-test with `ELEVENLABS_PERSONALIZATION_SECRET` unset (verification is skipped, logs a
+   warning), then set that secret before go-live.
+
+Nothing about the tools or the `scheduling` function changes — only where the persona/catalog come
+from. (An earlier draft called this `voice-agent-init`/`agent-init`; the real, adopted function is
+`voice-personalization`.)
 
 ## 7. Deferred
 
