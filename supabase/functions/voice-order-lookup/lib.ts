@@ -109,9 +109,61 @@ export function stripHash(name: unknown): string {
   return String(name ?? "").trim().replace(/^#/, "");
 }
 
-/** Shopify's `query` arg for the orders connection. Never interpolate a "#". */
-export function buildShopifySearchQuery(orderNumber: string): string {
-  return `name:${orderNumber}`;
+/**
+ * Comparison key for order names: alphanumerics only, lowercased.
+ *
+ * stripHash alone is not enough once a store sets an order-name PREFIX. Tsunami's
+ * orders are named "TSU#1749"; stripHash only removes a *leading* "#", so it
+ * returns "TSU#1749" unchanged, while normalizeOrderNumber turns what the caller
+ * said into "TSU1749". Those never compare equal and the real order gets thrown
+ * away as a near-miss.
+ *
+ * This stays strict about the parts that matter — "#1001-A" keys to "1001a" and
+ * still will not match "1001" — so the guard against Shopify's token search
+ * returning a neighbouring order is preserved.
+ */
+export function orderKey(value: unknown): string {
+  return String(value ?? "").replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+}
+
+/**
+ * Shopify's `query` arg for the orders connection.
+ *
+ * With a prefix configured we must search the store's REAL name ("TSU#1749"),
+ * quoted so the "#" survives as part of the term. Callers rarely say the prefix
+ * out loud — they say "seventeen forty-nine" — so we re-attach it here rather
+ * than depending on the caller to produce it.
+ *
+ * Without a prefix this is byte-identical to the previous behaviour.
+ */
+export function buildShopifySearchQuery(
+  orderNumber: string,
+  prefix?: string | null,
+): string {
+  const p = (prefix ?? "").trim();
+  if (!p) return `name:${orderNumber}`;
+  // Don't double-apply when the caller already included the prefix.
+  const bare = orderKey(orderNumber).startsWith(orderKey(p))
+    ? orderNumber.slice(
+        // Strip however many characters of the raw string correspond to the
+        // prefix's alphanumerics, tolerating punctuation the caller dropped.
+        matchedPrefixLength(orderNumber, p),
+      )
+    : orderNumber;
+  return `name:"${p}${bare}"`;
+}
+
+/** How many leading chars of `raw` correspond to `prefix`, ignoring punctuation. */
+function matchedPrefixLength(raw: string, prefix: string): number {
+  const wanted = orderKey(prefix);
+  let seen = "";
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (/[A-Za-z0-9]/.test(ch)) seen += ch.toLowerCase();
+    if (seen === wanted) return i + 1;
+    if (!wanted.startsWith(seen)) return 0;
+  }
+  return 0;
 }
 
 /**
@@ -125,10 +177,20 @@ export function buildShopifySearchQuery(orderNumber: string): string {
 export function pickExactOrder<T extends { name?: string }>(
   nodes: T[],
   orderNumber: string,
+  prefix?: string | null,
 ): T | null {
   if (!nodes.length) return null;
-  const want = stripHash(orderNumber).toLowerCase();
-  return nodes.find((n) => stripHash(n.name).toLowerCase() === want) ?? null;
+  const want = orderKey(orderNumber);
+  const p = orderKey(prefix ?? "");
+  // Accept the caller's digits with OR without the store's prefix: they say
+  // "seventeen forty-nine", the store calls it "TSU#1749", and both must match.
+  const wantPrefixed = p && !want.startsWith(p) ? p + want : want;
+  return (
+    nodes.find((n) => {
+      const got = orderKey(n.name);
+      return got === want || got === wantPrefixed;
+    }) ?? null
+  );
 }
 
 // -----------------------------------------------------------------------------

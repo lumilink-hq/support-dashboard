@@ -142,6 +142,39 @@ check("caller's hash tolerated", pickExactOrder(nodes, "#1001")?.name === "#1001
 check("suffixed order matched exactly", pickExactOrder(nodes, "1001-A")?.name === "#1001-A");
 check("no exact match -> null", pickExactOrder([{ name: "#1001-A" }], "1001") === null);
 check("empty list -> null", pickExactOrder([], "1001") === null);
+
+// --- Order-name PREFIX (Tsunami: orders are named "TSU#1749") ---------------
+// Regression guard for 2026-07-29. Both halves of the lookup assumed Shopify's
+// default "#1234" shape: normalizeOrderNumber drops "#" as punctuation, so we
+// searched name:TSU1749 (nonexistent), and pickExactOrder compared "TSU#1749"
+// against "TSU1749" and discarded the real order as a near-miss.
+console.log("\norder-name prefix — the store calls it TSU#1749");
+const PFX = "TSU#";
+const tsu = [{ name: "TSU#1749" }, { name: "TSU#1749-A" }];
+
+check("prefix re-attached when the caller omits it",
+  buildShopifySearchQuery(normalizeOrderNumber("1749")!, PFX) === 'name:"TSU#1749"',
+  buildShopifySearchQuery(normalizeOrderNumber("1749")!, PFX));
+check("prefix not doubled when the caller says it",
+  buildShopifySearchQuery(normalizeOrderNumber("TSU#1749")!, PFX) === 'name:"TSU#1749"',
+  buildShopifySearchQuery(normalizeOrderNumber("TSU#1749")!, PFX));
+check("spoken form 'tsu 1749' resolves",
+  buildShopifySearchQuery(normalizeOrderNumber("tsu 1749")!, PFX) === 'name:"TSU#1749"',
+  buildShopifySearchQuery(normalizeOrderNumber("tsu 1749")!, PFX));
+check("no prefix configured -> unchanged query",
+  buildShopifySearchQuery("1001", null) === "name:1001",
+  buildShopifySearchQuery("1001", null));
+
+check("digits alone match the prefixed order",
+  pickExactOrder(tsu, normalizeOrderNumber("1749")!, PFX)?.name === "TSU#1749");
+check("full name matches",
+  pickExactOrder(tsu, normalizeOrderNumber("TSU#1749")!, PFX)?.name === "TSU#1749");
+check("prefix without punctuation matches",
+  pickExactOrder(tsu, normalizeOrderNumber("tsu1749")!, PFX)?.name === "TSU#1749");
+check("suffixed near-miss STILL rejected under a prefix",
+  pickExactOrder([{ name: "TSU#1749-A" }], normalizeOrderNumber("1749")!, PFX) === null);
+check("prefix arg is optional — old call sites unaffected",
+  pickExactOrder([{ name: "#1001" }], "1001")?.name === "#1001");
 check("case insensitive", pickExactOrder([{ name: "#ts1001" }], "TS1001")?.name === "#ts1001");
 
 // -----------------------------------------------------------------------------

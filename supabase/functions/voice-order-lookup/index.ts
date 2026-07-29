@@ -291,6 +291,9 @@ Deno.serve(async (req) => {
   const platform: string = String(
     config?.store_platform ?? "woocommerce",
   ).toLowerCase();
+  // Shopify order-name prefix, e.g. "TSU#" -> orders are named "TSU#1749".
+  // Null/absent = the default "#1234" shape. Added by migration 0017.
+  const orderPrefix: string | null = config?.order_number_prefix ?? null;
 
   // ---------------------------------------------------------------------------
   // 3) Fetch the order. Branch per platform. MOCK_STORE short-circuits with a
@@ -364,7 +367,7 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             query: SHOPIFY_ORDER_QUERY,
-            variables: { q: buildShopifySearchQuery(orderNumber) },
+            variables: { q: buildShopifySearchQuery(orderNumber, orderPrefix) },
           }),
         });
       } catch (e) {
@@ -395,7 +398,7 @@ Deno.serve(async (req) => {
 
       // "name:1001" is a token match and can also return "1001-A". Require an
       // exact hit rather than reading a stranger's order down the phone.
-      const node = pickExactOrder(nodes, orderNumber);
+      const node = pickExactOrder(nodes, orderNumber, orderPrefix);
       if (!node) {
         return json(withWrap({
           found: false,
