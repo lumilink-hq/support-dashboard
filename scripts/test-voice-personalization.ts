@@ -148,7 +148,7 @@ ok("email custom_instructions never leak into phone prompt", !phoneInstrPrompt.i
 ok("first message greets by name + persona", buildFirstMessage(cfg) === "Thanks for calling Comfort Air (Demo), this is Lumi — how can I help?");
 
 const dv = buildDynamicVariables(cfg, services);
-const REQUIRED_VARS = ["client_slug", "store_name", "persona", "brand_voice", "timezone", "business_hours", "service_area", "services_summary", "transfer_number", "is_demo"];
+const REQUIRED_VARS = ["client_slug", "store_name", "persona", "brand_voice", "timezone", "business_hours", "service_area", "services_summary", "transfer_number", "is_demo", "store_policies"];
 ok("all dynamic variables present", REQUIRED_VARS.every((k) => k in dv));
 ok("all dynamic variables are strings", Object.values(dv).every((v) => typeof v === "string"));
 ok("client_slug carried for web tool routing", dv.client_slug === "comfort-air-demo");
@@ -158,13 +158,51 @@ ok("services_summary lists names", dv.services_summary.includes("AC Tune-Up"));
 const res = buildResponse(cfg, services);
 ok("response carries the REQUIRED initiation type discriminator", res.type === "conversation_initiation_client_data");
 ok("response has dynamic_variables", typeof res.dynamic_variables === "object");
-ok("override carries prompt", res.conversation_config_override.agent.prompt.prompt.length > 0);
-ok("override carries first_message", res.conversation_config_override.agent.first_message.length > 0);
-ok("override language en", res.conversation_config_override.agent.language === "en");
+ok("scheduling client still gets an override", Boolean(res.conversation_config_override));
+ok("override carries prompt", (res.conversation_config_override?.agent.prompt.prompt.length ?? 0) > 0);
+ok("override carries first_message", (res.conversation_config_override?.agent.first_message.length ?? 0) > 0);
+ok("override language en", res.conversation_config_override?.agent.language === "en");
+
+// ---- agentMode: 'orders' must NOT override the agent's prompt ---------------
+// Regression guard for 2026-07-29: shipping the scheduling override to an orders
+// agent turned it back into an HVAC scheduler mid-call. It greeted with the right
+// business name (variables were fine) and then refused every order question,
+// which reads as a broken agent rather than a broken webhook response.
+const ordersRow = {
+  ...clientRow,
+  name: "Tsunami",
+  slug: "shopify-store",
+  settings: {
+    ...(clientRow.settings ?? {}),
+    voice_agent_mode: "orders",
+    policies: "All sales are final. Tracking is emailed when the order ships.",
+  },
+};
+const ordersCfg = readClientConfig(ordersRow);
+const ordersRes = buildResponse(ordersCfg, services);
+
+ok("orders mode parsed from settings", ordersCfg.agentMode === "orders");
+ok("scheduling remains the default", cfg.agentMode === "scheduling");
+ok("unknown mode falls back to scheduling",
+   readClientConfig({ ...ordersRow, settings: { voice_agent_mode: "typo" } }).agentMode === "scheduling");
+ok("ORDERS: no prompt override — the agent keeps its own",
+   ordersRes.conversation_config_override === undefined);
+ok("ORDERS: the key is absent, not just undefined",
+   !("conversation_config_override" in ordersRes));
+ok("ORDERS: still carries the type discriminator",
+   ordersRes.type === "conversation_initiation_client_data");
+ok("ORDERS: still carries dynamic variables",
+   ordersRes.dynamic_variables.store_name === "Tsunami");
+ok("ORDERS: store_policies is populated",
+   ordersRes.dynamic_variables.store_policies.includes("All sales are final"));
+ok("ORDERS: client_slug carried for web tool routing",
+   ordersRes.dynamic_variables.client_slug === "shopify-store");
+ok("policies default to empty string when unset", cfg.policies === "");
+ok("store_policies always present even when blank", "store_policies" in dv);
 
 const fb = buildFallbackResponse();
 ok("fallback carries the type discriminator too", fb.type === "conversation_initiation_client_data");
-ok("fallback still valid shape", fb.dynamic_variables.store_name === "our team" && fb.conversation_config_override.agent.first_message.length > 0);
+ok("fallback still valid shape", fb.dynamic_variables.store_name === "our team" && (fb.conversation_config_override?.agent.first_message.length ?? 0) > 0);
 ok("fallback vars match required set", REQUIRED_VARS.every((k) => k in fb.dynamic_variables));
 
 // ---- verifySignature --------------------------------------------------------

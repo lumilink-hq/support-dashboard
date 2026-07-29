@@ -22,6 +22,18 @@ export type ServiceRow = {
   emergency_eligible?: boolean | null;
 };
 
+/**
+ * Which kind of phone agent this client runs.
+ *
+ * 'scheduling' — the original HVAC/booking receptionist. This function owns the
+ *                system prompt and ships it as a conversation override.
+ * 'orders'     — order status / WISMO support (Tsunami). The prompt lives in the
+ *                ElevenLabs agent instead; see buildResponse for why.
+ *
+ * Defaults to 'scheduling' so existing clients are unaffected.
+ */
+export type AgentMode = "scheduling" | "orders";
+
 export type ClientConfig = {
   name: string;
   slug: string; // tenant routing key on the web (analog of the dialed number)
@@ -33,6 +45,10 @@ export type ClientConfig = {
   transferNumber: string | null;
   extraInstructions: string; // phone-only free-form guidance from the dashboard
   isDemo: boolean;
+  agentMode: AgentMode;
+  // clients.settings.policies — the voice-sized policy blob the orders agent
+  // answers from, surfaced to the agent as {{store_policies}}.
+  policies: string;
 };
 
 // ElevenLabs conversation-initiation response. The top-level `type` discriminator
@@ -44,7 +60,10 @@ export type ClientConfig = {
 export type PersonalizationResponse = {
   type: "conversation_initiation_client_data";
   dynamic_variables: Record<string, string>;
-  conversation_config_override: {
+  // OPTIONAL. Omitted for 'orders' clients so the agent keeps its own prompt —
+  // see buildResponse. When omitted, ElevenLabs uses the agent's configured
+  // prompt and first message, which is exactly what we want there.
+  conversation_config_override?: {
     agent: {
       prompt: { prompt: string };
       first_message: string;
@@ -100,6 +119,11 @@ export function readClientConfig(row: {
         ? brand.voice_instructions.trim()
         : "",
     isDemo: Boolean(settings.is_demo),
+    // Anything other than an explicit 'orders' stays on the scheduling path, so
+    // a typo can never silently strip a scheduling client's system prompt.
+    agentMode: settings.voice_agent_mode === "orders" ? "orders" : "scheduling",
+    policies:
+      typeof settings.policies === "string" ? settings.policies.trim() : "",
   };
 }
 
@@ -306,17 +330,55 @@ export function buildDynamicVariables(
     services_summary: services.map((s) => s.name).join(", "),
     transfer_number: cfg.transferNumber ?? "",
     is_demo: String(cfg.isDemo),
+    // The orders agent's prompt references {{store_policies}}. ElevenLabs
+    // renders an undefined variable as an empty string rather than failing, so
+    // omitting this doesn't error — the agent just silently has NO policies and
+    // improvises. Always send it, even when blank.
+    store_policies: cfg.policies,
   };
 }
 
 /** Full personalization response for a resolved client. */
+/**
+ * Full personalization response for a resolved client.
+ *
+ * TWO SHAPES, and the difference matters:
+ *
+ * - 'scheduling' → variables + a conversation override carrying the system
+ *   prompt this file builds. One shared agent serves every scheduling tenant
+ *   because the prompt is assembled per call from their services and hours.
+ *
+ * - 'orders' → variables ONLY, no override. The orders prompt lives in the
+ *   ElevenLabs agent instead.
+ *
+ * WHY THE ORDERS PATH OMITS THE OVERRIDE. `buildSystemPrompt` is a booking
+ * receptionist — "call check_availability", "never invent open slots". An
+ * override REPLACES the agent's prompt, so returning it to an orders agent
+ * silently turns it back into an HVAC scheduler: it greets with the right
+ * business name (the variables are correct) and then refuses every order
+ * question. That exact symptom cost a debugging session on 2026-07-29, and it
+ * looks like an agent misconfiguration rather than a webhook response.
+ *
+ * Omitting the key is the documented way to say "use the agent's own prompt" —
+ * ElevenLabs only overrides fields that are present.
+ *
+ * Note this also means an orders agent needs NO per-field override permissions
+ * for normal calls. It still needs them enabled for the over-cap path, which
+ * does send an override (see buildDeflectResponse).
+ */
 export function buildResponse(
   cfg: ClientConfig,
   services: ServiceRow[],
 ): PersonalizationResponse {
-  return {
-    type: "conversation_initiation_client_data",
+  const base = {
+    type: "conversation_initiation_client_data" as const,
     dynamic_variables: buildDynamicVariables(cfg, services),
+  };
+
+  if (cfg.agentMode === "orders") return base;
+
+  return {
+    ...base,
     conversation_config_override: {
       agent: {
         prompt: { prompt: buildSystemPrompt(cfg, services) },
@@ -348,7 +410,10 @@ export function buildFallbackResponse(): PersonalizationResponse {
       services_summary: "",
       transfer_number: "",
       is_demo: "false",
+      store_policies: "",
     },
+    // The fallback DOES override: an unresolved number must not be handed to a
+    // live orders/booking prompt, so we replace it with the generic apology.
     conversation_config_override: {
       agent: {
         prompt: { prompt: generic },
