@@ -1,0 +1,60 @@
+{
+  "name": "lookup_order",
+  "description": "Look up a customer's order. Call this once you have an order number. Returns order status, tracking, items and totals, plus control flags the prompt branches on (need_order_number, order_not_found, verification_required, verification_failed, should_escalate, wrap_up). Never invent order details — only read back fields this returns.",
+  "type": "webhook",
+  "method": "POST",
+  "url": "https://xqsxjxrzpxhosedkmufg.functions.supabase.co/voice-order-lookup",
+  "headers": {
+    "Content-Type": "application/json",
+    "x-voice-tool-secret": "<VOICE_TOOL_SECRET>"
+  },
+  "body_parameters": {
+    "called_number": {
+      "type": "string",
+      "value_type": "dynamic",
+      "dynamic_variable": "system__called_number",
+      "description": "Phone calls only. Empty string on the web widget."
+    },
+    "client_ref": {
+      "type": "string",
+      "value_type": "dynamic",
+      "dynamic_variable": "client_slug",
+      "description": "Web widget only. Empty string on phone calls."
+    },
+    "caller_number": {
+      "type": "string",
+      "value_type": "dynamic",
+      "dynamic_variable": "system__caller_number"
+    },
+    "call_sid": {
+      "type": "string",
+      "value_type": "dynamic",
+      "dynamic_variable": "system__call_sid"
+    },
+    "conversation_id": {
+      "type": "string",
+      "value_type": "dynamic",
+      "dynamic_variable": "system__conversation_id",
+      "description": "Used as the call reference on the web, where there is no Twilio SID."
+    },
+    "order_number": {
+      "type": "string",
+      "value_type": "llm_prompt",
+      "description": "The order number the caller gave, digits only if possible. A leading # is fine — the server strips it."
+    },
+    "verify_email": {
+      "type": "string",
+      "value_type": "llm_prompt",
+      "description": "WEB ONLY. The email address the caller says is on the order. Required before any order details are returned on the web widget. Leave empty on phone calls."
+    },
+    "verify_zip": {
+      "type": "string",
+      "value_type": "llm_prompt",
+      "description": "WEB ONLY. The shipping ZIP code the caller gives, as an alternative to verify_email. Leave empty on phone calls."
+    }
+  },
+  "_notes": [
+    "ElevenLabs sends EVERY parameter on EVERY call, filling unused ones with empty strings. The function treats '' as absent — send both called_number and client_ref and let it decide.",
+    "On the web path the function returns verification_required and NO order fields until verify_email or verify_zip matches the order."
+  ]
+}

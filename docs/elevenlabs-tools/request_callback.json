@@ -1,0 +1,74 @@
+{
+  "name": "request_callback",
+  "description": "Create a support ticket with a callback request. Use when the order is flagged, the caller asks for a person, you cannot answer, or the call is running long. Returns ticket_no_spoken — read that value back to the caller EXACTLY as given. If ok is false, do NOT promise a call back.",
+  "type": "webhook",
+  "method": "POST",
+  "url": "https://xqsxjxrzpxhosedkmufg.functions.supabase.co/voice-ticket",
+  "headers": {
+    "Content-Type": "application/json",
+    "x-voice-tool-secret": "<VOICE_TOOL_SECRET>"
+  },
+  "body_parameters": {
+    "called_number": {
+      "type": "string",
+      "value_type": "dynamic",
+      "dynamic_variable": "system__called_number"
+    },
+    "client_ref": {
+      "type": "string",
+      "value_type": "dynamic",
+      "dynamic_variable": "client_slug"
+    },
+    "caller_number": {
+      "type": "string",
+      "value_type": "dynamic",
+      "dynamic_variable": "system__caller_number",
+      "description": "Used as the default callback number if the caller doesn't give a different one."
+    },
+    "call_sid": {
+      "type": "string",
+      "value_type": "dynamic",
+      "dynamic_variable": "system__call_sid"
+    },
+    "conversation_id": {
+      "type": "string",
+      "value_type": "dynamic",
+      "dynamic_variable": "system__conversation_id"
+    },
+    "caller_name": {
+      "type": "string",
+      "value_type": "llm_prompt",
+      "description": "The caller's name, if they gave one."
+    },
+    "callback_number": {
+      "type": "string",
+      "value_type": "llm_prompt",
+      "description": "The number to call back on. Default to the number they are calling from, but read it back digit by digit and confirm before sending. REQUIRED on the web widget, where there is no caller ID."
+    },
+    "callback_window": {
+      "type": "string",
+      "value_type": "llm_prompt",
+      "description": "When the caller says they're reachable, in their own words — e.g. 'after 3pm', 'any time tomorrow'."
+    },
+    "reason": {
+      "type": "string",
+      "value_type": "llm_prompt",
+      "description": "One sentence describing what the caller needs. This is what a human reads in the queue, so make it specific."
+    },
+    "order_number": {
+      "type": "string",
+      "value_type": "llm_prompt",
+      "description": "The order number, if one came up."
+    },
+    "priority": {
+      "type": "string",
+      "value_type": "llm_prompt",
+      "description": "low | normal | high | urgent. Default normal. Use high only for a genuinely time-sensitive problem."
+    }
+  },
+  "_notes": [
+    "Idempotent: a retried call with the same conversation returns the SAME ticket_no with duplicate:true, so the caller never hears two different reference numbers.",
+    "ticket_no_spoken renders 1042 as 'ten forty-two' — TTS reads a bare integer as 'one thousand and forty-two', which callers mishear and cannot repeat back.",
+    "If callback_number is missing and there is no caller ID (web), the tool returns callback_number_required — ask for a number and call again."
+  ]
+}

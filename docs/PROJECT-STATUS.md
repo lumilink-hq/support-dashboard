@@ -6,6 +6,14 @@ on a different machine: **read this file first**, then only the linked docs you 
 Goal right now: **a working Tsunami demo.** Call limits are built but deliberately parked —
 the ticket system is the priority because it's the only escalation path that exists.
 
+> **→ To finish the build, follow `docs/TSUNAMI-GO-LIVE.md`.** It's the ordered runbook:
+> retire Comfort Air, hand over the number, configure, deploy, build the agent. This file is
+> the map; that one is the route.
+>
+> **Decision 2026-07-29: Comfort Air is being retired and the demo number `+12135332469`
+> moved to Tsunami.** All resources go to the orders agent. Scheduling data is left intact —
+> dormant, not deleted.
+
 ---
 
 ## 0. Orientation in 60 seconds
@@ -33,59 +41,50 @@ Supabase project ref `xqsxjxrzpxhosedkmufg`. Functions base URL
 
 ---
 
-## 1. THE PHONE NUMBER QUESTION — you almost certainly don't need one
+## 1. THE PHONE NUMBER — one number, one tenant, and the trap in between
 
-**Belief to correct:** "Tsunami has to reuse the Comfort Air demo number to work."
+**Current plan:** `+12135332469` moves from `comfort-air-demo` to `shopify-store` (Tsunami).
+Comfort Air is retired. Exact SQL in `docs/TSUNAMI-GO-LIVE.md` §1.
 
-`+12135332469` belongs to `comfort-air-demo`. Migration `0010_client_phone_unique.sql`
-enforces **at most one client per phone-number-digits**, so
-`update clients set phone_number='+12135332469' where slug='shopify-store'` **fails with a
-unique violation.** That constraint exists because this exact collision already happened once:
-two clients shared that number, `resolve_client_by_number` returned an arbitrary one, and the
-scheduling demo silently served empty slots.
+**The trap that will cost you an hour if you hit it blind.** Two migrations disagree about
+what `is_active` means:
 
-**But a browser call has no dialed number at all.** Since 2026-07-29, `voice-order-lookup`
-routes by **client slug** as well as by dialed number, which is how the scheduling function
-already worked. So:
+- `resolve_client_by_number` (`0006`) **filters on `is_active`** — deactivating a client stops
+  it answering calls.
+- The unique index `uq_clients_phone_digits` (`0010`) is `where phone_number is not null` and
+  has **no `is_active` filter** — a deactivated client *still holds its number*.
 
-### The demo on tsunami.store needs NO Twilio number and NO number juggling.
+So **deactivating Comfort Air does not free the number.** You must set its `phone_number` to
+NULL, or Tsunami's `update` fails with a unique violation. And if the number is switched
+**only in the ElevenLabs UI**, the database still maps those digits to Comfort Air: calls
+route to the wrong tenant, or return "this phone line isn't configured for a store." Verify
+with the query in `TSUNAMI-GO-LIVE.md` §0 before debugging anything else.
+
+That constraint exists because the collision already happened once — two clients shared a
+number, resolution returned an arbitrary one, and the scheduling demo silently served empty
+slots. One number cannot serve two tenants: ElevenLabs binds a number to one agent, and
+`resolve_client_by_number` maps it to one client. Don't work around it.
+
+### The web widget needs no number at all
+
+A browser call has no dialed number; `voice-order-lookup` routes by **client slug**. So the
+tsunami.store embed works independently of all of the above, and both paths can run at once —
+phone by number, web by slug.
 
 ```sql
--- Enable the web path on the REAL Tsunami row (live data was the chosen approach).
 update clients
    set settings = settings || jsonb_build_object('web_lookup_enabled', true)
  where slug = 'shopify-store';
 ```
 
-That's the whole configuration. The widget passes
-`dynamic-variables='{"client_slug":"shopify-store"}'`, the tool sends
-`client_ref: {{client_slug}}`, and the caller-verification gate (§3) protects the live data.
+**Do NOT set `is_demo = true` on the real Tsunami row** to enable web routing. That flag marks
+sandbox tenants, and setting it on a live client disables the guard keeping the public widget
+away from real customer data. `web_lookup_enabled` is the explicit, safe opt-in.
 
-**Do NOT set `is_demo = true` on the real Tsunami row.** That flag exists to mark sandbox
-tenants; setting it on a live client disables the guard that keeps the public widget away
-from real customer data. `web_lookup_enabled` is the correct, explicit opt-in.
+### Restoring Comfort Air later
 
-### If you later want a *callable* Tsunami phone line
-
-Two options, in order of preference:
-
-1. **Buy a second Twilio number — $1.15/month.** Cheaper than any workaround's complexity,
-   and both demos stay live simultaneously.
-2. **Swap the number between tenants** for a one-off scheduled demo. The unique index means
-   you must clear the old holder first, in one transaction:
-   ```sql
-   begin;
-   update clients set phone_number = null   where slug = 'comfort-air-demo';
-   update clients set phone_number = '+12135332469' where slug = 'shopify-store';
-   commit;
-   -- revert afterwards by running it in reverse
-   ```
-   In ElevenLabs you must also reassign the number to the orders agent. **This breaks the
-   Comfort Air scheduling demo while it's in effect.**
-
-One number cannot serve two tenants at once — ElevenLabs binds a number to one agent, and
-`resolve_client_by_number` maps a number to one client. Don't try to work around that; it's
-the invariant that prevents tenant misrouting.
+Two `update`s plus reassigning a number in ElevenLabs — rollback SQL is in
+`TSUNAMI-GO-LIVE.md` §7. Its `services` and `appointments` data is untouched.
 
 ---
 
@@ -101,6 +100,7 @@ the invariant that prevents tenant misrouting.
 | Limiter layers 1 & 4 (logic only) | `voice-personalization/lib.ts`, `voice-call-logger/lib.ts` | 42 unit checks |
 | **Tickets + callbacks** | `migrations/0014_tickets_callbacks.sql` | applied + smoke-tested |
 | **`request_callback` tool** | `functions/voice-ticket/{lib,index}.ts` | parses; helpers sanity-checked |
+| Tool schemas | `docs/elevenlabs-tools/{lookup_order,request_callback}.json` | valid JSON |
 | Shopify policy fetcher | `scripts/fetch-shopify-policies.mjs` | — |
 
 ### Test commands
@@ -192,6 +192,7 @@ Ordered by how much time they'll cost if rediscovered.
 | **100 voice minutes/month** for Tsunami | it's the CFO model's Starter tier (`$149/mo`, `B13`) |
 | **2-minute call policy**, `max_call_secs` 180 | CFO model `B15`, listed *Required, before Tsunami*. Earlier 300s/420s recommendations are **withdrawn** |
 | Extend `review_queue`, don't build a `tickets` table | two inboxes that disagree |
+| **Retire Comfort Air**, move its number to Tsunami (2026-07-29) | one demo to focus on; scheduling data left dormant, not deleted |
 
 ---
 
@@ -199,45 +200,22 @@ Ordered by how much time they'll cost if rediscovered.
 
 ### 5a. Make the demo work (current focus)
 
-1. **Deploy what exists.**
-   ```bash
-   supabase db push          # applies 0012, 0013, 0014
-   supabase functions deploy voice-order-lookup --no-verify-jwt
-   supabase functions deploy voice-ticket --no-verify-jwt
-   ```
-2. **Shopify credentials into Vault** (read-only custom app: `read_orders`,
-   `read_fulfillments`):
-   ```sql
-   select vault.create_secret(
-     '{"access_token":"shpat_…","base_url":"https://tsunami-store-7957.myshopify.com"}',
-     'shopify-store_shopify');
-   update clients set store_credentials_ref = 'shopify-store_shopify'
-    where slug = 'shopify-store';
-   ```
-3. **Enable the web path** — the `web_lookup_enabled` update in §1.
-4. **Apply the staleness fix to Tsunami's rules** (this is what stops every WISMO call
-   escalating):
-   ```sql
-   update clients set abnormal_status_rules = jsonb_build_object(
-     'abnormal_statuses', jsonb_build_array('ON_HOLD','RESTOCKED','REFUNDED','VOIDED','PARTIALLY_REFUNDED'),
-     'stale_after_hours', 48,
-     'stale_exempt_statuses', jsonb_build_array('FULFILLED','PARTIALLY_FULFILLED'))
-    where slug = 'shopify-store';
-   ```
-   ⚠️ `evaluate_flag` is shared with the **live email agent** — this changes email behavior for
-   Tsunami too (it stops sending holding replies about shipped-but-old orders). Intended, but
-   deliberate.
-5. **Fill the empty config**: `business_hours` (currently `{}` — confirm timezone) and
-   `settings.policies` (condense from `brand_tone_config.custom_instructions`, or pull with
-   `scripts/fetch-shopify-policies.mjs`; keep it ~150 words, it's re-sent every turn).
-6. **ElevenLabs — new orders agent**: paste the prompt, add tools `lookup_order`
-   (with `client_ref`, `verify_email`, `verify_zip`), `request_callback`, `end_call`. Set the
-   post-call webhook to `voice-call-logger`. LLM = Claude. Enable per-field conversation
-   overrides in Agent → Security.
-7. **Dashboard**: surface the new ticket fields on `/review-queue` — ticket number, callback
-   number with a `tel:` link, and the `callbacks_due` view. **This is the last piece needed
-   for the demo story** ("caller asks for a human → it appears here").
-8. **Embed** on tsunami.store behind the age gate.
+**Follow `docs/TSUNAMI-GO-LIVE.md`** — it has the SQL, the agent prompt, and the tool config
+in order. Summary of the sequence:
+
+| # | Step | Where |
+|---|---|---|
+| 0 | Verify the number switch actually landed in the DB | GO-LIVE §0 |
+| 1 | Retire Comfort Air, hand over the number | §1 |
+| 2 | Shopify token → Vault; `web_lookup_enabled`; **staleness rules**; business hours; policy blob | §2 |
+| 3 | `db push` + deploy `voice-order-lookup` and `voice-ticket` | §3 |
+| 4 | Build the new ElevenLabs orders agent (prompt + 3 tools + post-call webhook) | §4 |
+| 5 | **Dashboard: ticket number, `tel:` callback link, `callbacks_due`** — the last build item | §5 |
+| 6 | Walk the five call scenarios before demoing | §6 |
+| 7 | Embed on tsunami.store behind the age gate | web-demo checklist |
+
+The single highest-impact line in there is the `stale_exempt_statuses` update in §2c. Without
+it nearly every "where's my order?" call escalates instead of answering.
 
 ### 5b. Parked (built or specced, deliberately not now)
 
@@ -254,6 +232,8 @@ Ordered by how much time they'll cost if rediscovered.
 | File | What |
 |---|---|
 | `docs/PROJECT-STATUS.md` | **this file — start here** |
+| `docs/TSUNAMI-GO-LIVE.md` | **the runbook to finish the build** |
+| `docs/elevenlabs-tools/*.json` | version-controlled ElevenLabs tool schemas |
 | `docs/COMMIT-CHECKLIST.md` | git state, CRLF trap, suggested commits |
 | `docs/tsunami-voice-orders-plan.md` | the full original plan + cost model |
 | `docs/tsunami-config-and-limits-reassessment.md` | per-client config SQL, caps, the staleness finding |
