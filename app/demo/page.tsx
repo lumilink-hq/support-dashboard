@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { LumiWidget } from "@/components/lumi-widget";
 
 export const metadata: Metadata = {
   title: "Meet Lumi — the AI receptionist that books jobs 24/7 | LumiLink",
@@ -6,9 +7,14 @@ export const metadata: Metadata = {
     "Try Lumi, the AI phone receptionist for home-service companies. Book a service visit with our demo HVAC company — by phone or in your browser.",
 };
 
-// The browser widget is disabled for now — it can't book because a browser call
-// has no dialed number to resolve the client (see docs/client-onboarding.md).
-// The call-in demo below is the live path.
+// Browser widget: a browser call has no dialed number, so we route the demo
+// tenant by slug (client_slug) instead. Only demo-flagged clients resolve this
+// way, so the public widget can never reach a real client's calendar. Set
+// NEXT_PUBLIC_ELEVENLABS_AGENT_ID to the demo agent to switch the widget on; if
+// it's unset the page falls back to the call-in demo only.
+const DEMO_AGENT_ID = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID;
+const DEMO_CLIENT_SLUG =
+  process.env.NEXT_PUBLIC_DEMO_CLIENT_SLUG ?? "comfort-air-demo";
 const PHONE_DISPLAY = "(213) 533-2469";
 const PHONE_TEL = "+12135332469";
 
@@ -87,7 +93,9 @@ export default function DemoPage() {
             </a>
           </div>
           <p className="mt-4 text-sm text-blue-200">
-            Call from any phone — Lumi answers live and books the visit.
+            {DEMO_AGENT_ID
+              ? "Call from any phone, or tap the chat bubble in the corner to talk to Lumi right in your browser."
+              : "Call from any phone — Lumi answers live and books the visit."}
           </p>
         </section>
 
@@ -158,6 +166,12 @@ export default function DemoPage() {
           </div>
         </footer>
       </div>
+
+      {/* In-browser voice widget. Mounts a floating "talk to Lumi" bubble; routes
+          the demo tenant by slug since a browser call has no dialed number. */}
+      {DEMO_AGENT_ID ? (
+        <LumiWidget agentId={DEMO_AGENT_ID} clientSlug={DEMO_CLIENT_SLUG} />
+      ) : null}
     </div>
   );
 }

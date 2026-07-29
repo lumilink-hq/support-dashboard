@@ -6,19 +6,34 @@
 // feature's infrastructure, then flips the entitlement to 'active' so the
 // dashboard page unlocks itself with no human in the loop.
 //
-// Reality check: some steps genuinely need a client-supplied secret (store API
-// key, the Gmail connection). When one is missing we DON'T half-activate — we
-// park the task as 'needs_human' (entitlement stays 'pending', so the dashboard
-// keeps showing "setting up…") and surface why. Everything that CAN be automated
-// (buy the Twilio number, create the ElevenLabs agent) is.
+// VOICE (scheduling MVP) is now IMPLEMENTED end-to-end:
+//   1. Ensure the client has a phone number — reuse clients.phone_number
+//      (bring-your-own) or, when AUTO_PURCHASE_NUMBERS=1, buy a voice-capable US
+//      local number via the Twilio API and save it.
+//   2. Import that number into ElevenLabs (POST /v1/convai/phone-numbers) and
+//      assign it to the ONE shared agent (PATCH …/{id} { agent_id }). Idempotent:
+//      we list existing numbers first and skip if it's already on our agent.
+// A scheduling client does NOT need store credentials — that gate now applies
+// only to clients that actually use order lookup (store_platform set).
+//
+// Safety:
+//   * PROVISION_MODE defaults to 'mock' — NO external calls, control flow only,
+//     so you can exercise the queue without buying anything. Set 'live' to arm.
+//   * Missing client input (no number + auto-purchase off, missing creds) parks
+//     the task 'needs_human' (entitlement stays 'pending' → dashboard shows
+//     "setting up…"); it never half-activates.
+//   * Transient (5xx/network) errors throw and are retried up to MAX_ATTEMPTS;
+//     4xx/config errors go straight to needs_human.
 //
 // Trigger options (pick per ops preference):
-//   * cron (Supabase scheduled function) every minute — simplest, fully hands-off
+//   * cron (Supabase scheduled function) every minute — simplest, hands-off
 //   * called fire-and-forget by billing-webhook right after a grant
 // It always drains the whole queue, so double-triggering is harmless.
 //
-// The Twilio / ElevenLabs calls are STUBBED with clear TODOs — the control flow,
-// idempotency, and DB transitions are real and complete.
+// Env: SUPABASE_URL, SUPABASE_SECRET_KEYS,
+//      PROVISION_MODE ('mock'|'live'), AUTO_PURCHASE_NUMBERS ('0'|'1'),
+//      TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_AREA_CODE (optional),
+//      ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID (the shared agent).
 // =============================================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
@@ -30,6 +45,19 @@ if (!rawSecrets) throw new Error("SUPABASE_SECRET_KEYS is required");
 const SERVICE_ROLE_SECRET = (JSON.parse(rawSecrets) as Record<string, string>)["default"];
 if (!SERVICE_ROLE_SECRET) throw new Error("Missing SUPABASE_SECRET_KEYS['default']");
 
+// External-provider config. 'mock' (default) makes NO external calls.
+const PROVISION_MODE = (Deno.env.get("PROVISION_MODE") ?? "mock").toLowerCase();
+const LIVE = PROVISION_MODE === "live";
+const AUTO_PURCHASE = (Deno.env.get("AUTO_PURCHASE_NUMBERS") ?? "0") === "1";
+
+const TWILIO_ACCOUNT_SID = Deno.env.get("TWILIO_ACCOUNT_SID") ?? "";
+const TWILIO_AUTH_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN") ?? "";
+const DEFAULT_AREA_CODE = Deno.env.get("TWILIO_AREA_CODE") ?? "";
+
+const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") ?? "";
+const ELEVENLABS_AGENT_ID = Deno.env.get("ELEVENLABS_AGENT_ID") ?? "";
+const ELEVENLABS_BASE = "https://api.elevenlabs.io/v1/convai/phone-numbers";
+
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_SECRET, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
@@ -37,36 +65,214 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_SECRET, {
 const MAX_ATTEMPTS = 5;
 
 type Feature = "email" | "voice";
-
-// A step returns done, or "needs_human" with a reason (missing client input),
-// or throws for a transient error (retried on the next drain).
 type StepResult = { ok: true } | { ok: false; needsHuman: true; reason: string };
+
+// A blocker that a human must clear (missing input, 4xx) — parks needs_human now.
+class NeedsHumanError extends Error {}
+// A transient failure (5xx / network) — requeued and retried.
+class TransientError extends Error {}
+
+function needsHuman(reason: string): StepResult {
+  return { ok: false, needsHuman: true, reason };
+}
+function onlyDigits(s: string): string {
+  return (s ?? "").replace(/\D/g, "");
+}
+function last10(s: string): string {
+  return onlyDigits(s).slice(-10);
+}
+
+// ---- Twilio ----------------------------------------------------------------
+
+function twilioAuth(): string {
+  return "Basic " + btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
+}
+
+// Buy a voice-capable US local number. Returns the E.164 number, or null when no
+// number is available (→ needs_human). Throws TransientError on 5xx/network.
+async function twilioBuyNumber(areaCode: string): Promise<string | null> {
+  const base = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}`;
+  const q = new URLSearchParams({ VoiceEnabled: "true" });
+  if (areaCode) q.set("AreaCode", areaCode);
+
+  let availRes: Response;
+  try {
+    availRes = await fetch(`${base}/AvailablePhoneNumbers/US/Local.json?${q}`, {
+      headers: { Authorization: twilioAuth() },
+    });
+  } catch (e) {
+    throw new TransientError(`twilio availability network error: ${e}`);
+  }
+  if (availRes.status >= 500) throw new TransientError(`twilio availability ${availRes.status}`);
+  const avail = await availRes.json().catch(() => ({}));
+  if (!availRes.ok) {
+    throw new NeedsHumanError(`twilio availability ${availRes.status}: ${avail?.message ?? ""}`);
+  }
+  const candidate = avail?.available_phone_numbers?.[0]?.phone_number as string | undefined;
+  if (!candidate) return null;
+
+  let buyRes: Response;
+  try {
+    buyRes = await fetch(`${base}/IncomingPhoneNumbers.json`, {
+      method: "POST",
+      headers: {
+        Authorization: twilioAuth(),
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ PhoneNumber: candidate }),
+    });
+  } catch (e) {
+    throw new TransientError(`twilio purchase network error: ${e}`);
+  }
+  if (buyRes.status >= 500) throw new TransientError(`twilio purchase ${buyRes.status}`);
+  const bought = await buyRes.json().catch(() => ({}));
+  if (!buyRes.ok) throw new NeedsHumanError(`twilio purchase ${buyRes.status}: ${bought?.message ?? ""}`);
+  return (bought.phone_number as string) ?? candidate;
+}
+
+// ---- ElevenLabs ------------------------------------------------------------
+
+function elevenHeaders(json = false): Record<string, string> {
+  const h: Record<string, string> = { "xi-api-key": ELEVENLABS_API_KEY };
+  if (json) h["Content-Type"] = "application/json";
+  return h;
+}
+
+// ElevenLabs Twilio import body. Field names per the ConvAI phone-numbers API /
+// SDK (provider discriminator + Twilio sid/token). If ElevenLabs renames these,
+// this builder is the single place to change.
+function twilioImportBody(number: string, label: string) {
+  return {
+    provider: "twilio",
+    phone_number: number,
+    label,
+    sid: TWILIO_ACCOUNT_SID,
+    token: TWILIO_AUTH_TOKEN,
+  };
+}
+
+async function elevenList(): Promise<any[]> {
+  let res: Response;
+  try {
+    res = await fetch(ELEVENLABS_BASE, { headers: elevenHeaders() });
+  } catch (e) {
+    throw new TransientError(`elevenlabs list network error: ${e}`);
+  }
+  if (res.status >= 500) throw new TransientError(`elevenlabs list ${res.status}`);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new NeedsHumanError(`elevenlabs list ${res.status}: ${body?.detail ?? body?.message ?? ""}`);
+  // The API returns an array (older) or { phone_numbers: [...] } (newer) — accept both.
+  return Array.isArray(body) ? body : (body?.phone_numbers ?? []);
+}
+
+// Import (if needed) and assign the number to the shared agent. Idempotent.
+async function elevenAttachNumber(number: string, label: string): Promise<void> {
+  const target = last10(number);
+  const existing = (await elevenList()).find((p) => last10(p?.phone_number ?? "") === target);
+
+  let phoneId: string | undefined = existing?.phone_number_id;
+
+  if (!phoneId) {
+    // Need to import — that requires the Twilio creds ElevenLabs will store.
+    if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
+      throw new NeedsHumanError("Twilio credentials required to import the number into ElevenLabs");
+    }
+    let res: Response;
+    try {
+      res = await fetch(ELEVENLABS_BASE, {
+        method: "POST",
+        headers: elevenHeaders(true),
+        body: JSON.stringify(twilioImportBody(number, label)),
+      });
+    } catch (e) {
+      throw new TransientError(`elevenlabs import network error: ${e}`);
+    }
+    if (res.status >= 500) throw new TransientError(`elevenlabs import ${res.status}`);
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new NeedsHumanError(`elevenlabs import ${res.status}: ${body?.detail ?? body?.message ?? ""}`);
+    phoneId = body?.phone_number_id;
+    if (!phoneId) throw new NeedsHumanError("elevenlabs import returned no phone_number_id");
+  } else if (existing?.assigned_agent?.agent_id === ELEVENLABS_AGENT_ID) {
+    return; // already imported AND on our shared agent — nothing to do
+  }
+
+  // Assign (or correct the assignment of) our shared agent.
+  let patch: Response;
+  try {
+    patch = await fetch(`${ELEVENLABS_BASE}/${phoneId}`, {
+      method: "PATCH",
+      headers: elevenHeaders(true),
+      body: JSON.stringify({ agent_id: ELEVENLABS_AGENT_ID }),
+    });
+  } catch (e) {
+    throw new TransientError(`elevenlabs assign network error: ${e}`);
+  }
+  if (patch.status >= 500) throw new TransientError(`elevenlabs assign ${patch.status}`);
+  if (!patch.ok) {
+    const body = await patch.json().catch(() => ({}));
+    throw new NeedsHumanError(`elevenlabs assign ${patch.status}: ${body?.detail ?? body?.message ?? ""}`);
+  }
+}
 
 // ---- Per-feature provisioning ----------------------------------------------
 
+function readAreaCode(client: Record<string, any>): string {
+  let s: any = client.settings ?? {};
+  if (typeof s === "string") {
+    try { s = JSON.parse(s); } catch { s = {}; }
+  }
+  const fromCfg = s?.scheduling?.area_code;
+  return String(fromCfg ?? DEFAULT_AREA_CODE ?? "").replace(/\D/g, "").slice(0, 3);
+}
+
 async function provisionVoice(client: Record<string, any>): Promise<StepResult> {
-  // Voice needs: a Twilio number + an ElevenLabs agent bound to it, plus the
-  // client's store credentials so the agent can look up orders.
-  if (!client.store_credentials_ref) {
-    return { ok: false, needsHuman: true, reason: "store_credentials_ref not set on client" };
+  // Store credentials only matter if this client actually uses order lookup.
+  // A pure scheduling (HVAC) client has no store_platform and needs none.
+  if (client.store_platform && !client.store_credentials_ref) {
+    return needsHuman("store_credentials_ref not set (order lookup is enabled for this client)");
   }
 
-  // TODO(twilio): if client.phone_number is null, purchase a number via the
-  //   Twilio API and UPDATE clients.phone_number (E.164). Idempotent: skip if set.
-  // TODO(elevenlabs): create/patch the Conversational AI agent, point its custom
-  //   LLM at our voice endpoint, and wire the Twilio number's voice webhook to it.
-  // Both are network calls; throw on transient failure to get a retry.
+  // 1) Ensure a phone number.
+  let number = String(client.phone_number ?? "").trim();
+  if (!number) {
+    if (!AUTO_PURCHASE) {
+      return needsHuman("no phone number set — add one in Settings, or enable AUTO_PURCHASE_NUMBERS");
+    }
+    if (!LIVE) {
+      return needsHuman("no phone number set; auto-purchase is disabled in mock mode (set PROVISION_MODE=live)");
+    }
+    if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
+      return needsHuman("TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN not configured for auto-purchase");
+    }
+    const areaCode = readAreaCode(client);
+    const bought = await twilioBuyNumber(areaCode);
+    if (!bought) {
+      return needsHuman(`no available Twilio numbers${areaCode ? " in area code " + areaCode : ""}`);
+    }
+    number = bought;
+    const { error } = await supabase
+      .from("clients")
+      .update({ phone_number: number })
+      .eq("id", client.id);
+    if (error) throw new TransientError("failed to save purchased number: " + error.message);
+  }
 
+  // 2) Attach the number to the shared ElevenLabs agent.
+  if (!LIVE) return { ok: true }; // mock: exercised the control flow, stop here
+  if (!ELEVENLABS_API_KEY || !ELEVENLABS_AGENT_ID) {
+    return needsHuman("ELEVENLABS_API_KEY/ELEVENLABS_AGENT_ID not configured");
+  }
+  await elevenAttachNumber(number, String(client.name ?? "Lumilink client"));
   return { ok: true };
 }
 
 async function provisionEmail(client: Record<string, any>): Promise<StepResult> {
   // Email needs the store creds and a support inbox the orchestration watches.
   if (!client.store_credentials_ref) {
-    return { ok: false, needsHuman: true, reason: "store_credentials_ref not set on client" };
+    return needsHuman("store_credentials_ref not set on client");
   }
   if (!client.support_email) {
-    return { ok: false, needsHuman: true, reason: "support_email (Gmail) not connected" };
+    return needsHuman("support_email (Gmail) not connected");
   }
 
   // TODO(orchestration): enable this client's email flow (e.g. upsert into the
@@ -96,7 +302,7 @@ async function processTask(task: Record<string, any>): Promise<void> {
 
   const { data: client, error: clientErr } = await supabase
     .from("clients")
-    .select("id, phone_number, support_email, store_credentials_ref, store_platform")
+    .select("id, name, phone_number, support_email, store_credentials_ref, store_platform, settings")
     .eq("id", client_id)
     .maybeSingle();
 
@@ -124,10 +330,19 @@ async function processTask(task: Record<string, any>): Promise<void> {
       });
     }
   } catch (e) {
-    // Transient error: bump attempts. Give up to human after MAX_ATTEMPTS.
+    // A known blocker → needs_human immediately (retrying won't help).
+    if (e instanceof NeedsHumanError) {
+      await supabase.rpc("fail_provisioning", {
+        p_client_id: client_id,
+        p_feature: feature,
+        p_reason: e.message,
+        p_needs_human: true,
+      });
+      return;
+    }
+    // Transient/unexpected error: bump attempts, retry, give up to human after MAX.
     const reason = e instanceof Error ? e.message : "provisioning error";
     const giveUp = (task.attempts ?? 0) + 1 >= MAX_ATTEMPTS;
-    // Return it to the queue for retry unless we've exhausted attempts.
     await supabase
       .from("provisioning_tasks")
       .update({
@@ -163,7 +378,7 @@ Deno.serve(async (req) => {
     processed++;
   }
 
-  return new Response(JSON.stringify({ ok: true, processed }), {
+  return new Response(JSON.stringify({ ok: true, processed, mode: PROVISION_MODE }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });

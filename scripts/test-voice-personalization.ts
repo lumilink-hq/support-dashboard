@@ -52,6 +52,10 @@ const clientRow = {
       persona: "Lumi",
       hours: {
         mon: ["08:00", "18:00"],
+        tue: ["08:00", "18:00"],
+        wed: ["08:00", "18:00"],
+        thu: ["08:00", "18:00"],
+        fri: ["08:00", "18:00"],
         sat: ["09:00", "14:00"],
         sun: [],
       },
@@ -73,7 +77,7 @@ ok("reads persona", cfg.persona === "Lumi");
 ok("reads brand voice", cfg.brandVoice === "warm, professional, efficient");
 ok("reads timezone", cfg.timezone === "America/Los_Angeles");
 ok("reads service area", cfg.serviceArea === "Within 25 miles of San Francisco, CA");
-ok("prefers human hours string", cfg.hoursHuman === "Mon-Fri 08:00-18:00, Sat 09:00-14:00");
+ok("renders structured hours in §3 style", cfg.hoursHuman === "Mon–Fri 8 AM–6 PM, Sat 9 AM–2 PM, Sun closed");
 ok("reads transfer number", cfg.transferNumber === "+14155550111");
 ok("reads is_demo", cfg.isDemo === true);
 
@@ -93,20 +97,27 @@ ok(
 
 // ---- formatServices ---------------------------------------------------------
 const menu = formatServices(services);
-ok("callout-fee service shows service call + quoted", menu.includes("$89 service call, then quoted"));
-ok("fixed service shows price", menu.includes("AC Tune-Up: $99"));
-ok("zero-price fixed shows free", menu.includes("New System Estimate: free"));
-ok("emergency flag surfaced", menu.includes("(available for emergencies)"));
+ok("callout-fee service shows call-out fee + quoted", menu.includes("$89 call-out fee, final price quoted on site"));
+ok("fixed service shows price", menu.includes("AC Tune-Up — $99 flat"));
+ok("zero-price fixed shows free", menu.includes("New System Estimate — free"));
+ok("emergency flag surfaced", menu.includes("(emergency-eligible)"));
 ok("empty services handled", formatServices([]) === "No services are configured yet.");
 
 // ---- buildSystemPrompt ------------------------------------------------------
 const prompt = buildSystemPrompt(cfg, services);
 ok("prompt names the persona", prompt.includes("You are Lumi"));
 ok("prompt names the business", prompt.includes("Comfort Air (Demo)"));
-ok("prompt embeds the service menu", prompt.includes("AC Tune-Up: $99"));
-ok("prompt embeds hours", prompt.includes("Mon-Fri 08:00-18:00"));
+ok("prompt embeds the service menu", prompt.includes("AC Tune-Up — $99 flat"));
+ok("prompt embeds hours", prompt.includes("Mon–Fri 8 AM–6 PM"));
 ok("prompt embeds service area", prompt.includes("Within 25 miles"));
-ok("prompt references system__time", prompt.includes("{{system__time}}"));
+ok("prompt anchors time off UTC (system__time_utc, not system__time)", prompt.includes("{{system__time_utc}}"));
+ok("prompt does not use the ambiguous system__time", !prompt.includes("{{system__time}}"));
+ok("prompt carries the §3 booking flow (from_date guidance)", prompt.includes("from_date"));
+ok("prompt confirms once before booking", prompt.includes("Confirming:"));
+ok("prompt covers reschedule/cancel via find_appointment", prompt.includes("find_appointment"));
+ok("prompt has a change/cancel section", prompt.includes("Changing or cancelling an appointment"));
+ok("prompt guards against unconfirmed changes", prompt.toLowerCase().includes("never change or cancel an appointment you haven't"));
+ok("prompt handles a passed appointment (book new, don't move)", prompt.toLowerCase().includes("already happened") && prompt.toLowerCase().includes("book a fresh one"));
 ok("prompt mentions the three tools", prompt.includes("check_availability") && prompt.includes("book") && prompt.includes("capture_lead"));
 ok("demo note present when is_demo", prompt.includes("DEMONSTRATION"));
 ok("transfer path used when transfer_number set", prompt.includes("warm-transfer"));
@@ -114,8 +125,27 @@ ok("transfer path used when transfer_number set", prompt.includes("warm-transfer
 const noTransfer = readClientConfig({ ...clientRow, settings: { ...clientRow.settings, transfer_number: null } });
 ok("lead-capture path when no transfer_number", buildSystemPrompt(noTransfer, services).includes("capture the caller's details as a lead"));
 
+// ---- phone-only extra instructions (separate from email custom_instructions) --
+ok("no voice_instructions → extraInstructions empty", cfg.extraInstructions === "");
+ok("prompt has no 'Additional instructions' block when empty", !prompt.includes("Additional instructions from"));
+
+const withPhoneInstr = readClientConfig({
+  ...clientRow,
+  brand_tone_config: {
+    ...clientRow.brand_tone_config,
+    // email-only field must NOT leak into the phone prompt
+    custom_instructions: "EMAIL ONLY: mention our 30-day return policy.",
+    voice_instructions: "Mention same-day service. Never quote a repair total on the phone.",
+  },
+});
+ok("reads voice_instructions", withPhoneInstr.extraInstructions === "Mention same-day service. Never quote a repair total on the phone.");
+const phoneInstrPrompt = buildSystemPrompt(withPhoneInstr, services);
+ok("phone prompt injects voice_instructions", phoneInstrPrompt.includes("Mention same-day service"));
+ok("phone prompt frames it as additional guidance", phoneInstrPrompt.includes("Additional instructions from Comfort Air (Demo)"));
+ok("email custom_instructions never leak into phone prompt", !phoneInstrPrompt.includes("EMAIL ONLY"));
+
 // ---- greeting + dynamic variables ------------------------------------------
-ok("first message greets by name + persona", buildFirstMessage(cfg) === "Thanks for calling Comfort Air (Demo), this is Lumi. How can I help you today?");
+ok("first message greets by name + persona", buildFirstMessage(cfg) === "Thanks for calling Comfort Air (Demo), this is Lumi — how can I help?");
 
 const dv = buildDynamicVariables(cfg, services);
 const REQUIRED_VARS = ["client_slug", "store_name", "persona", "brand_voice", "timezone", "business_hours", "service_area", "services_summary", "transfer_number", "is_demo"];
@@ -126,12 +156,14 @@ ok("services_summary lists names", dv.services_summary.includes("AC Tune-Up"));
 
 // ---- buildResponse / fallback shape ----------------------------------------
 const res = buildResponse(cfg, services);
+ok("response carries the REQUIRED initiation type discriminator", res.type === "conversation_initiation_client_data");
 ok("response has dynamic_variables", typeof res.dynamic_variables === "object");
 ok("override carries prompt", res.conversation_config_override.agent.prompt.prompt.length > 0);
 ok("override carries first_message", res.conversation_config_override.agent.first_message.length > 0);
 ok("override language en", res.conversation_config_override.agent.language === "en");
 
 const fb = buildFallbackResponse();
+ok("fallback carries the type discriminator too", fb.type === "conversation_initiation_client_data");
 ok("fallback still valid shape", fb.dynamic_variables.store_name === "our team" && fb.conversation_config_override.agent.first_message.length > 0);
 ok("fallback vars match required set", REQUIRED_VARS.every((k) => k in fb.dynamic_variables));
 

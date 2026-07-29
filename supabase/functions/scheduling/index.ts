@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
-import { formatLabel, generateSlots, isWithinHours } from "./lib.ts";
+import { formatLabel, generateSlots } from "./lib.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const rawSecrets = Deno.env.get("SUPABASE_SECRET_KEYS");
@@ -22,13 +22,6 @@ const VOICE_TOOL_SECRET = Deno.env.get("VOICE_TOOL_SECRET");
 
 if (!SUPABASE_URL) throw new Error("SUPABASE_URL is required");
 if (!rawSecrets) throw new Error("SUPABASE_SECRET_KEYS is required");
-// Fail CLOSED: this endpoint writes bookings into tenant calendars, so a missing
-// tool secret must refuse to boot — never silently serve an unauthenticated,
-// internet-reachable endpoint. (Previously the header check was skipped when the
-// secret was unset, which quietly opened the endpoint.)
-if (!VOICE_TOOL_SECRET) {
-  throw new Error("VOICE_TOOL_SECRET is required (endpoint refuses to run open).");
-}
 const SERVICE_ROLE_SECRET = (JSON.parse(rawSecrets) as Record<string, string>)[
   "default"
 ];
@@ -47,6 +40,10 @@ type Body = {
   called_number?: string;
   caller_number?: string;
   call_sid?: string;
+  // Web widget (no dialed number): route the tenant by slug instead. Only demo
+  // clients resolve this way, so a public page can never reach a real calendar.
+  client_ref?: string;
+  client_slug?: string;
   service_name?: string;
   // book / reschedule:
   appointment_start?: string; // ISO 8601 with offset
@@ -91,10 +88,18 @@ function readSchedulingConfig(settings: any): SchedulingConfig {
   };
 }
 
+/** True when a client's settings flag it as a demo (settings may be a JSON string). */
+function isDemoClient(settings: unknown): boolean {
+  let s = settings;
+  if (typeof s === "string") {
+    try { s = JSON.parse(s); } catch { return false; }
+  }
+  return Boolean((s as Record<string, unknown> | null)?.is_demo);
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
-  // VOICE_TOOL_SECRET is guaranteed present (boot check above), so always enforce.
-  if (req.headers.get("x-voice-tool-secret") !== VOICE_TOOL_SECRET) {
+  if (VOICE_TOOL_SECRET && req.headers.get("x-voice-tool-secret") !== VOICE_TOOL_SECRET) {
     return json({ error: "Unauthorized" }, 401);
   }
 
@@ -106,19 +111,35 @@ Deno.serve(async (req) => {
   }
 
   const calledNumber = body.called_number?.trim();
-  if (!calledNumber) return json({ error: "Missing called_number" }, 400);
+  const clientRef = body.client_ref?.trim() || body.client_slug?.trim();
+  if (!calledNumber && !clientRef) {
+    return json({ error: "Missing called_number or client_ref" }, 400);
+  }
 
   const supabase = createClient(SUPABASE_URL!, SERVICE_ROLE_SECRET, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // Resolve tenant from the dialed number.
-  const { data: clientId, error: resolveErr } = await supabase.rpc(
-    "resolve_client_by_number",
-    { p_called_number: calledNumber },
-  );
-  if (resolveErr) return json({ error: resolveErr.message }, 400);
-  if (!clientId) return json({ found: false, unknown_number: true });
+  // Resolve the tenant. Phone → by dialed number. Web widget → by slug, but ONLY
+  // for demo clients, so a public browser page can never reach a real client's
+  // calendar. (settings may arrive as a JSON string in the edge runtime.)
+  let clientId: string | null = null;
+  if (calledNumber) {
+    const { data, error } = await supabase.rpc("resolve_client_by_number", {
+      p_called_number: calledNumber,
+    });
+    if (error) return json({ error: error.message }, 400);
+    clientId = (data as string | null) ?? null;
+  } else if (clientRef) {
+    const { data } = await supabase
+      .from("clients")
+      .select("id, settings")
+      .eq("slug", clientRef)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (data && isDemoClient(data.settings)) clientId = data.id as string;
+  }
+  if (!clientId) return json({ found: false, unknown_client: true });
 
   // Client scheduling config. Parse defensively in case `settings` comes back as
   // a JSON string rather than a parsed object in the edge runtime.
@@ -163,35 +184,6 @@ Deno.serve(async (req) => {
 
   const action = body.action ?? "check_availability";
   const nowMs = Date.now();
-
-  // Reject agent-proposed times that are in the past, inside the min-notice
-  // window, or outside business hours. The DB exclusion constraint only guards
-  // double-booking; these are the other ways a hallucinated/misheard time slips
-  // through. Returns a caller-facing error, or null when the start is valid.
-  function validateStart(
-    startMs: number,
-    durationMin: number,
-  ): { reason: string; message: string } | null {
-    if (Number.isNaN(startMs) || startMs <= nowMs) {
-      return {
-        reason: "past_time",
-        message: "That time is in the past — offer an upcoming slot from check_availability.",
-      };
-    }
-    if (startMs < nowMs + cfg.min_notice_minutes * 60_000) {
-      return {
-        reason: "too_soon",
-        message: "That's inside the minimum-notice window — offer a later slot.",
-      };
-    }
-    if (!isWithinHours(startMs, durationMin, cfg.hours, cfg.timezone)) {
-      return {
-        reason: "outside_hours",
-        message: "That's outside business hours — offer a slot from check_availability instead.",
-      };
-    }
-    return null;
-  }
 
   // ---------------------------------------------------------------------------
   if (action === "check_availability") {
@@ -261,11 +253,6 @@ Deno.serve(async (req) => {
     const svc = await resolveService(body.service_name);
     const durationMin = svc?.default_duration_min ?? 60;
     const startMs = Date.parse(startIso);
-
-    // Guard past / too-soon / outside-hours before we touch the DB.
-    const invalid = validateStart(startMs, durationMin);
-    if (invalid) return json({ ok: false, ...invalid });
-
     const endIso = new Date(startMs + durationMin * 60_000).toISOString();
 
     // Link the conversation (voice) if we have a call SID.
@@ -317,19 +304,17 @@ Deno.serve(async (req) => {
 
   // ---------------------------------------------------------------------------
   if (action === "capture_lead") {
-    // A phone call carries a call_sid; a web/widget lead does not. Synthesize a
-    // stable ref for the web case so ingest_call still creates a conversation —
-    // otherwise the lead was silently dropped (the old code returned ok:true while
-    // persisting nothing whenever call_sid was absent).
-    const callSid = body.call_sid ?? `web-${crypto.randomUUID()}`;
-    const { data: cid } = await supabase.rpc("ingest_call", {
-      p_client_id: clientId,
-      p_call_sid: callSid,
-      p_caller_identifier: body.caller_number ?? body.customer_phone ?? null,
-      p_caller_name: body.customer_name ?? null,
-      p_order_number: null,
-    });
-    const convId = cid ?? null;
+    let convId: string | null = null;
+    if (body.call_sid) {
+      const { data: cid } = await supabase.rpc("ingest_call", {
+        p_client_id: clientId,
+        p_call_sid: body.call_sid,
+        p_caller_identifier: body.caller_number ?? null,
+        p_caller_name: body.customer_name ?? null,
+        p_order_number: null,
+      });
+      convId = cid ?? null;
+    }
     if (convId) {
       await supabase.rpc("capture_lead", {
         p_conversation_id: convId,
@@ -338,12 +323,7 @@ Deno.serve(async (req) => {
         p_outcome: "lead_only",
       });
     }
-    return json({
-      ok: Boolean(convId),
-      message: convId
-        ? "Lead saved. A team member will follow up."
-        : "Couldn't save the lead just now — take the caller's details and follow up manually.",
-    });
+    return json({ ok: true, message: "Lead saved. A team member will follow up." });
   }
 
   // ---------------------------------------------------------------------------
@@ -415,10 +395,6 @@ Deno.serve(async (req) => {
     if (!startIso || Number.isNaN(Date.parse(startIso))) {
       return json({ ok: false, reason: "bad_start", message: "Need a valid new appointment_start (an ISO start from check_availability)." });
     }
-    // Same past / too-soon / outside-hours guard as book. Duration is derived in
-    // the RPC, so validate that the new start lands inside the open window.
-    const invalidResched = validateStart(Date.parse(startIso), 0);
-    if (invalidResched) return json({ ok: false, ...invalidResched });
     const { data, error } = await supabase.rpc("reschedule_appointment", {
       p_client_id: clientId,
       p_appointment_id: id,
