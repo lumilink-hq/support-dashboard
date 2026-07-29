@@ -32,6 +32,9 @@ export type CallFields = {
   calledNumber: string | null;
   callerId: string | null;
   elevenConversationId: string | null;
+  // Web widget sessions have no dialed number; they carry the tenant slug as a
+  // dynamic variable instead (set by the widget and echoed by personalization).
+  clientSlug: string | null;
   status: string | null;
 };
 
@@ -98,6 +101,7 @@ export function extractCallFields(payload: PostCallPayload): CallFields {
       dv["system__conversation_id"],
       data.conversation_id,
     ),
+    clientSlug: first(dv["client_slug"], (meta as any).client_slug),
     status: str(data.status),
   };
 }

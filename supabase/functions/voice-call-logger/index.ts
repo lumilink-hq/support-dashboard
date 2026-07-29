@@ -48,6 +48,15 @@ function json(payload: unknown, status = 200) {
   });
 }
 
+/** True when a client's settings flag it as a demo (settings may be a JSON string). */
+function isDemoClient(settings: unknown): boolean {
+  let s = settings;
+  if (typeof s === "string") {
+    try { s = JSON.parse(s); } catch { return false; }
+  }
+  return Boolean((s as Record<string, unknown> | null)?.is_demo);
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -106,11 +115,13 @@ Deno.serve(async (req) => {
   // conversation id (web/SIP calls have no call SID). Either serves as the
   // conversation's external_ref.
   const ref = f.callSid ?? f.elevenConversationId;
-  if (!ref || !f.calledNumber) {
+  // We need a reference AND a way to resolve the tenant: a dialed number (phone)
+  // or a client slug (web widget). A browser session has only the slug.
+  if (!ref || (!f.calledNumber && !f.clientSlug)) {
     return json(
       {
         error:
-          "Could not extract a call reference or dialed number from the payload",
+          "Could not extract a call reference plus a dialed number or client slug from the payload",
       },
       400,
     );
@@ -120,14 +131,27 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // 1) Resolve tenant from the dialed number.
-  const { data: clientId, error: resolveErr } = await supabase.rpc(
-    "resolve_client_by_number",
-    { p_called_number: f.calledNumber },
-  );
-  if (resolveErr) return json({ error: resolveErr.message }, 400);
+  // 1) Resolve the tenant. Phone → by dialed number. Web widget → by slug, but
+  //    ONLY for demo clients (mirrors the scheduling + personalization guard), so
+  //    a public browser session can never attach to a real client's records.
+  let clientId: string | null = null;
+  if (f.calledNumber) {
+    const { data, error } = await supabase.rpc("resolve_client_by_number", {
+      p_called_number: f.calledNumber,
+    });
+    if (error) return json({ error: error.message }, 400);
+    clientId = (data as string | null) ?? null;
+  } else if (f.clientSlug) {
+    const { data } = await supabase
+      .from("clients")
+      .select("id, settings")
+      .eq("slug", f.clientSlug)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (data && isDemoClient(data.settings)) clientId = data.id as string;
+  }
   if (!clientId) {
-    return json({ ok: false, unknown_number: true, call_ref: ref });
+    return json({ ok: false, unknown_tenant: true, call_ref: ref });
   }
 
   // 2) Ensure the conversation exists (idempotent; the lookup tool usually made
@@ -201,7 +225,7 @@ Deno.serve(async (req) => {
     await supabase.rpc("apply_flag", {
       p_conversation_id: convId,
       p_reason: flagReason,
-      p_details: `Voice call ${f.callSid} flagged: ${flagReason}.`,
+      p_details: `Voice call ${ref} flagged: ${flagReason}.`,
     });
   }
 
