@@ -1,8 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-/** Paths reachable without a session. */
-const PUBLIC_PREFIXES = ["/login", "/signup", "/auth", "/demo"];
+// The public/gated decision lives in lib/route-access.ts so it can be unit
+// tested without Next or Supabase. Change the lists there, not here.
+import { isPublicPath } from "@/lib/route-access";
 
 /**
  * Refreshes the Supabase session cookie on every request and gates protected
@@ -39,7 +40,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
+  const isPublic = isPublicPath(pathname);
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
