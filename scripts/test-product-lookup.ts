@@ -219,5 +219,133 @@ ok("narrow hit: total_matches carried", narrow.total_matches === 1);
 ok("narrow hit: falls back to match_count when total absent",
    buildProductResponse({ ok: true, fresh: true, matches: [freshMatch] }).total_matches === 1);
 
+// =============================================================================
+// Deals intent (0024)
+// =============================================================================
+console.log("\ndeals intent");
+const dealMatch = {
+  title: "Sunset Sherbert - Hybrid",
+  price_min: 30,
+  price_max: 30,
+  currency: "USD",
+  available: true,
+  stock_confidence: "fresh",
+  variants: [],
+  on_sale: true,
+  was_price: 60,
+  discount_pct: 50,
+};
+const deals = buildProductResponse({
+  ok: true,
+  intent: "deals",
+  fresh: true,
+  matches: [dealMatch],
+  total_matches: 4,
+});
+ok("deals: intent echoed", deals.intent === "deals");
+ok("deals: found", deals.found === true);
+ok("deals: was_price carried", deals.products?.[0].was_price === 60);
+ok("deals: discount_pct carried", deals.products?.[0].discount_pct === 50);
+ok("deals: on_sale flagged", deals.products?.[0].on_sale === true);
+ok("deals: total surfaced in the message", (deals.message ?? "").includes("4 products are on sale"));
+ok(
+  "deals: agent told to quote both prices",
+  (deals.message ?? "").toLowerCase().includes("was_price"),
+);
+
+const noDeals = buildProductResponse({
+  ok: true,
+  intent: "deals",
+  fresh: true,
+  matches: [],
+  total_matches: 0,
+  catalog: { types: [{ type: "Flower", n: 52, examples: ["Zoap"] }], brands: [] },
+});
+ok("no deals: found false", noDeals.found === false);
+ok(
+  "no deals: explicitly forbids inventing a promotion",
+  (noDeals.message ?? "").toLowerCase().includes("invent"),
+);
+ok("no deals: catalog attached so the agent can pivot", noDeals.catalog !== undefined);
+
+console.log("\ndeals — percentages are only spoken when real");
+ok(
+  "no discount_pct -> agent told to state it only when present",
+  (buildProductResponse({
+    ok: true,
+    intent: "deals",
+    fresh: true,
+    matches: [{ ...dealMatch, discount_pct: null }],
+  }).message ?? "").includes("Only state a percentage if discount_pct is present"),
+);
+ok(
+  "null discount_pct stays null, never 0",
+  buildProductResponse({
+    ok: true,
+    intent: "deals",
+    fresh: true,
+    matches: [{ ...dealMatch, discount_pct: null, was_price: null }],
+  }).products?.[0].discount_pct === null,
+);
+
+// =============================================================================
+// All-out-of-stock + alternatives (0024)
+// =============================================================================
+console.log("\nall out of stock");
+const soldOut = {
+  title: "Milk and Cookies - Hybrid - 3.5G",
+  price_min: 25,
+  price_max: 25,
+  currency: "USD",
+  available: false,
+  stock_confidence: "fresh",
+  variants: [],
+};
+const oos = buildProductResponse({
+  ok: true,
+  fresh: true,
+  matches: [soldOut],
+  all_out_of_stock: true,
+  alternatives: [
+    { title: "Blue Slushie - Indica", price_min: 40, price_max: 40, currency: "USD", on_sale: true },
+    { title: "Gelonade - Hybrid", price_min: 25, price_max: 25, currency: "USD", on_sale: false },
+  ],
+});
+ok(
+  "out of stock is found:TRUE — the store does sell it",
+  oos.found === true && oos.all_out_of_stock === true,
+);
+ok("alternatives surfaced", oos.alternatives?.length === 2);
+ok("alternative name mapped from title", oos.alternatives?.[0].name === "Blue Slushie - Indica");
+ok("alternative price mapped", oos.alternatives?.[0].price_from === 40);
+ok("alternative sale flag mapped", oos.alternatives?.[0].on_sale === true);
+ok(
+  "agent told NOT to say we don't carry it",
+  (oos.message ?? "").includes("not that we don't carry it"),
+);
+ok(
+  "agent confined to the alternatives list",
+  (oos.message ?? "").includes("Only offer what is"),
+);
+ok("no restock promises", (oos.message ?? "").toLowerCase().includes("do not promise a restock"));
+
+const oosNoAlts = buildProductResponse({
+  ok: true,
+  fresh: true,
+  matches: [soldOut],
+  all_out_of_stock: true,
+  alternatives: [],
+});
+ok("no alternatives -> field omitted", oosNoAlts.alternatives === undefined);
+ok(
+  "no alternatives -> falls back to logging a ticket",
+  (oosNoAlts.message ?? "").toLowerCase().includes("ticket"),
+);
+
+console.log("\nin-stock results are unaffected");
+const inStock = buildProductResponse({ ok: true, fresh: true, matches: [freshMatch] });
+ok("no all_out_of_stock flag", inStock.all_out_of_stock === undefined);
+ok("no alternatives offered for an available product", inStock.alternatives === undefined);
+
 console.log(`\nproduct-lookup: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

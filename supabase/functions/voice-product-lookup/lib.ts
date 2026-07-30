@@ -67,6 +67,21 @@ export type SpokenProduct = {
   sizes: SpokenVariant[];
   sizes_in_stock: string[];
   sizes_out_of_stock: string[];
+  // Discount, when the store publishes one. `was_price` is only ever present
+  // alongside a real, higher reference price (see saleFrom in the sync), so the
+  // agent can say "fifty, down to twenty-five" without checking the arithmetic.
+  on_sale: boolean;
+  was_price: number | null;
+  discount_pct: number | null;
+};
+
+/** A product the agent can offer when everything asked for is sold out. */
+export type SpokenAlternative = {
+  name: string;
+  price_from: number | null;
+  price_to: number | null;
+  currency: string | null;
+  on_sale: boolean;
 };
 
 type RpcMatch = Record<string, any>;
@@ -119,7 +134,23 @@ export function toSpokenProduct(m: RpcMatch): SpokenProduct {
     sizes,
     sizes_in_stock: inStock,
     sizes_out_of_stock: outOfStock,
+    on_sale: m.on_sale === true,
+    was_price: m.was_price != null ? Number(m.was_price) : null,
+    discount_pct: m.discount_pct != null ? Number(m.discount_pct) : null,
   };
+}
+
+export function toAlternatives(raw: unknown): SpokenAlternative[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((a: any) => ({
+      name: String(a?.title ?? "").trim(),
+      price_from: a?.price_min != null ? Number(a.price_min) : null,
+      price_to: a?.price_max != null ? Number(a.price_max) : null,
+      currency: a?.currency ?? null,
+      on_sale: a?.on_sale === true,
+    }))
+    .filter((a) => a.name);
 }
 
 export type CatalogOverview = {
@@ -142,6 +173,13 @@ export type ProductLookupResponse = {
   // Present ONLY on a miss: what the store does carry, so the agent offers real
   // options instead of a dead end.
   catalog?: CatalogOverview;
+  // 'deals' when the caller asked about discounts rather than naming a product.
+  intent?: string;
+  // Every matched product is out of stock. Distinct from found:false — the store
+  // DOES sell it, so the agent must not say otherwise.
+  all_out_of_stock?: boolean;
+  // In-stock products of the same kind, present only alongside all_out_of_stock.
+  alternatives?: SpokenAlternative[];
   wrap_up?: boolean;
   message?: string;
 };
@@ -198,6 +236,43 @@ export function buildProductResponse(rpc: unknown): ProductLookupResponse {
   }
 
   const matches: RpcMatch[] = Array.isArray(r.matches) ? r.matches : [];
+
+  // ---------------------------------------------------------------------------
+  // DEALS. "What's on sale" is a different question from "do you have X", and
+  // answering it with the normal matcher returns whichever product is named
+  // something similar to the word "deal".
+  // ---------------------------------------------------------------------------
+  if (r.intent === "deals") {
+    if (matches.length === 0) {
+      const catalog = toCatalogOverview(r.catalog);
+      return {
+        found: false,
+        intent: "deals",
+        match_count: 0,
+        ...(catalog ? { catalog } : {}),
+        message:
+          "Nothing is discounted right now. Say so plainly — do NOT invent a promotion or " +
+          "repeat one you remember from elsewhere. Offer to point them at what the store carries instead.",
+      };
+    }
+    const products = matches.map(toSpokenProduct);
+    const total = Number(r.total_matches ?? products.length);
+    return {
+      found: true,
+      intent: "deals",
+      match_count: products.length,
+      total_matches: total,
+      broad: r.broad === true,
+      stock_known: r.fresh === true,
+      products,
+      message:
+        `${total} product${total === 1 ? " is" : "s are"} on sale, biggest saving first; ` +
+        `${products.length} listed here. Quote was_price and the current price together ` +
+        `("normally fifty, on sale at twenty-five"). Only state a percentage if discount_pct is present. ` +
+        `Everything listed is in stock. Do NOT describe any other product as discounted.`,
+    };
+  }
+
   if (matches.length === 0) {
     // A miss is not a dead end. search_products hands back the catalogue, so the
     // agent names what the store DOES carry. Callers rarely know a product's
@@ -248,6 +323,34 @@ export function buildProductResponse(rpc: unknown): ProductLookupResponse {
         `That matched ${total} products, so do NOT just read these few out as if they were the whole range. ` +
         `Say roughly how many there are and ask ONE narrowing question — a strain type, an effect they're after, or a size. ` +
         `Only name specific products if they ask for examples. ${stockLine}`,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // EVERYTHING MATCHED IS SOLD OUT. The most common way a product call ends
+  // badly: the caller named the one thing that's gone, and the agent had nothing
+  // to offer while a dozen similar products sat in stock. Note this is NOT
+  // found:false — the store does sell it, and saying otherwise is a lie the
+  // caller can check on the website in ten seconds.
+  // ---------------------------------------------------------------------------
+  const alternatives = toAlternatives(r.alternatives);
+  if (r.all_out_of_stock === true) {
+    return {
+      found: true,
+      match_count: products.length,
+      total_matches: Number(r.total_matches ?? products.length),
+      stock_known: stockKnown,
+      all_out_of_stock: true,
+      products,
+      ...(alternatives.length ? { alternatives } : {}),
+      message:
+        alternatives.length
+          ? "We DO sell this, it is just out of stock — say that, not that we don't carry it. " +
+            "Then offer ONE or TWO of the alternatives by name with their price. Only offer what is " +
+            "in the alternatives list. Do not promise a restock date."
+          : "We DO sell this, it is just out of stock — say that, not that we don't carry it. " +
+            "Nothing comparable is in stock either, so offer to log a ticket so someone can follow up. " +
+            "Do not promise a restock date.",
     };
   }
 

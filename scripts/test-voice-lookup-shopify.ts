@@ -15,12 +15,18 @@ import {
   mapShopifyOrder,
   mapWooOrder,
   normalizeOrderNumber,
+  normalizeWooStatus,
   orderNumberCandidates,
   normalizeStatus,
   parseCreds,
   pickExactOrder,
   pickFulfillment,
+  pickShipment,
   pickShopifyCreds,
+  pickWooOrder,
+  shipStationOrderNumber,
+  WOO_STATUS_MAP,
+  wooOrderUrl,
   SHOPIFY_API_VERSION,
   SHOPIFY_ORDER_QUERY,
   SHOPIFY_POLICIES_QUERY,
@@ -280,28 +286,154 @@ check("shipping address name fallback", fallback.customer_name === "Grace Hopper
 check("unparseable date -> null, not Invalid Date", fallback.order_placed_at === null);
 
 // -----------------------------------------------------------------------------
-console.log("\nmapWooOrder — unchanged behavior");
+console.log("\nmapWooOrder");
 // -----------------------------------------------------------------------------
 const woo = mapWooOrder(
   {
     status: "processing",
     date_created: "2026-07-25T10:00:00",
+    date_created_gmt: "2026-07-25T17:00:00",
     total: "99.99",
     currency: "USD",
     billing: { first_name: "Alan", last_name: "Turing", email: "alan@example.com" },
-    line_items: [{ name: "Widget", quantity: 3 }],
+    line_items: [{ name: "Widget", quantity: 3, total: "89.97" }],
   },
   { trackingNumber: "1Z888", carrierCode: "fedex", shipmentStatus: "shipped", shipDate: "2026-07-26" },
 );
-check("woo status", woo.store_status === "processing");
+check("woo status mapped into the shared token set", woo.store_status === "IN_PROGRESS");
 check("woo name", woo.customer_name === "Alan Turing");
 check("woo total numeric", woo.order_total === 99.99);
 check("woo tracking from shipstation", woo.tracking_number === "1Z888");
 check("woo carrier", woo.carrier === "fedex");
 check("woo estimated_delivery always null", woo.estimated_delivery === null);
+check(
+  "woo line items carry a UNIT price like Shopify's",
+  woo.line_items[0].price === 29.99,
+);
+check(
+  "date_created_gmt is read as UTC, not as server-local time",
+  woo.order_placed_at === "2026-07-25T17:00:00.000Z",
+);
 const wooNoTrack = mapWooOrder({ status: "on-hold", line_items: [] }, null);
 check("woo without tracking", wooNoTrack.tracking_number === null);
 check("woo raw_shipping defaults to {}", JSON.stringify(wooNoTrack.raw_shipping) === "{}");
+check("woo on-hold maps to ON_HOLD", wooNoTrack.store_status === "ON_HOLD");
+check("woo currency defaults to USD, not null", wooNoTrack.currency === "USD");
+check("woo total defaults to 0, not null", wooNoTrack.order_total === 0);
+check(
+  "shipping_status inferred when ShipStation omits it",
+  mapWooOrder({}, { trackingNumber: "1Z1" }).shipping_status === "shipped",
+);
+
+// -----------------------------------------------------------------------------
+console.log("\nnormalizeWooStatus — Woo's vocabulary must join Shopify's");
+//
+// This is the fix for the highest-impact Woo divergence: evaluate_flag and
+// 0013's stale_exempt_statuses both do a JSONB membership test against the
+// UPPERCASE token set, so raw Woo statuses could never match a rule — no Woo
+// order could flag as abnormal, and no completed Woo order could ever stop the
+// staleness clock.
+// -----------------------------------------------------------------------------
+check("completed -> FULFILLED (this is what stops the staleness clock)",
+  normalizeWooStatus("completed") === "FULFILLED");
+check("pending -> PENDING", normalizeWooStatus("pending") === "PENDING");
+check("processing -> IN_PROGRESS", normalizeWooStatus("processing") === "IN_PROGRESS");
+check("on-hold -> ON_HOLD", normalizeWooStatus("on-hold") === "ON_HOLD");
+check("refunded -> REFUNDED", normalizeWooStatus("refunded") === "REFUNDED");
+check("cancelled -> VOIDED", normalizeWooStatus("cancelled") === "VOIDED");
+check("US spelling accepted", normalizeWooStatus("canceled") === "VOIDED");
+check("failed -> VOIDED", normalizeWooStatus("failed") === "VOIDED");
+check("wc- prefix tolerated", normalizeWooStatus("wc-completed") === "FULFILLED");
+check("case-insensitive", normalizeWooStatus("COMPLETED") === "FULFILLED");
+check(
+  "an unknown plugin status returns null rather than an invented token",
+  normalizeWooStatus("awaiting-warehouse") === null,
+);
+check("empty -> null", normalizeWooStatus("") === null);
+check(
+  "every mapped value is inside ALLOWED_STATUSES",
+  Object.values(WOO_STATUS_MAP).every((v) => ALLOWED_STATUSES.has(v)),
+);
+
+// -----------------------------------------------------------------------------
+console.log("\nwooOrderUrl — the three lookup schemes the Zap already had");
+// -----------------------------------------------------------------------------
+check("default is the id path",
+  wooOrderUrl("https://budclub.example", "1749").url ===
+    "https://budclub.example/wp-json/wc/v3/orders/1749");
+check("id path is not a list", wooOrderUrl("https://x.example", "1").returnsList === false);
+check("trailing slash tolerated",
+  wooOrderUrl("https://budclub.example/", "1749", "id").url.includes("/wp-json/wc/v3/orders/1749"));
+check("search scheme",
+  wooOrderUrl("https://budclub.example", "1749", "search").url ===
+    "https://budclub.example/wp-json/wc/v3/orders?search=1749");
+check("search returns a list", wooOrderUrl("https://x.example", "1", "search").returnsList === true);
+check("meta scheme carries the key",
+  wooOrderUrl("https://budclub.example", "1749", "meta:_order_number").url ===
+    "https://budclub.example/wp-json/wc/v3/orders?meta_key=_order_number&meta_value=1749");
+check("order numbers are url-encoded",
+  wooOrderUrl("https://x.example", "17 49", "search").url.includes("17%2049"));
+
+// -----------------------------------------------------------------------------
+console.log("\npickWooOrder — 'search' is full-text and WILL return neighbours");
+// -----------------------------------------------------------------------------
+check("exact match on the customer-facing number",
+  pickWooOrder([{ id: 55, number: "1748" }, { id: 56, number: "1749" }], "1749")?.id === 56);
+check("no exact match in a list -> null, never the first result",
+  pickWooOrder([{ id: 55, number: "1748" }], "1749") === null);
+check("a single object from /orders/{id} is the order",
+  pickWooOrder({ id: 812, number: "1749" }, "812")?.id === 812);
+check("matches on id when number is absent",
+  pickWooOrder([{ id: 1749 }], "1749")?.id === 1749);
+check("prefix tolerated on the caller's side",
+  pickWooOrder([{ id: 1, number: "1749" }], "TSU1749", "TSU#")?.number === "1749");
+check("prefix tolerated on the store's side",
+  pickWooOrder([{ id: 1, number: "TSU#1749" }], "1749", "TSU#")?.number === "TSU#1749");
+check("empty payload -> null", pickWooOrder([], "1749") === null);
+check("null payload -> null", pickWooOrder(null, "1749") === null);
+
+// -----------------------------------------------------------------------------
+console.log("\npickShipment — voided labels and split shipments");
+// -----------------------------------------------------------------------------
+check(
+  "a voided label is never read out",
+  pickShipment([
+    { voided: true, trackingNumber: "VOIDED1", createDate: "2026-07-28" },
+    { voided: false, trackingNumber: "REAL1", createDate: "2026-07-27" },
+  ])?.trackingNumber === "REAL1",
+);
+check(
+  "most recent shipment wins (the response is unsorted)",
+  pickShipment([
+    { trackingNumber: "OLD", createDate: "2026-07-20" },
+    { trackingNumber: "NEW", createDate: "2026-07-28" },
+  ])?.trackingNumber === "NEW",
+);
+check(
+  "prefers a shipment that actually has tracking",
+  pickShipment([
+    { createDate: "2026-07-28" },
+    { trackingNumber: "T1", createDate: "2026-07-20" },
+  ])?.trackingNumber === "T1",
+);
+check("all voided -> null", pickShipment([{ voided: true, trackingNumber: "X" }]) === null);
+check("empty -> null", pickShipment([]) === null);
+check("undefined -> null", pickShipment(undefined) === null);
+
+// -----------------------------------------------------------------------------
+console.log("\nshipStationOrderNumber — the silent no-tracking bug");
+//
+// ShipStation keys on the CUSTOMER-FACING number. Querying it with Woo's post id
+// returned nothing on any store with a sequential-order-number plugin, so every
+// WISMO call answered "no tracking yet" while the label existed all along.
+// -----------------------------------------------------------------------------
+check("prefers the customer-facing number over the post id",
+  shipStationOrderNumber({ id: 812, number: "1749" }, "812") === "1749");
+check("falls back when the order has no number",
+  shipStationOrderNumber({ id: 812 }, "812") === "812");
+check("blank number falls back", shipStationOrderNumber({ number: "  " }, "812") === "812");
+check("numeric number stringified", shipStationOrderNumber({ number: 1749 }, "812") === "1749");
+check("null order falls back", shipStationOrderNumber(null, "812") === "812");
 
 // -----------------------------------------------------------------------------
 console.log("\nshopifyErrorFrom — 200 OK is not success");

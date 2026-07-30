@@ -40,13 +40,17 @@ import {
   parseCreds,
   orderNumberCandidates,
   pickExactOrder,
+  pickShipment,
   pickShopifyCreds,
+  pickWooOrder,
+  shipStationOrderNumber,
   SHOPIFY_ORDER_QUERY,
   shopifyErrorFrom,
   shopifyGraphqlUrl,
   stripHash,
   stripTrailingSlash,
   verifyCaller,
+  wooOrderUrl,
   type LineItemLite,
   type NormalizedOrder,
 } from "./lib.ts";
@@ -292,9 +296,15 @@ Deno.serve(async (req) => {
   const platform: string = String(
     config?.store_platform ?? "woocommerce",
   ).toLowerCase();
-  // Shopify order-name prefix, e.g. "TSU#" -> orders are named "TSU#1749".
+  // Order-name prefix, e.g. "TSU#" -> orders are named "TSU#1749".
   // Null/absent = the default "#1234" shape. Added by migration 0017.
+  // Applies to BOTH platforms: a Woo store with a sequential-number plugin can
+  // prefix its numbers exactly the same way.
   const orderPrefix: string | null = config?.order_number_prefix ?? null;
+  // WooCommerce only. 'id' (default) | 'search' | 'meta:<key>' — see wooOrderUrl.
+  // Added to get_client_config by migration 0022; absent on older DBs, and the
+  // ?? keeps this function working against one.
+  const orderScheme: string = config?.order_number_scheme ?? "id";
 
   // ---------------------------------------------------------------------------
   // 3) Fetch the order. Branch per platform. MOCK_STORE short-circuits with a
@@ -451,36 +461,71 @@ Deno.serve(async (req) => {
         });
       }
 
-      const wooRes = await fetch(
-        `${wooBase}/wp-json/wc/v3/orders/${encodeURIComponent(orderNumber)}`,
-        { headers: { Authorization: basicAuth(wooKey, wooSecret) } },
-      );
+      // Try the caller's value as given, then digits-only if it carried letters
+      // — the same widening the Shopify branch does, for the same reason: a
+      // customer reading "TSU#1749" off a confirmation when the store's own
+      // number is "1749".
+      let o: Record<string, any> | null = null;
+      for (const candidate of orderNumberCandidates(orderNumber)) {
+        const { url, returnsList } = wooOrderUrl(wooBase, candidate, orderScheme);
 
-      if (wooRes.status === 404) {
+        let wooRes: Response;
+        try {
+          wooRes = await fetch(url, {
+            headers: { Authorization: basicAuth(wooKey, wooSecret) },
+          });
+        } catch (e) {
+          console.error("woo fetch failed", String(e));
+          return json(LOOKUP_ERROR);
+        }
+
+        // 404 means "no such order" only on the /orders/{id} form. The list
+        // forms answer 200 with [].
+        if (wooRes.status === 404) continue;
+        if (!wooRes.ok) {
+          console.error("woo http error", wooRes.status);
+          return json(LOOKUP_ERROR);
+        }
+
+        const payload = await wooRes.json().catch(() => null);
+        // `search` is a full-text match and can return a NEIGHBOURING order, so
+        // this insists on an exact hit rather than reading out a stranger's
+        // order — the same guard as pickExactOrder on the Shopify side.
+        const hit = pickWooOrder(payload, candidate, orderPrefix);
+        if (hit) {
+          o = hit;
+          break;
+        }
+        void returnsList;
+      }
+
+      if (!o) {
         return json(withWrap({
           found: false,
           order_not_found: true,
           message: "No order matched that number.",
         }));
       }
-      if (!wooRes.ok) {
-        console.error("woo http error", wooRes.status);
-        return json(LOOKUP_ERROR);
-      }
 
-      const o = (await wooRes.json()) as Record<string, any>;
+      // Echo back what the STORE calls the order, not what the caller said —
+      // and, critically, key orders_cache on it. Under the `id` scheme these
+      // differ, so without this the same order lands in the cache twice.
+      canonicalOrderNumber = shipStationOrderNumber(o, orderNumber);
 
       // ShipStation tracking (best-effort — missing shipping is not an error).
       let tracking: Record<string, any> | null = null;
       if (shipKey && shipSecret) {
         try {
+          // ShipStation matches the CUSTOMER-FACING number, not Woo's post id.
+          const ssNumber = shipStationOrderNumber(o, orderNumber);
           const ssRes = await fetch(
-            `https://ssapi.shipstation.com/shipments?orderNumber=${encodeURIComponent(orderNumber)}`,
+            `https://ssapi.shipstation.com/shipments?orderNumber=${encodeURIComponent(ssNumber)}`,
             { headers: { Authorization: basicAuth(shipKey, shipSecret) } },
           );
           if (ssRes.ok) {
             const ss = (await ssRes.json()) as Record<string, any>;
-            tracking = Array.isArray(ss.shipments) ? ss.shipments[0] ?? null : null;
+            // Skips voided labels and prefers the most recent one with tracking.
+            tracking = pickShipment(ss.shipments) as Record<string, any> | null;
           }
         } catch { /* tracking stays null */ }
       }

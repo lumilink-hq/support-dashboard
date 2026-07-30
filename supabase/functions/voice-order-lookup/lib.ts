@@ -427,31 +427,261 @@ export function mapShopifyOrder(node: Record<string, any>): NormalizedOrder {
 // WooCommerce -> normalized
 // -----------------------------------------------------------------------------
 
+/**
+ * WooCommerce's order status vocabulary, mapped onto the SAME token set the
+ * Shopify path produces.
+ *
+ * THIS IS LOAD-BEARING, and it was the single biggest Woo/Shopify divergence.
+ * `evaluate_flag` does a JSONB membership test of the stored status against
+ * `abnormal_status_rules.abnormal_statuses`, and `0013` matches
+ * `stale_exempt_statuses` (documented with values like 'FULFILLED') the same
+ * way. Both are written in the UPPERCASE Shopify vocabulary. Passing Woo's raw
+ * lowercase `processing` / `on-hold` straight through means:
+ *
+ *   - no abnormal-status rule can ever match, so a Woo order that IS abnormal
+ *     never flags and never escalates; and
+ *   - no staleness exemption can ever match, so every completed Woo order older
+ *     than stale_after_hours flags as `order_over_24h` and the agent escalates a
+ *     perfectly healthy "where is my order" call.
+ *
+ * Mapping here means one rule set works for a client on either platform.
+ * The untouched Woo value is still recoverable from `raw_store.status`.
+ */
+export const WOO_STATUS_MAP: Readonly<Record<string, string>> = {
+  pending: "PENDING", // awaiting payment
+  "checkout-draft": "PENDING",
+  processing: "IN_PROGRESS", // paid, being picked/packed
+  "on-hold": "ON_HOLD",
+  completed: "FULFILLED",
+  cancelled: "VOIDED",
+  canceled: "VOIDED", // Woo uses the British spelling; be forgiving
+  failed: "VOIDED",
+  refunded: "REFUNDED",
+  trash: "VOIDED",
+};
+
+/**
+ * Map a Woo status into ALLOWED_STATUSES. An unrecognized status (Woo lets
+ * plugins register custom ones, e.g. `wc-awaiting-shipment`) returns null rather
+ * than an invented token: null is honest and merely fails to match a rule, while
+ * a wrong token could match the WRONG rule and escalate the wrong calls.
+ */
+export function normalizeWooStatus(status: unknown): string | null {
+  const raw = String(status ?? "").trim().toLowerCase();
+  if (!raw) return null;
+  // Woo's REST API returns bare statuses, but the DB and some plugins use the
+  // `wc-` prefix. Accept both.
+  const key = raw.startsWith("wc-") ? raw.slice(3) : raw;
+  const mapped = WOO_STATUS_MAP[key];
+  if (mapped && ALLOWED_STATUSES.has(mapped)) return mapped;
+  // A custom status that happens to already be a valid token (rare) is kept.
+  const upper = key.toUpperCase().replace(/-/g, "_");
+  return ALLOWED_STATUSES.has(upper) ? upper : null;
+}
+
+/**
+ * Build the WooCommerce REST URL for an order lookup.
+ *
+ * WHY SCHEMES EXIST: `/orders/{id}` takes Woo's INTERNAL post id, which is not
+ * what the customer sees whenever a sequential-order-number plugin is installed
+ * (very common). The production email Zap already supports three schemes; the
+ * voice path only ever implemented `id`, so on any such store every voice
+ * lookup 404s while the same order resolves fine over email.
+ *
+ *   'id'          -> /orders/{n}                     (default; internal post id)
+ *   'search'      -> /orders?search={n}              (customer-facing number)
+ *   'meta:<key>'  -> /orders?meta_key=<key>&meta_value={n}
+ *
+ * The array-returning schemes are why the caller must handle both a bare object
+ * and a list — see `pickWooOrder`.
+ */
+export function wooOrderUrl(
+  baseUrl: string,
+  orderNumber: string,
+  scheme?: string | null,
+): { url: string; returnsList: boolean } {
+  const base = stripTrailingSlash(baseUrl);
+  const s = String(scheme ?? "id").trim() || "id";
+  const n = encodeURIComponent(orderNumber);
+
+  if (s.startsWith("meta:")) {
+    const metaKey = s.slice(5);
+    return {
+      url: `${base}/wp-json/wc/v3/orders?meta_key=${encodeURIComponent(metaKey)}&meta_value=${n}`,
+      returnsList: true,
+    };
+  }
+  if (s === "search") {
+    return { url: `${base}/wp-json/wc/v3/orders?search=${n}`, returnsList: true };
+  }
+  return { url: `${base}/wp-json/wc/v3/orders/${n}`, returnsList: false };
+}
+
+/**
+ * Choose the right order from a Woo response.
+ *
+ * The `search` scheme is a full-text match over the whole order — it will
+ * happily return order 1002 when asked for 1001 because "1001" appears in a
+ * customer note. This mirrors `pickExactOrder` on the Shopify side: prefer an
+ * exact match on the customer-facing `number` (or `id`), and only fall back to
+ * the sole result when there is exactly one and it was an id-style fetch.
+ */
+export function pickWooOrder(
+  payload: unknown,
+  orderNumber: string,
+  prefix?: string | null,
+): Record<string, any> | null {
+  const list: Record<string, any>[] = Array.isArray(payload)
+    ? payload
+    : payload && typeof payload === "object"
+      ? [payload as Record<string, any>]
+      : [];
+  if (!list.length) return null;
+
+  // Accept the caller's value with OR without the store's prefix, in either
+  // direction: the caller may read "TSU#1749" off a confirmation while Woo
+  // stores "1749", or the reverse. The prefix is a per-client constant, so
+  // widening by exactly it does not loosen the exact-match guarantee.
+  const want = orderKey(orderNumber);
+  const p = orderKey(prefix ?? "");
+  const wanted = new Set([want]);
+  if (p) {
+    if (want.startsWith(p)) wanted.add(want.slice(p.length));
+    else wanted.add(p + want);
+  }
+
+  const exact = list.find((o) => {
+    const candidates = [o?.number, o?.id].map(orderKey).filter(Boolean);
+    return candidates.some((c) => wanted.has(c));
+  });
+  if (exact) return exact;
+
+  // A single result from a direct /orders/{id} fetch IS the order — Woo resolved
+  // the id for us, so there is nothing to disambiguate.
+  if (!Array.isArray(payload) && list.length === 1) return list[0];
+  return null;
+}
+
+type ShipStationShipment = {
+  voided?: boolean;
+  createDate?: string | null;
+  trackingNumber?: string | null;
+  carrierCode?: string | null;
+  shipmentStatus?: string | null;
+  shipDate?: string | null;
+};
+
+/**
+ * Pick the shipment a caller is actually asking about.
+ *
+ * TWO BUGS THIS FIXES, both of which the production Zap already got right:
+ *   1. VOIDED LABELS. A label that was printed and then cancelled stays in the
+ *      ShipStation response. Taking `shipments[0]` blindly means the agent can
+ *      read out a tracking number for a label that will never move.
+ *   2. ORDERING. The response is not sorted, so `[0]` is arbitrary. On a split
+ *      shipment the caller wants the most recent one that actually has tracking.
+ *
+ * Mirrors `pickFulfillment` on the Shopify side deliberately — the two platforms
+ * should answer "which shipment?" the same way.
+ */
+export function pickShipment(
+  shipments: ShipStationShipment[] | null | undefined,
+): ShipStationShipment | null {
+  const list = (Array.isArray(shipments) ? shipments : []).filter(
+    (s) => s && !s.voided,
+  );
+  if (!list.length) return null;
+  const withTracking = list.filter((s) => s.trackingNumber);
+  const pool = withTracking.length ? withTracking : list;
+  return [...pool].sort((a, b) => {
+    const ta = a.createDate ? Date.parse(a.createDate) : 0;
+    const tb = b.createDate ? Date.parse(b.createDate) : 0;
+    return tb - ta;
+  })[0] ?? null;
+}
+
+/**
+ * Which number to hand ShipStation.
+ *
+ * ShipStation stores the CUSTOMER-FACING order number (Woo's `number`), not
+ * Woo's internal post id. Under the default `id` scheme the voice function was
+ * querying ShipStation with the post id, so on any store where those differ
+ * (i.e. any store with a sequential-order-number plugin) tracking silently came
+ * back empty and every WISMO call answered "no tracking yet". The Zap has always
+ * used `order.number` — this brings voice in line.
+ */
+export function shipStationOrderNumber(
+  order: Record<string, any> | null | undefined,
+  fallback: string,
+): string {
+  const n = order?.number;
+  if (n !== null && n !== undefined && String(n).trim() !== "") {
+    return String(n).trim();
+  }
+  return fallback;
+}
+
 export function mapWooOrder(
   o: Record<string, any>,
   tracking: Record<string, any> | null,
 ): NormalizedOrder {
+  // Zap-aligned line item shape {name, quantity, price} — the Shopify path
+  // writes `price`, and both platforms upsert the SAME orders_cache row, so
+  // omitting it here meant a Woo lookup silently stripped prices off a row a
+  // Shopify/email lookup had populated.
   const lineItems: LineItemLite[] = Array.isArray(o.line_items)
-    ? o.line_items.map((li: any) => ({ name: li.name, quantity: li.quantity }))
+    ? o.line_items.map((li: any) => ({
+        name: li.name,
+        quantity: li.quantity,
+        // Woo returns money as strings, and `total` is the LINE total while
+        // Shopify's originalUnitPriceSet is the UNIT price. Divide so the two
+        // platforms mean the same thing by `price`.
+        price: wooUnitPrice(li),
+      }))
     : [];
 
+  const shipment = tracking as ShipStationShipment | null;
+
   return {
-    store_status: o.status ?? null,
+    // See normalizeWooStatus — raw Woo statuses can never match a flag rule.
+    store_status: normalizeWooStatus(o.status),
     customer_name:
       [o.billing?.first_name, o.billing?.last_name].filter(Boolean).join(" ") || null,
     customer_email: o.billing?.email ?? null,
-    currency: o.currency ?? null,
-    order_total: o.total ? Number(o.total) : null,
-    order_placed_at: toIso(o.date_created),
+    // Zap-aligned defaults: 'USD' and 0, not null. A null currency renders as
+    // "142 " with no unit when the agent speaks the total.
+    currency: o.currency || "USD",
+    order_total: parseFloat(o.total) || 0,
+    // Woo's `date_created` is store-local with NO timezone; `date_created_gmt`
+    // is UTC but omits the "Z", so Date.parse would read it as local time and
+    // shift the order by the server's offset — which then feeds the staleness
+    // clock in evaluate_flag and can flag a fresh order as 24h old.
+    order_placed_at: toIso(
+      o.date_created_gmt ? `${o.date_created_gmt}Z` : o.date_created,
+    ),
     line_items: lineItems,
-    tracking_number: tracking?.trackingNumber ?? null,
-    carrier: tracking?.carrierCode ?? null,
-    shipping_status: tracking?.shipmentStatus ?? null,
-    shipped_at: toIso(tracking?.shipDate),
+    tracking_number: shipment?.trackingNumber ?? null,
+    carrier: shipment?.carrierCode ?? null,
+    // ShipStation only reports shipmentStatus on some plans; a shipment that
+    // carries a tracking number has, by definition, shipped.
+    shipping_status:
+      shipment?.shipmentStatus ?? (shipment?.trackingNumber ? "shipped" : null),
+    shipped_at: toIso(shipment?.shipDate),
+    // ShipStation V1 has no delivery estimate on the shipments endpoint.
     estimated_delivery: null,
     raw_store: o,
-    raw_shipping: tracking ?? {},
+    raw_shipping: (shipment as Record<string, unknown>) ?? {},
   };
+}
+
+/** Woo line totals are strings and cover the whole line, not one unit. */
+function wooUnitPrice(li: Record<string, any>): number {
+  // `price` is already per-unit on modern Woo and is the most direct signal.
+  const direct = parseFloat(li?.price);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  const total = parseFloat(li?.total) || 0;
+  const qty = Number(li?.quantity);
+  return Number.isFinite(qty) && qty > 0 ? total / qty : total;
 }
 
 // -----------------------------------------------------------------------------

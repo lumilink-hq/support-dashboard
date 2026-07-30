@@ -1,5 +1,10 @@
 // =============================================================================
-// shopify-product-sync/lib.ts — pure helpers for the catalog sync.
+// product-sync/shopify.ts — the Shopify product adapter.
+//
+// One of two adapters behind the shared `ProductRow` contract in types.ts (the
+// other is woo.ts). Everything downstream — products_cache, upsert_products,
+// search_products, voice-product-lookup — is platform-agnostic and must stay
+// that way; if something here needs to leak outward, it belongs in types.ts.
 //
 // No Deno, no network, no Supabase: everything here is unit-testable from node
 // (scripts/test-product-sync.ts). index.ts holds the I/O.
@@ -16,22 +21,22 @@
 //     value and let the SQL decide what is surfaceable.
 // =============================================================================
 
+import {
+  num,
+  parseCreds,
+  type ProductRow,
+  saleFrom,
+  stripHtml,
+  stripTrailingSlash,
+} from "./types.ts";
+
+// Re-exported so existing importers (and the tests) keep one import site.
+export { stripHtml, type ProductRow };
+
 export type ShopifyCreds = {
   access_token?: string;
   base_url?: string;
 };
-
-function parseCreds<T>(raw: unknown): T {
-  if (!raw) return {} as T;
-  if (typeof raw === "string") {
-    try {
-      return JSON.parse(raw) as T;
-    } catch {
-      return {} as T;
-    }
-  }
-  return raw as T;
-}
 
 /**
  * Pull Shopify credentials out of get_client_integration_secrets.
@@ -51,10 +56,6 @@ export function pickShopifyCreds(
 
 /** Pinned to voice-order-lookup and the email Zap. Bump all three together. */
 export const SHOPIFY_API_VERSION = "2026-04";
-
-function stripTrailingSlash(s: string): string {
-  return s.replace(/\/+$/, "");
-}
 
 export function shopifyGraphqlUrl(baseUrl: string): string {
   return `${stripTrailingSlash(baseUrl)}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
@@ -129,6 +130,10 @@ query SyncProducts($cursor: String) {
           minVariantPrice { amount currencyCode }
           maxVariantPrice { amount currencyCode }
         }
+        compareAtPriceRange {
+          minVariantCompareAtPrice { amount }
+          maxVariantCompareAtPrice { amount }
+        }
         variants(first: 25) {
           edges {
             node {
@@ -136,6 +141,7 @@ query SyncProducts($cursor: String) {
               title
               sku
               price
+              compareAtPrice
               availableForSale
               inventoryQuantity
             }
@@ -146,59 +152,9 @@ query SyncProducts($cursor: String) {
   }
 }`.trim();
 
-export type ProductRow = {
-  product_ref: string;
-  handle: string | null;
-  title: string;
-  product_type: string | null;
-  vendor: string | null;
-  status: string | null;
-  tags: string[];
-  description: string | null;
-  url: string | null;
-  currency: string | null;
-  price_min: number | null;
-  price_max: number | null;
-  tracks_inventory: boolean;
-  total_inventory: number | null;
-  available: boolean | null;
-  variants: Array<{
-    title: string | null;
-    sku: string | null;
-    price: number | null;
-    available: boolean | null;
-    inventory: number | null;
-  }>;
-};
-
-/**
- * Shopify descriptions are HTML pages. This is read out loud, so flatten to text
- * and cap it — the SQL caps again at 400 chars for the spoken payload, but there
- * is no reason to carry kilobytes through the sync to get there.
- */
-export function stripHtml(input: unknown, maxLen = 600): string | null {
-  if (input == null) return null;
-  const text = String(input)
-    .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<\/(p|div|li|h[1-6])>/gi, " ")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!text) return null;
-  return text.length > maxLen ? `${text.slice(0, maxLen - 1).trimEnd()}…` : text;
-}
-
-function num(v: unknown): number | null {
-  if (v === null || v === undefined || v === "") return null;
-  const n = typeof v === "string" ? Number(v) : (v as number);
-  return typeof n === "number" && Number.isFinite(n) ? n : null;
-}
+// ProductRow, stripHtml and num now live in types.ts — shared with woo.ts so the
+// two adapters cannot drift apart on the row shape. Imported and re-exported at
+// the top of this file.
 
 /** Map one GraphQL product node onto the products_cache row shape. */
 export function mapShopifyProduct(node: Record<string, any>): ProductRow | null {
@@ -234,6 +190,19 @@ export function mapShopifyProduct(node: Record<string, any>): ProductRow | null 
   const min = node?.priceRangeV2?.minVariantPrice;
   const max = node?.priceRangeV2?.maxVariantPrice;
 
+  // Discount. compareAtPriceRange is the product-level "was" band; when a store
+  // sets compare-at per variant instead, fall back to the variants themselves so
+  // a per-variant sale still registers.
+  const cmpMinRaw =
+    num(node?.compareAtPriceRange?.minVariantCompareAtPrice?.amount) ??
+    lowest(variantEdges.map((e) => num(e?.node?.compareAtPrice)));
+  const cmpMaxRaw =
+    num(node?.compareAtPriceRange?.maxVariantCompareAtPrice?.amount) ??
+    highest(variantEdges.map((e) => num(e?.node?.compareAtPrice)));
+
+  const saleMin = saleFrom(num(min?.amount), cmpMinRaw);
+  const saleMax = saleFrom(num(max?.amount), cmpMaxRaw);
+
   return {
     product_ref: ref,
     handle: node.handle ?? null,
@@ -253,7 +222,19 @@ export function mapShopifyProduct(node: Record<string, any>): ProductRow | null 
     total_inventory: num(node.totalInventory),
     available,
     variants,
+    on_sale: saleMin.on_sale || saleMax.on_sale,
+    compare_at_min: saleMin.compare_at,
+    compare_at_max: saleMax.compare_at,
   };
+}
+
+function lowest(xs: (number | null)[]): number | null {
+  const v = xs.filter((n): n is number => n !== null);
+  return v.length ? Math.min(...v) : null;
+}
+function highest(xs: (number | null)[]): number | null {
+  const v = xs.filter((n): n is number => n !== null);
+  return v.length ? Math.max(...v) : null;
 }
 
 /** Pull the page of nodes plus the pagination cursor out of a response. */
