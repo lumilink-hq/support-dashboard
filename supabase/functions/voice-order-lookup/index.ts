@@ -32,7 +32,10 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import {
-  buildShopifySearchQuery,
+  checkCallTime,
+  shopifyOrderQueries,
+  timeNotice,
+  type TimeCheck,
   extractClientRef,
   mapShopifyOrder,
   mapWooOrder,
@@ -86,6 +89,9 @@ type LookupRequest = {
   // Caller verification — required on the web path (see the security note below).
   verify_email?: string;
   verify_zip?: string;
+  // ElevenLabs {{system__call_duration_secs}} — how long the call has been
+  // running. Lets us warn before the hard cut instead of being severed.
+  call_duration_secs?: number | string;
 };
 
 type LookupResponse = {
@@ -102,6 +108,11 @@ type LookupResponse = {
   // Usage limiter, layer 3: this call started under the cap but the tenant is
   // over it now. Answer what's already known, then close out politely.
   wrap_up?: boolean;
+  // Per-call duration clock. ElevenLabs cuts the line without warning at the
+  // ceiling, so the agent is told how long is left and asked to close it out.
+  seconds_remaining?: number;
+  wind_down?: boolean;  // finish this topic, don't start another
+  final_call?: boolean; // one sentence, say goodbye, end_call
   // spoken order facts (present when found):
   order_number?: string;
   status?: string | null;
@@ -255,24 +266,43 @@ Deno.serve(async (req) => {
   // is deliberately swallowed.
   // ---------------------------------------------------------------------------
   let wrapUp = false;
+  let timing: TimeCheck = { remaining: null, windDown: false, finalCall: false };
   try {
     const { data: allowance } = await supabase.rpc("check_voice_allowance", {
       p_client_id: clientId,
     });
     wrapUp = allowance ? allowance.allowed === false : false;
+    // The OTHER clock: this call's own duration ceiling. ElevenLabs enforces it
+    // by terminating mid-sentence with no warning, so the agent needs to know
+    // how long it has and close the call itself.
+    timing = checkCallTime(body.call_duration_secs, allowance?.max_call_secs);
   } catch (e) {
     console.error("check_voice_allowance failed (continuing)", String(e));
   }
 
-  /** Attach the wrap-up signal to whatever we're about to tell the agent. */
-  const withWrap = (r: LookupResponse): LookupResponse =>
-    wrapUp
-      ? {
-          ...r,
-          wrap_up: true,
-          message: `${r.message ?? ""} This line has reached its usage limit — give the answer you have, then close the call politely.`.trim(),
-        }
-      : r;
+  /** Attach the wrap-up and time signals to whatever we tell the agent. */
+  const withWrap = (r: LookupResponse): LookupResponse => {
+    const notes = [
+      r.message ?? "",
+      wrapUp
+        ? "This line has reached its usage limit — give the answer you have, then close the call politely."
+        : "",
+      timeNotice(timing) ?? "",
+    ].filter(Boolean);
+
+    return {
+      ...r,
+      ...(wrapUp ? { wrap_up: true } : {}),
+      ...(timing.remaining !== null
+        ? {
+            seconds_remaining: timing.remaining,
+            wind_down: timing.windDown,
+            final_call: timing.finalCall,
+          }
+        : {}),
+      message: notes.join(" ").trim(),
+    };
+  };
 
   // No order number yet -> tell the agent to ask for it.
   if (!orderNumber) {
@@ -373,8 +403,24 @@ Deno.serve(async (req) => {
       // order "#1749"; orders_cache proves the store's names are bare digits.
       // The second attempt only widens what we ASK for — pickExactOrder still
       // requires an exact match on the real name.
+      // Two dimensions to try, flattened into one ordered list of queries:
+      //   • what the caller said, then digits-only if it carried letters
+      //   • with the store's prefix, then without it
+      // The second dimension is what makes a MISCONFIGURED prefix survivable:
+      // "TSU#" is what Tsunami's customers read off their email, not what
+      // Shopify names the order, so re-attaching it to a bare "1756" asks for a
+      // name that doesn't exist. Trying both shapes costs one extra request on a
+      // miss and turns a failed call into a found order.
+      const queries = [
+        ...new Set(
+          orderNumberCandidates(orderNumber).flatMap((c) =>
+            shopifyOrderQueries(c, orderPrefix)
+          ),
+        ),
+      ];
+
       let node: Record<string, any> | null = null;
-      for (const candidate of orderNumberCandidates(orderNumber)) {
+      for (const q of queries) {
         let shopRes: Response;
         try {
           shopRes = await fetch(shopifyGraphqlUrl(shopBase), {
@@ -385,7 +431,7 @@ Deno.serve(async (req) => {
             },
             body: JSON.stringify({
               query: SHOPIFY_ORDER_QUERY,
-              variables: { q: buildShopifySearchQuery(candidate, orderPrefix) },
+              variables: { q },
             }),
           });
         } catch (e) {
@@ -416,7 +462,10 @@ Deno.serve(async (req) => {
 
         // "name:1001" is a token match and can also return "1001-A". Require an
         // exact hit rather than reading a stranger's order down the phone.
-        const hit = pickExactOrder(nodes, candidate, orderPrefix);
+        // Matched against what the CALLER said, not against the query we
+        // happened to send — pickExactOrder already accepts the caller's digits
+        // with or without the store's prefix, in either direction.
+        const hit = pickExactOrder(nodes, orderNumber, orderPrefix);
         if (hit) {
           node = hit;
           break;

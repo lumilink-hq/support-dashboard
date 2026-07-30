@@ -136,6 +136,134 @@ export function orderNumberCandidates(orderNumber: string): string[] {
 }
 
 /**
+ * The Shopify `query` strings worth trying, in order.
+ *
+ * WHY THIS EXISTS AND WHY IT IS NOT JUST buildShopifySearchQuery:
+ *
+ * `order_number_prefix` was built for a store whose orders are NAMED with a
+ * prefix ("TSU#1749"). Tsunami turned out not to be one — its orders are named
+ * bare digits, and "TSU#" is only what customers read off their confirmation
+ * email. With the prefix configured anyway, a caller saying a bare "1756" had
+ * the prefix RE-ATTACHED and we asked Shopify for a name that does not exist,
+ * so a perfectly valid order came back not-found.
+ *
+ * The old flow could not recover from that: orderNumberCandidates only adds a
+ * second candidate when the caller's value contains LETTERS, so a bare-digit
+ * caller got exactly one query and one chance.
+ *
+ * So when a prefix is configured we now try BOTH shapes — prefixed first (it is
+ * the more specific, and it is what the setting asks for), then bare. Which one
+ * the store actually uses stops mattering, and a misconfigured prefix degrades
+ * into one wasted request instead of a failed call.
+ *
+ * This only widens what we ASK Shopify. pickExactOrder still requires an exact
+ * match against the store's real name, and it already accepts the caller's
+ * digits with or without the prefix, so nothing here loosens the guard against
+ * reading out a neighbouring order.
+ */
+export function shopifyOrderQueries(
+  orderNumber: string,
+  prefix?: string | null,
+): string[] {
+  const n = String(orderNumber ?? "").trim();
+  if (!n) return [];
+
+  const p = (prefix ?? "").trim();
+  if (!p) return [buildShopifySearchQuery(n)];
+
+  const bare = n.slice(matchedPrefixLength(n, p)) || n;
+  return [...new Set([
+    buildShopifySearchQuery(n, p), // name:"TSU#1756"
+    `name:${bare}`,                // name:1756
+  ])];
+}
+
+// -----------------------------------------------------------------------------
+// Running out of time on the call
+// -----------------------------------------------------------------------------
+
+export type TimeCheck = {
+  /** Seconds left before the hard cut. Null when we can't tell. */
+  remaining: number | null;
+  /** Start steering toward a close. */
+  windDown: boolean;
+  /** Answer this one thing, say goodbye, hang up. */
+  finalCall: boolean;
+};
+
+/**
+ * How close is this call to its hard duration limit?
+ *
+ * WHY THIS EXISTS: ElevenLabs enforces max call duration by TERMINATING the
+ * call. There is no warning, no grace, and no goodbye — it stops mid-sentence,
+ * which sounds exactly like the line dropping. A caller who has just given their
+ * order number and hears silence assumes the company hung up on them.
+ *
+ * The existing `wrap_up` signal only covers a tenant crossing their MONTHLY cap.
+ * Nothing knew about the per-call ceiling, so every call that ran long ended
+ * badly by design.
+ *
+ * ElevenLabs exposes `system__call_duration_secs` as a system dynamic variable,
+ * so the agent can pass elapsed time on every tool call and we can hand back how
+ * long is left. Two thresholds rather than one, because "you have 45 seconds"
+ * and "you have 10 seconds" call for different behaviour: the first means stop
+ * opening new topics, the second means say goodbye now.
+ *
+ * Returns all-null/false when elapsed or the cap is unknown — an unknown clock
+ * must never make the agent rush a call that has plenty of time left.
+ */
+export function checkCallTime(
+  elapsedSecs: unknown,
+  maxCallSecs: unknown,
+  opts: { windDownAt?: number; finalCallAt?: number } = {},
+): TimeCheck {
+  const elapsed = Number(elapsedSecs);
+  const max = Number(maxCallSecs);
+  if (
+    !Number.isFinite(elapsed) || elapsed < 0 ||
+    !Number.isFinite(max) || max <= 0
+  ) {
+    return { remaining: null, windDown: false, finalCall: false };
+  }
+
+  const remaining = Math.max(Math.round(max - elapsed), 0);
+
+  // Proportional, but CLAMPED at both ends.
+  //
+  // Pure percentages break in both directions: 10% of a 2-minute call is 12
+  // seconds, which is not enough runway to close gracefully, while 25% of a
+  // 10-minute call is two and a half minutes of the agent nagging about time
+  // when there is plenty. Wrapping up takes roughly the same wall-clock effort
+  // regardless of how long the call has been — a sentence and a goodbye — so
+  // the window is bounded in seconds, not just scaled.
+  const clamp = (v: number, lo: number, hi: number) =>
+    Math.min(Math.max(v, lo), hi);
+  const windDownAt = opts.windDownAt ?? clamp(Math.round(max * 0.25), 20, 45);
+  const finalCallAt = opts.finalCallAt ?? clamp(Math.round(max * 0.10), 10, 15);
+
+  return {
+    remaining,
+    windDown: remaining <= windDownAt,
+    finalCall: remaining <= finalCallAt,
+  };
+}
+
+/** The instruction appended to a tool response when the clock is running down. */
+export function timeNotice(t: TimeCheck): string | null {
+  if (t.remaining === null) return null;
+  if (t.finalCall) {
+    return `Only about ${t.remaining} seconds remain before this call ends automatically. ` +
+      `Answer in ONE short sentence, tell the caller you have to let them go and how to reach the team, then end the call yourself. ` +
+      `Do NOT let it cut off mid-sentence.`;
+  }
+  if (t.windDown) {
+    return `About ${t.remaining} seconds remain on this call. Start steering toward a close: ` +
+      `finish the current question, do not open a new topic, and offer a callback or email if more is needed.`;
+  }
+  return null;
+}
+
+/**
  * Comparison key for order names: alphanumerics only, lowercased.
  *
  * stripHash alone is not enough once a store sets an order-name PREFIX. Tsunami's
@@ -208,15 +336,22 @@ export function pickExactOrder<T extends { name?: string }>(
   if (!nodes.length) return null;
   const want = orderKey(orderNumber);
   const p = orderKey(prefix ?? "");
-  // Accept the caller's digits with OR without the store's prefix: they say
-  // "seventeen forty-nine", the store calls it "TSU#1749", and both must match.
-  const wantPrefixed = p && !want.startsWith(p) ? p + want : want;
-  return (
-    nodes.find((n) => {
-      const got = orderKey(n.name);
-      return got === want || got === wantPrefixed;
-    }) ?? null
-  );
+
+  // Accept the caller's digits with OR without the store's prefix, in BOTH
+  // directions. Only adding the prefixed form was a half-fix: it handled a
+  // caller saying "1756" against a store naming it "TSU#1756", but not a caller
+  // saying "TSU1756" against a store naming it "#1756" — which is the shape
+  // Tsunami actually uses, since "TSU#" appears on the confirmation email and
+  // nowhere in Shopify. Widening by exactly the configured prefix keeps the
+  // guard against neighbouring orders intact ("1001-A" still never matches
+  // "1001").
+  const wanted = new Set([want]);
+  if (p) {
+    if (want.startsWith(p)) wanted.add(want.slice(p.length));
+    else wanted.add(p + want);
+  }
+
+  return nodes.find((n) => wanted.has(orderKey(n.name))) ?? null;
 }
 
 // -----------------------------------------------------------------------------

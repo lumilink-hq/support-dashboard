@@ -49,6 +49,9 @@ export type ClientConfig = {
   // clients.settings.policies — the voice-sized policy blob the orders agent
   // answers from, surfaced to the agent as {{store_policies}}.
   policies: string;
+  // clients.settings.voice_greeting — the client's own opening line, used
+  // verbatim when set. Blank means we build one from the store name.
+  greeting: string;
   // clients.settings.shipping_restrictions — where the store will and won't
   // ship, in the CLIENT's own approved words. Surfaced as
   // {{shipping_restrictions}}. Blank on purpose is fine: the prompt then makes
@@ -70,10 +73,15 @@ export type PersonalizationResponse = {
   // see buildResponse. When omitted, ElevenLabs uses the agent's configured
   // prompt and first message, which is exactly what we want there.
   conversation_config_override?: {
+    // Every field is OPTIONAL, and that is load-bearing: ElevenLabs overrides
+    // only the fields that are PRESENT, so omitting `prompt` is the documented
+    // way to say "keep the agent's own system prompt". The orders path relies on
+    // exactly that — it overrides the greeting so the store is named correctly,
+    // while leaving the orders prompt in the agent where it belongs.
     agent: {
-      prompt: { prompt: string };
-      first_message: string;
-      language: string;
+      prompt?: { prompt: string };
+      first_message?: string;
+      language?: string;
     };
   };
 };
@@ -130,6 +138,10 @@ export function readClientConfig(row: {
     agentMode: settings.voice_agent_mode === "orders" ? "orders" : "scheduling",
     policies:
       typeof settings.policies === "string" ? settings.policies.trim() : "",
+    greeting:
+      typeof settings.voice_greeting === "string"
+        ? settings.voice_greeting.trim()
+        : "",
     shippingRestrictions:
       typeof settings.shipping_restrictions === "string"
         ? settings.shipping_restrictions.trim()
@@ -318,6 +330,26 @@ export function buildFirstMessage(cfg: ClientConfig): string {
 }
 
 /**
+ * The greeting for an ORDERS/support line.
+ *
+ * Differs from the scheduling greeting on purpose: a support caller wants to
+ * know two things in the first two seconds — did I reach the right company, and
+ * is this the right department. So the store name comes first and the word
+ * "support" is explicit. The persona name is deliberately NOT led with; on a
+ * support line "this is Lumi" invites "…who?" before the caller has confirmed
+ * they've reached the right business at all.
+ *
+ * A client can override the whole thing with settings.voice_greeting when they
+ * have their own wording. Whatever they set is used verbatim — it is their
+ * brand, not ours to reformat.
+ */
+export function buildOrdersFirstMessage(cfg: ClientConfig): string {
+  const custom = (cfg.greeting ?? "").trim();
+  if (custom) return custom;
+  return `Thanks for calling ${cfg.name} support — how can I help you today?`;
+}
+
+/**
  * Assemble the dynamic variables. Extra variables are harmless; the important
  * rule is that every variable the agent's base prompt references is present.
  * We keep a stable, documented set so the agent config and this function agree.
@@ -389,7 +421,26 @@ export function buildResponse(
     dynamic_variables: buildDynamicVariables(cfg, services),
   };
 
-  if (cfg.agentMode === "orders") return base;
+  if (cfg.agentMode === "orders") {
+    // Variables only for the PROMPT — the orders prompt lives in the agent (see
+    // the note above). But the FIRST MESSAGE is overridden, because it has to
+    // name the store: an agent whose greeting is baked into its config greets
+    // every tenant as whichever client it was written for, which is exactly the
+    // failure found on 2026-07-30 (an unconfigured number was answered with a
+    // confident "yes, this is Bud Club").
+    //
+    // Requires `First message` to be enabled in Agent → Security. If it isn't,
+    // ElevenLabs errors the call rather than ignoring the field.
+    return {
+      ...base,
+      conversation_config_override: {
+        agent: {
+          first_message: buildOrdersFirstMessage(cfg),
+          language: "en",
+        },
+      },
+    };
+  }
 
   return {
     ...base,

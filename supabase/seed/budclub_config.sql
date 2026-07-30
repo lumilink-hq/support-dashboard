@@ -1,5 +1,5 @@
 -- =============================================================================
--- budclub_config.sql — configure the Bud Club (woo-store) client.
+-- budclub_config.sql — configure the Bud Club (budmember001) client.
 --
 -- Run top to bottom. Every value that is a JUDGEMENT rather than a fact is in
 -- its own numbered block with the alternative written out next to it, so it can
@@ -59,6 +59,39 @@
 
 
 -- #############################################################################
+-- SECTION 0.5 — PREFLIGHT: fail loudly if the slug is wrong
+--
+-- Every statement below is `update clients … where slug = 'budmember001'`. If
+-- that slug does not exist, each one quietly updates ZERO rows and the whole
+-- file "succeeds" while configuring nothing — and the first sign would be a
+-- voice call answering "this line isn't configured for a store".
+--
+-- This is not hypothetical here: a snapshot of this row taken earlier showed the
+-- slug as `budmember001-2`, so the two names are genuinely in circulation.
+-- Raising an exception costs nothing and turns a silent no-op into an obvious
+-- error, so run the whole file inside a transaction if you can.
+-- #############################################################################
+
+do $$
+declare
+  v_id   uuid;
+  v_near text;
+begin
+  select id into v_id from clients where slug = 'budmember001';
+  if v_id is null then
+    select string_agg(slug, ', ' order by slug) into v_near
+      from clients
+     where slug ilike 'bud%' or name ilike '%bud%';
+    raise exception
+      'No client with slug "budmember001". Nothing was configured. Similar slugs: %',
+      coalesce(v_near, '(none found)');
+  end if;
+  raise notice 'Configuring client % (budmember001)', v_id;
+end;
+$$;
+
+
+-- #############################################################################
 -- SECTION 1 — Core store wiring (facts, not judgements)
 -- #############################################################################
 --
@@ -72,13 +105,13 @@ update clients
    set store_platform = 'woocommerce',
        store_base_url = 'https://budclub.com',
        support_email  = 'hey@budclub.com'
- where slug = 'woo-store';
+ where slug = 'budmember001';
 
 -- Phone: NONE EXISTS on the site — support is email-only (hey@budclub.com plus a
 -- contact form). There was never a number to find. Once Twilio provisioning
 -- lands, set it here in E.164 and nowhere else:
 --
---   update clients set phone_number = '+1XXXXXXXXXX' where slug = 'woo-store';
+--   update clients set phone_number = '+1XXXXXXXXXX' where slug = 'budmember001';
 --
 -- ⚠️ uq_clients_phone_digits has NO is_active filter, so a deactivated client
 --    still holds its number. If this update fails on a unique violation, null
@@ -111,7 +144,7 @@ update clients
 --            update clients
 --               set settings = settings || jsonb_build_object(
 --                     'order_number_scheme', 'search')
---             where slug = 'woo-store';
+--             where slug = 'budmember001';
 --          or, if the plugin's docs name a postmeta key, prefer the exact form:
 --                     'order_number_scheme', 'meta:_order_number'
 --
@@ -122,7 +155,7 @@ update clients
 update clients
    set settings = coalesce(settings, '{}'::jsonb)
                   || jsonb_build_object('order_number_scheme', 'id')
- where slug = 'woo-store';
+ where slug = 'budmember001';
 
 
 -- #############################################################################
@@ -151,7 +184,7 @@ update clients
          'stale_after_hours',     96,
          'stale_exempt_statuses', jsonb_build_array('FULFILLED', 'REFUNDED')
        )
- where slug = 'woo-store';
+ where slug = 'budmember001';
 
 
 -- #############################################################################
@@ -173,7 +206,7 @@ update clients
          'sat', jsonb_build_array(),
          'sun', jsonb_build_array()
        )
- where slug = 'woo-store';
+ where slug = 'budmember001';
 
 
 -- #############################################################################
@@ -191,6 +224,14 @@ update clients
 
 update clients
    set settings = coalesce(settings, '{}'::jsonb) || jsonb_build_object(
+
+     -- ⚠️ REQUIRED, and easy to miss. voice-personalization DEFAULTS TO
+     -- 'scheduling', which returns a full conversation_config_override carrying
+     -- the HVAC booking prompt. Sent to the shared ORDERS agent, that override
+     -- REPLACES its prompt — so Bud Club would answer the phone as a heating
+     -- engineer. 'orders' makes personalization return dynamic variables ONLY
+     -- and leave the agent's own prompt alone.
+     'voice_agent_mode',              'orders',
 
      -- The slug is public (it sits in page HTML), so it is an identifier, never
      -- a credential. This opt-in plus the email/ZIP verification gate is what
@@ -244,7 +285,7 @@ update clients
        'NEVER state a free-shipping threshold: the site currently shows two different numbers.'
      )
    )
- where slug = 'woo-store';
+ where slug = 'budmember001';
 
 
 -- #############################################################################
@@ -263,14 +304,14 @@ select slug,
        abnormal_status_rules ->> 'stale_after_hours' as stale_hours,
        business_hours ->> 'tz'                   as tz
   from clients
- where slug = 'woo-store';
+ where slug = 'budmember001';
 
 -- Then sync the catalog (public Store API — no key required):
 --
 --   curl -X POST "$FUNCTIONS_URL/product-sync" \
 --     -H "x-voice-tool-secret: $VOICE_TOOL_SECRET" \
 --     -H 'content-type: application/json' \
---     -d '{"client_slug":"woo-store"}'
+--     -d '{"client_slug":"budmember001"}'
 --
 -- A healthy response has "complete": true and an empty warnings array, and
 -- "source": "woocommerce_store_api" until a REST key is added.
@@ -280,9 +321,9 @@ select count(*)                              as products,
        count(*) filter (where on_sale)       as on_sale,
        max(fetched_at)                       as last_sync
   from products_cache
- where client_id = (select id from clients where slug = 'woo-store');
+ where client_id = (select id from clients where slug = 'budmember001');
 
-select * from product_sync_health where slug = 'woo-store';
+select * from product_sync_health where slug = 'budmember001';
 
 
 -- #############################################################################
@@ -298,12 +339,12 @@ select * from product_sync_health where slug = 'woo-store';
 --
 --   update clients
 --      set settings = settings || jsonb_build_object('order_number_scheme', 'search')
---    where slug = 'woo-store';
+--    where slug = 'budmember001';
 --
 -- Remove a key:
 --
 --   update clients set settings = settings - 'order_number_scheme'
---    where slug = 'woo-store';
+--    where slug = 'budmember001';
 --
 -- ⚠️ `settings = jsonb_build_object(...)` without the `settings ||` REPLACES the
 --    whole object and would silently drop web_lookup_enabled, stock_policy and

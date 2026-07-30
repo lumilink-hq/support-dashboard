@@ -27,7 +27,7 @@
 -- Set it with:
 --   update clients
 --      set settings = settings || jsonb_build_object('order_number_scheme', 'search')
---    where slug = 'woo-store';
+--    where slug = 'budmember001';
 --
 -- NULL / absent means 'id', which is the behaviour every existing client has
 -- today, so this migration changes nothing until a client opts in.

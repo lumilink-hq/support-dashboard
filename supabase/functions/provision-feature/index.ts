@@ -64,6 +64,23 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_SECRET, {
 
 const MAX_ATTEMPTS = 5;
 
+// Entry-tier allowance from the CFO workbook v2.0: Starter = 100 min/mo.
+// Provisioning only knows the FEATURE ('voice'), not the tier — tiers above
+// Starter are granted manually at launch — so it applies the entry allowance and
+// set_plan_voice_caps (0025) refuses to overwrite a higher cap an operator
+// already set.
+const STARTER_INCLUDED_MINUTES = Number(
+  Deno.env.get("STARTER_INCLUDED_MINUTES") ?? 100,
+);
+
+// MUST stay BELOW the ElevenLabs agent's "max call duration" (currently 120s).
+// ElevenLabs enforces its cap by severing the audio mid-sentence; this value is
+// what voice-order-lookup's checkCallTime() measures against to make the agent
+// wind down and say goodbye BEFORE that happens. Set it equal to or above the
+// ElevenLabs cap and the wrap-up is scheduled for a moment that never arrives —
+// every long call gets cut off. 105 leaves ~26s of runway. See 0025's header.
+const MAX_CALL_SECS = Number(Deno.env.get("MAX_CALL_SECS") ?? 105);
+
 type Feature = "email" | "voice";
 type StepResult = { ok: true } | { ok: false; needsHuman: true; reason: string };
 
@@ -225,12 +242,43 @@ function readAreaCode(client: Record<string, any>): string {
   return String(fromCfg ?? DEFAULT_AREA_CODE ?? "").replace(/\D/g, "").slice(0, 3);
 }
 
+// Pin the plan's minute allowance on the client BEFORE the line can take calls.
+// Skipping this leaves the client on the platform default, which is not what
+// they bought — a $179 / 100-minute client would run against whatever the
+// default happens to be, at real ElevenLabs + Twilio cost per minute.
+//
+// Runs in mock mode too: it's a local DB write, and mock only suppresses
+// EXTERNAL calls. Getting the cap right is exactly what we want to exercise.
+async function applyPlanCaps(clientId: string): Promise<StepResult> {
+  const { data, error } = await supabase.rpc("set_plan_voice_caps", {
+    p_client_id: clientId,
+    p_monthly_minutes: STARTER_INCLUDED_MINUTES,
+    p_max_call_secs: MAX_CALL_SECS,
+    // Never clobber a manually-granted Growth/Scale allowance.
+    p_overwrite: false,
+  });
+
+  if (error) {
+    // Missing RPC / permission problems won't fix themselves on retry.
+    throw new NeedsHumanError(`set_plan_voice_caps failed: ${error.message}`);
+  }
+  if (data && data.ok === false) {
+    return needsHuman(`could not set voice caps: ${data.error ?? "unknown error"}`);
+  }
+  return { ok: true };
+}
+
 async function provisionVoice(client: Record<string, any>): Promise<StepResult> {
   // Store credentials only matter if this client actually uses order lookup.
   // A pure scheduling (HVAC) client has no store_platform and needs none.
   if (client.store_platform && !client.store_credentials_ref) {
     return needsHuman("store_credentials_ref not set (order lookup is enabled for this client)");
   }
+
+  // 0) Cap first. If this fails we stop before a live number exists, rather
+  //    than after — an uncapped line that can answer is the expensive failure.
+  const capped = await applyPlanCaps(client.id);
+  if (!capped.ok) return capped;
 
   // 1) Ensure a phone number.
   let number = String(client.phone_number ?? "").trim();
