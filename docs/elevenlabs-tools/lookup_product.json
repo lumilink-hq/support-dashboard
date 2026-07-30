@@ -1,0 +1,103 @@
+{
+  "type": "webhook",
+  "name": "lookup_product",
+  "description": "Look up a product in the store catalogue: what it is, what it costs, which sizes exist, and whether they are in stock. Call this for any question about what the store sells. Read back ONLY what this returns. If stock_known is false you must not say whether anything is in stock. If catalog_unavailable is true, never tell the caller the product does not exist.",
+  "disable_interruptions": false,
+  "interruption_mode": "allow",
+  "force_pre_tool_speech": false,
+  "pre_tool_speech": "auto",
+  "tool_call_sound": null,
+  "tool_call_sound_behavior": "auto",
+  "tool_error_handling_mode": "auto",
+  "execution_mode": "immediate",
+  "api_schema": {
+    "url": "https://xqsxjxrzpxhosedkmufg.functions.supabase.co/voice-product-lookup",
+    "method": "POST",
+    "path_params_schema": [],
+    "query_params_schema": [],
+    "request_body_schema": {
+      "id": "body",
+      "type": "object",
+      "description": "Look up a product in the store catalogue: what it is, what it costs, which sizes exist, and whether they are in stock. Call this for any question about what the store sells. Read back ONLY what this returns. If stock_known is false you must not say whether anything is in stock. If catalog_unavailable is true, never tell the caller the product does not exist.",
+      "properties": [
+        {
+          "id": "called_number",
+          "type": "string",
+          "value_type": "dynamic_variable",
+          "description": "",
+          "dynamic_variable": "system__called_number",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": false
+        },
+        {
+          "id": "client_ref",
+          "type": "string",
+          "value_type": "dynamic_variable",
+          "description": "",
+          "dynamic_variable": "client_slug",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": false
+        },
+        {
+          "id": "call_sid",
+          "type": "string",
+          "value_type": "dynamic_variable",
+          "description": "",
+          "dynamic_variable": "system__call_sid",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": false
+        },
+        {
+          "id": "conversation_id",
+          "type": "string",
+          "value_type": "dynamic_variable",
+          "description": "",
+          "dynamic_variable": "system__conversation_id",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": true
+        },
+        {
+          "id": "product_query",
+          "type": "string",
+          "value_type": "llm_prompt",
+          "description": "The product the caller asked about, in as FEW words as possible. Send only the distinctive part, never the whole sentence. Drop the brand unless they named just a brand: for 'do you have any WAVE Super Runtz' send 'Super Runtz'; for 'do you carry WAVE' send 'WAVE'. A type works too ('Flower', 'Pre-Roll'), and so does a descriptor they used ('indica'). Shorter is better — the search matches partial names, so 'Runtz' finds 'WAVE Super Runtz'.",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "enum": null,
+          "is_system_provided": false,
+          "required": true
+        }
+      ],
+      "required": false,
+      "value_type": "llm_prompt"
+    },
+    "request_headers": [
+      {
+        "type": "secret",
+        "name": "x-voice-tool-secret",
+        "secret_id": "5BmqMzQ5V5mn7yw69e3s"
+      }
+    ],
+    "content_type": "application/json",
+    "auth_connection": null
+  },
+  "assignments": [],
+  "response_timeout_secs": 20,
+  "dynamic_variables": {
+    "dynamic_variable_placeholders": {
+      "client_slug": {
+        "type": "string_literal",
+        "value": ""
+      }
+    }
+  },
+  "response_mocks": []
+}
