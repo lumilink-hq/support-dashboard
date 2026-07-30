@@ -61,7 +61,7 @@ export default async function ConversationDetailPage({
   const { data: conv } = await supabase
     .from("conversations")
     .select(
-      "id, channel, customer_name, customer_identifier, subject, status, flagged, flag_reason, order_number, last_message_at, created_at",
+      "id, client_id, channel, customer_name, customer_identifier, subject, status, flagged, flag_reason, order_number, last_message_at, created_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -81,11 +81,17 @@ export default async function ConversationDetailPage({
 
   let order: OrderRow | null = null;
   if (conversation.order_number) {
+    // Scoped by client_id as well as order_number. RLS already confines this to
+    // the caller's tenant, but orders_cache is unique on (client_id,
+    // order_number) — not order_number alone — so a query keyed only on the
+    // number relies on RLS for correctness rather than stating it. Every query
+    // in this codebase carries its tenant scope explicitly.
     const { data: orderData } = await supabase
       .from("orders_cache")
       .select(
         "order_number, store_platform, store_status, is_abnormal, customer_name, customer_email, currency, order_total, order_placed_at, line_items, tracking_number, carrier, shipping_status, shipped_at, estimated_delivery, fetched_at",
       )
+      .eq("client_id", conversation.client_id)
       .eq("order_number", conversation.order_number)
       .maybeSingle();
     order = (orderData as OrderRow | null) ?? null;

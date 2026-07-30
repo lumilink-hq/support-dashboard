@@ -24,6 +24,9 @@ export type ClientRow = {
 
 export type ConversationRow = {
   id: string;
+  // Needed to scope the orders_cache lookup, which is unique on
+  // (client_id, order_number) rather than order_number alone.
+  client_id: string;
   channel: Channel;
   customer_name: string | null;
   customer_identifier: string | null;

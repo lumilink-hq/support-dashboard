@@ -23,7 +23,7 @@ export default async function ConversationsPage({
   let query = supabase
     .from("conversations")
     .select(
-      "id, channel, customer_name, customer_identifier, subject, status, flagged, flag_reason, order_number, last_message_at, created_at",
+      "id, client_id, channel, customer_name, customer_identifier, subject, status, flagged, flag_reason, order_number, last_message_at, created_at",
     )
     .order("last_message_at", { ascending: false, nullsFirst: false });
 

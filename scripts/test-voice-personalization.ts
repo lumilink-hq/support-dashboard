@@ -148,7 +148,7 @@ ok("email custom_instructions never leak into phone prompt", !phoneInstrPrompt.i
 ok("first message greets by name + persona", buildFirstMessage(cfg) === "Thanks for calling Comfort Air (Demo), this is Lumi — how can I help?");
 
 const dv = buildDynamicVariables(cfg, services);
-const REQUIRED_VARS = ["client_slug", "store_name", "persona", "brand_voice", "timezone", "business_hours", "service_area", "services_summary", "transfer_number", "is_demo", "store_policies"];
+const REQUIRED_VARS = ["client_slug", "store_name", "persona", "brand_voice", "timezone", "business_hours", "service_area", "services_summary", "transfer_number", "is_demo", "store_policies", "shipping_restrictions"];
 ok("all dynamic variables present", REQUIRED_VARS.every((k) => k in dv));
 ok("all dynamic variables are strings", Object.values(dv).every((v) => typeof v === "string"));
 ok("client_slug carried for web tool routing", dv.client_slug === "comfort-air-demo");
@@ -199,6 +199,14 @@ ok("ORDERS: client_slug carried for web tool routing",
    ordersRes.dynamic_variables.client_slug === "shopify-store");
 ok("policies default to empty string when unset", cfg.policies === "");
 ok("store_policies always present even when blank", "store_policies" in dv);
+ok("shipping_restrictions always present even when blank", "shipping_restrictions" in dv);
+ok("shipping_restrictions defaults to empty (agent then declines)", cfg.shippingRestrictions === "");
+{
+  const shipRow = { ...ordersRow, settings: { ...(ordersRow.settings ?? {}), shipping_restrictions: "  We ship to 38 states.  " } };
+  const shipCfg = readClientConfig(shipRow);
+  ok("shipping_restrictions read and trimmed", shipCfg.shippingRestrictions === "We ship to 38 states.");
+  ok("shipping_restrictions reaches the agent", buildResponse(shipCfg, services).dynamic_variables.shipping_restrictions === "We ship to 38 states.");
+}
 
 const fb = buildFallbackResponse();
 ok("fallback carries the type discriminator too", fb.type === "conversation_initiation_client_data");

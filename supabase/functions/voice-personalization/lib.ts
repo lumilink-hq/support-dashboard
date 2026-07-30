@@ -49,6 +49,12 @@ export type ClientConfig = {
   // clients.settings.policies — the voice-sized policy blob the orders agent
   // answers from, surfaced to the agent as {{store_policies}}.
   policies: string;
+  // clients.settings.shipping_restrictions — where the store will and won't
+  // ship, in the CLIENT's own approved words. Surfaced as
+  // {{shipping_restrictions}}. Blank on purpose is fine: the prompt then makes
+  // the agent decline shipping questions, which beats it reasoning about hemp
+  // legality from training data.
+  shippingRestrictions: string;
 };
 
 // ElevenLabs conversation-initiation response. The top-level `type` discriminator
@@ -124,6 +130,10 @@ export function readClientConfig(row: {
     agentMode: settings.voice_agent_mode === "orders" ? "orders" : "scheduling",
     policies:
       typeof settings.policies === "string" ? settings.policies.trim() : "",
+    shippingRestrictions:
+      typeof settings.shipping_restrictions === "string"
+        ? settings.shipping_restrictions.trim()
+        : "",
   };
 }
 
@@ -335,6 +345,10 @@ export function buildDynamicVariables(
     // omitting this doesn't error — the agent just silently has NO policies and
     // improvises. Always send it, even when blank.
     store_policies: cfg.policies,
+    // Same contract for {{shipping_restrictions}}. Blank is a valid state and
+    // makes the agent decline shipping questions; missing would look identical
+    // but is an accident rather than a decision, so always send the key.
+    shipping_restrictions: cfg.shippingRestrictions,
   };
 }
 
@@ -411,6 +425,7 @@ export function buildFallbackResponse(): PersonalizationResponse {
       transfer_number: "",
       is_demo: "false",
       store_policies: "",
+      shipping_restrictions: "",
     },
     // The fallback DOES override: an unresolved number must not be handed to a
     // live orders/booking prompt, so we replace it with the generic apology.

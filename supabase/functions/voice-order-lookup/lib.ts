@@ -110,6 +110,32 @@ export function stripHash(name: unknown): string {
 }
 
 /**
+ * Forms of an order number worth trying, in order of preference.
+ *
+ * WHY THIS EXISTS: callers say a prefix the store doesn't store. Tsunami's
+ * customers read "TSU#1749" off their confirmation, but Shopify names that order
+ * "#1749" — proved by orders_cache, which is keyed on the store's own canonical
+ * name and contains bare digits (1491, 1699, 1749).
+ *
+ * normalizeOrderNumber("TSU#1749") yields "TSU1749" (the "#" is punctuation, the
+ * letters are not), which matches nothing. So after the literal form we also try
+ * digits-only.
+ *
+ * Safe because pickExactOrder still demands an exact match against the store's
+ * real name — a second candidate widens what we ASK Shopify, never what we
+ * accept as a hit. Only fires when the caller's value actually contains letters,
+ * so a plain "1749" costs no extra request.
+ */
+export function orderNumberCandidates(orderNumber: string): string[] {
+  const first = String(orderNumber ?? "").trim();
+  if (!first) return [];
+  const out = [first];
+  const digits = first.replace(/[^0-9]/g, "");
+  if (digits && digits !== first && /[A-Za-z]/.test(first)) out.push(digits);
+  return [...new Set(out)];
+}
+
+/**
  * Comparison key for order names: alphanumerics only, lowercased.
  *
  * stripHash alone is not enough once a store sets an order-name PREFIX. Tsunami's

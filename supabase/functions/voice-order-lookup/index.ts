@@ -38,6 +38,7 @@ import {
   mapWooOrder,
   normalizeOrderNumber,
   parseCreds,
+  orderNumberCandidates,
   pickExactOrder,
   pickShopifyCreds,
   SHOPIFY_ORDER_QUERY,
@@ -357,48 +358,61 @@ Deno.serve(async (req) => {
         });
       }
 
-      let shopRes: Response;
-      try {
-        shopRes = await fetch(shopifyGraphqlUrl(shopBase), {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Shopify-Access-Token": token,
-          },
-          body: JSON.stringify({
-            query: SHOPIFY_ORDER_QUERY,
-            variables: { q: buildShopifySearchQuery(orderNumber, orderPrefix) },
-          }),
-        });
-      } catch (e) {
-        console.error("shopify fetch failed", String(e));
-        return json(LOOKUP_ERROR);
+      // Try the caller's value as given, then digits-only if it carried letters.
+      // Customers read "TSU#1749" off a confirmation while Shopify names the
+      // order "#1749"; orders_cache proves the store's names are bare digits.
+      // The second attempt only widens what we ASK for — pickExactOrder still
+      // requires an exact match on the real name.
+      let node: Record<string, any> | null = null;
+      for (const candidate of orderNumberCandidates(orderNumber)) {
+        let shopRes: Response;
+        try {
+          shopRes = await fetch(shopifyGraphqlUrl(shopBase), {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Shopify-Access-Token": token,
+            },
+            body: JSON.stringify({
+              query: SHOPIFY_ORDER_QUERY,
+              variables: { q: buildShopifySearchQuery(candidate, orderPrefix) },
+            }),
+          });
+        } catch (e) {
+          console.error("shopify fetch failed", String(e));
+          return json(LOOKUP_ERROR);
+        }
+
+        if (!shopRes.ok) {
+          // 401/403 = bad or expired token, 429 = throttled. Never fabricate.
+          console.error("shopify http error", shopRes.status);
+          return json(LOOKUP_ERROR);
+        }
+
+        const payload = (await shopRes.json().catch(() => null)) as
+          | Record<string, any>
+          | null;
+
+        // Shopify answers 200 even for query/throttle errors — check the body too.
+        const gqlError = shopifyErrorFrom(payload);
+        if (gqlError) {
+          console.error("shopify graphql error", gqlError);
+          return json(LOOKUP_ERROR);
+        }
+
+        const nodes = (payload?.data?.orders?.edges ?? [])
+          .map((e: any) => e?.node)
+          .filter(Boolean);
+
+        // "name:1001" is a token match and can also return "1001-A". Require an
+        // exact hit rather than reading a stranger's order down the phone.
+        const hit = pickExactOrder(nodes, candidate, orderPrefix);
+        if (hit) {
+          node = hit;
+          break;
+        }
       }
 
-      if (!shopRes.ok) {
-        // 401/403 = bad or expired token, 429 = throttled. Never fabricate.
-        console.error("shopify http error", shopRes.status);
-        return json(LOOKUP_ERROR);
-      }
-
-      const payload = (await shopRes.json().catch(() => null)) as
-        | Record<string, any>
-        | null;
-
-      // Shopify answers 200 even for query/throttle errors — check the body too.
-      const gqlError = shopifyErrorFrom(payload);
-      if (gqlError) {
-        console.error("shopify graphql error", gqlError);
-        return json(LOOKUP_ERROR);
-      }
-
-      const nodes = (payload?.data?.orders?.edges ?? [])
-        .map((e: any) => e?.node)
-        .filter(Boolean);
-
-      // "name:1001" is a token match and can also return "1001-A". Require an
-      // exact hit rather than reading a stranger's order down the phone.
-      const node = pickExactOrder(nodes, orderNumber, orderPrefix);
       if (!node) {
         return json(withWrap({
           found: false,
@@ -533,6 +547,43 @@ Deno.serve(async (req) => {
   });
   const flagged: boolean = Boolean(flagEval?.flagged);
   const flagReason: string | null = flagEval?.reason ?? null;
+
+  // 4b) RECONCILE the conversation's order number to the store's canonical name.
+  //
+  //     The early ingest_call above wrote what the CALLER said, normalized —
+  //     "TSU1749" for Tsunami, because normalizeOrderNumber strips the "#" as
+  //     punctuation. orders_cache is keyed on the STORE's name, "TSU#1749". Those
+  //     two disagreeing broke two things silently:
+  //
+  //       1. The dashboard's order panel joins orders_cache on the conversation's
+  //          order_number, so it found nothing and showed no order context.
+  //       2. voice-call-logger step 4 reads conversations.order_number, looks up
+  //          orders_cache, and runs evaluate_flag on it. No row meant no
+  //          evaluation, so a flagged order NEVER escalated after the call.
+  //
+  //     Invisible for clients whose order names are plain digits (normalized ==
+  //     canonical), which is why it surfaced only once Tsunami's prefix landed.
+  //
+  //     ingest_call is idempotent on (client_id, external_ref) and its upsert is
+  //     `coalesce(excluded.order_number, conversations.order_number)` — a non-null
+  //     new value wins — so re-calling it is the supported way to correct this.
+  if (callSid && canonicalOrderNumber && canonicalOrderNumber !== orderNumber) {
+    const { error: reconcileErr } = await supabase.rpc("ingest_call", {
+      p_client_id: clientId,
+      p_call_sid: callSid,
+      p_caller_identifier: body.caller_number ?? null,
+      p_caller_name: body.caller_name ?? null,
+      p_order_number: canonicalOrderNumber,
+    });
+    // Non-fatal: the caller still gets their answer. But log it, because the
+    // dashboard and the post-call escalation both depend on this landing.
+    if (reconcileErr) {
+      console.error(
+        "failed to reconcile conversation order_number",
+        reconcileErr.message,
+      );
+    }
+  }
 
   // 5) Cache the normalized order.
   await supabase

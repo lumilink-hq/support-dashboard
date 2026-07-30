@@ -15,6 +15,7 @@ import {
   mapShopifyOrder,
   mapWooOrder,
   normalizeOrderNumber,
+  orderNumberCandidates,
   normalizeStatus,
   parseCreds,
   pickExactOrder,
@@ -495,6 +496,36 @@ check(
 );
 
 // -----------------------------------------------------------------------------
+// --- orderNumberCandidates -------------------------------------------------
+// Callers read "TSU#1749" off a confirmation; Shopify names that order "#1749".
+// orders_cache is keyed on the store's canonical name and holds bare digits
+// (1491, 1699, 1749), which is how we know the prefix is spoken, not stored.
+console.log("\ncandidates — caller says a prefix the store doesn't keep");
+check("plain digits -> single attempt",
+  orderNumberCandidates("1749").join("|") === "1749",
+  orderNumberCandidates("1749").join("|"));
+check("letters present -> falls back to digits",
+  orderNumberCandidates("TSU1749").join("|") === "TSU1749|1749",
+  orderNumberCandidates("TSU1749").join("|"));
+check("normalized TSU#1749 yields both forms",
+  orderNumberCandidates(normalizeOrderNumber("TSU#1749")!).join("|") === "TSU1749|1749",
+  orderNumberCandidates(normalizeOrderNumber("TSU#1749")!).join("|"));
+check("lowercase spoken form works",
+  orderNumberCandidates(normalizeOrderNumber("tsu 1749")!).join("|") === "tsu1749|1749");
+check("no duplicate attempt when digits equal the input",
+  orderNumberCandidates("1749").length === 1);
+check("suffixed order keeps its shape (no digit-stripping surprise)",
+  orderNumberCandidates("1001-A").join("|") === "1001-A|1001");
+check("empty -> no attempts", orderNumberCandidates("").length === 0);
+// The safety property: a wider ASK must not widen what we ACCEPT.
+console.log("\ncandidates must not loosen exact matching");
+check("digits candidate still rejects a suffixed near-miss",
+  pickExactOrder([{ name: "#1749-A" }], "1749") === null);
+check("digits candidate matches the real order",
+  pickExactOrder([{ name: "#1749" }], "1749")?.name === "#1749");
+check("letter form does NOT match a bare-digit order",
+  pickExactOrder([{ name: "#1749" }], "TSU1749") === null);
+
 console.log(
   failures === 0
     ? `\nAll checks passed.`

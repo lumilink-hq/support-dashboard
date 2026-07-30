@@ -179,8 +179,15 @@ Deno.serve(async (req) => {
   });
   if (convErr) return json({ error: convErr.message }, 400);
 
-  // 3) Append transcript turns. The final turn advances status to 'resolved';
-  //    an escalation below may override it to 'flagged'.
+  // 3) Append transcript turns. The final turn closes the conversation; an
+  //    escalation below may override it to 'flagged'.
+  //
+  //    'closed', NOT 'resolved'. This used to write 'resolved' on every call,
+  //    which meant every conversation in the dashboard read as resolved whether
+  //    or not anything had been. 'resolved' should mean a person dealt with it;
+  //    a call simply ending is 'closed'. Both are allowed by the CHECK in 0001,
+  //    and nothing keys off the value — it renders as a badge — so this is a
+  //    display-truth fix, not a behaviour change.
   const turns = buildTurns(payload?.data?.transcript, ref);
   let logged = 0;
   for (let i = 0; i < turns.length; i++) {
@@ -192,7 +199,7 @@ Deno.serve(async (req) => {
       p_audio_url: null, // hook: pass a Storage URL here if recording is enabled
       p_model: null,
       p_turn_ref: turns[i].turnRef,
-      p_new_status: isLast ? "resolved" : null,
+      p_new_status: isLast ? "closed" : null,
     });
     if (!error) logged++;
   }
