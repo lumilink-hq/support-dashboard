@@ -19,13 +19,48 @@ export type EntitlementRow = {
 // UI state for a feature the tenant may or may not hold. Absence of a row = locked.
 export type FeatureState = "locked" | "setup" | "active" | "past_due" | "canceled";
 
+// -----------------------------------------------------------------------------
+// COMMERCIAL TRUTH — mirrors the CFO workbook "LumiLink Financial Hub" v2.0
+// (as of 2026-07-29). The workbook is the source of truth: if these constants
+// and the workbook disagree, the workbook wins and this file is the bug.
+//
+// Only Starter is self-serve today. Growth ($279 + $499 / 250 min) and Scale
+// ($449 + $799 / 600 min) are sales-assisted: close manually, grant the
+// entitlement, set the client's voice cap by hand. The tier schema is
+// deliberately deferred — see docs/landing-page-plan.md §5.
+// -----------------------------------------------------------------------------
+
+export const STARTER_PLAN = {
+  label: "Starter",
+  monthlyUsd: 179,
+  setupFeeUsd: 299,
+  includedMinutes: 100,
+  /** Policy, all tiers: soft warning → confirm → transfer/ticket/hang-up. */
+  maxCallMinutes: 2,
+  numbers: 1,
+  careHoursPerMonth: 2,
+} as const;
+
+/** Automatic overages — not optional features. Must be disclosed before checkout. */
+export const OVERAGE = {
+  perVoiceMinuteUsd: 0.3,
+  perCareHourUsd: 85,
+} as const;
+
 export type FeatureMeta = {
   key: Feature;
   label: string;
   tagline: string;
   blurb: string;
   bullets: string[];
-  price: string; // display copy only; real price lives with the processor
+  /**
+   * Display copy only; the real price lives with the processor.
+   * `null` means the feature is NOT sold separately — it's included with the
+   * plan, so the UI shows no price and no checkout button.
+   */
+  price: string | null;
+  /** One-time fee shown alongside the recurring price, when there is one. */
+  setupFee: string | null;
   areas: string[]; // dashboard routes this feature unlocks
 };
 
@@ -37,12 +72,15 @@ export const FEATURES: FeatureMeta[] = [
     blurb:
       "Lumi answers your phone, quotes from your price list, checks real availability, books jobs, captures leads, and reschedules — around the clock.",
     bullets: [
-      "After-hours & missed-call capture",
+      `${STARTER_PLAN.includedMinutes} included minutes/mo · ${STARTER_PLAN.numbers} local number`,
+      "24/7 answering, after-hours & missed-call capture",
       "Real-time availability and booking",
-      "Emergency triage and warm transfer",
-      "Reschedule & cancel by phone",
+      "Website knowledge sync included — no connector fee",
+      "Callback ticket portal so nothing disappears",
+      `Calls capped at ${STARTER_PLAN.maxCallMinutes} min, then transfer or callback ticket`,
     ],
-    price: "from $299/mo",
+    price: `$${STARTER_PLAN.monthlyUsd}/mo`,
+    setupFee: `$${STARTER_PLAN.setupFeeUsd} one-time setup`,
     areas: ["/appointments", "/leads", "/services"],
   },
   {
@@ -56,7 +94,10 @@ export const FEATURES: FeatureMeta[] = [
       "Order + shipping lookups",
       "Human review queue",
     ],
-    price: "from $199/mo",
+    // Not a priced SKU. The CFO model removed email pricing entirely; email is
+    // an included capability. The entitlement row still gates page access.
+    price: null,
+    setupFee: null,
     areas: ["/conversations", "/review-queue"],
   },
 ];
@@ -114,6 +155,44 @@ export async function getEntitlements(): Promise<
   const map: Partial<Record<Feature, EntitlementRow>> = {};
   for (const r of (data ?? []) as EntitlementRow[]) map[r.feature] = r;
   return map;
+}
+
+// Current-month voice usage for the caller's own tenant.
+//
+// Reads the `voice_usage_current` view from 0012, which is declared
+// `security_invoker` so the RLS on clients/voice_usage_events applies to the
+// querying user — a tenant can only ever resolve its own row. Returns null when
+// the client has no voice usage row yet (e.g. a brand-new workspace).
+export type VoiceUsage = {
+  calls: number;
+  minutes_used: number;
+  /** null = explicitly unlimited (-1 in caps) or unresolvable. */
+  minutes_cap: number | null;
+  avg_call_minutes: number | null;
+};
+
+export async function getVoiceUsage(): Promise<VoiceUsage | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("voice_usage_current")
+    .select("calls, minutes_used, minutes_cap, avg_call_minutes")
+    .maybeSingle();
+  return (data as VoiceUsage | null) ?? null;
+}
+
+// Minutes billed at the overage rate once the allowance is consumed, and what
+// they'd cost. Returns zeros when there's no cap or the client is under it.
+export function overageEstimate(usage: VoiceUsage | null): {
+  overMinutes: number;
+  estimatedUsd: number;
+} {
+  const cap = usage?.minutes_cap ?? null;
+  if (!usage || cap === null || cap < 0) return { overMinutes: 0, estimatedUsd: 0 };
+  const over = Math.max(usage.minutes_used - cap, 0);
+  return {
+    overMinutes: Math.round(over * 100) / 100,
+    estimatedUsd: Math.round(over * OVERAGE.perVoiceMinuteUsd * 100) / 100,
+  };
 }
 
 // Page-level gate. When enforcement is off, nothing is locked. When on, a feature
