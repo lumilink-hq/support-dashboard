@@ -20,14 +20,21 @@ export const PUBLIC_PREFIXES = [
 /**
  * Public paths matched EXACTLY.
  *
- * "/" MUST live here and can never go in PUBLIC_PREFIXES. Every pathname begins
- * with "/", so a prefix entry would make isPublicPath() return true for every
- * route in the application and unauthenticate the whole dashboard in one line.
+ * "/preview" is the Next.js marketing landing page, parked off the root while
+ * the Wix site is still the public front door. It is deliberately reachable
+ * without a session so the link can be shared for review, and it carries a
+ * robots noindex so search engines don't rank it against the Wix site.
+ *
+ * "/" is NOT here: the root redirects into the dashboard, so it stays gated.
+ * If you ever put "/" back, it MUST go in this list and never in
+ * PUBLIC_PREFIXES — every pathname begins with "/", so a prefix entry would
+ * make isPublicPath() true for every route and unauthenticate the whole
+ * dashboard in one line of diff.
  *
  * When adding marketing routes later: anything with sub-paths goes in
  * PUBLIC_PREFIXES, bare single pages go here.
  */
-export const PUBLIC_EXACT = ["/"] as const;
+export const PUBLIC_EXACT = ["/preview"] as const;
 
 /**
  * True when `pathname` may be served to a visitor with no session.
