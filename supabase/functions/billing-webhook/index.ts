@@ -249,6 +249,37 @@ async function resolveBySubscription(
   };
 }
 
+// Nudge the provisioning worker to drain its queue. Never throws, never blocks
+// the webhook response.
+//
+// EdgeRuntime.waitUntil keeps the request alive for the background call after
+// we've responded; without it the isolate can be torn down mid-flight and the
+// kick is silently lost. Falls back to a floating promise where it isn't
+// available. Either way, failure here only delays provisioning until the next
+// event or cron run — it must never turn a successful grant into a 500, because
+// Stripe would then retry an event we already applied.
+function kickProvisioning(): void {
+  const url = `${SUPABASE_URL}/functions/v1/provision-feature`;
+  const p = fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      // Harmless when the function is deployed --no-verify-jwt, required if it
+      // ever isn't.
+      Authorization: `Bearer ${SERVICE_ROLE_SECRET}`,
+    },
+    body: "{}",
+  })
+    .then((r) => {
+      if (!r.ok) console.error(`provision-feature kick returned ${r.status}`);
+    })
+    .catch((e) => console.error("provision-feature kick failed:", String(e)));
+
+  const rt = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+    .EdgeRuntime;
+  if (typeof rt?.waitUntil === "function") rt.waitUntil(p);
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -353,6 +384,19 @@ Deno.serve(async (req) => {
     p_current_period_end: ev.currentPeriodEnd ?? null,
     p_payload: diagnostics,
   });
+
+  // A grant leaves the entitlement 'pending' and a task 'queued'. Nothing
+  // drains that queue on its own, so without this the customer pays and sits on
+  // "Setting up your plan…" until a human remembers to poke the function.
+  //
+  // Fire-and-forget on purpose. Provisioning buys a Twilio number and calls
+  // ElevenLabs; that can outlast Stripe's delivery timeout, and a webhook that
+  // times out gets RETRIED — re-running a grant we already applied. The queue
+  // is idempotent and retried on its own schedule, so the correct thing here is
+  // to kick it and return immediately, never to wait for it or fail on it.
+  if (!error && (data as { status?: string } | null)?.status === "applied") {
+    kickProvisioning();
+  }
 
   if (error) {
     // Let the processor retry on a genuine server error.
