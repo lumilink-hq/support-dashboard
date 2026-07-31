@@ -9,14 +9,16 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
-// In-page anchors only. Every link here has to resolve to a section that is
+// Mixed routes and in-page anchors. Anchors must resolve to a section that is
 // actually rendered on the landing page: a nav link that scrolls nowhere reads
-// as a broken site.
+// as a broken site. "#faq" only exists on the landing page, so on /plans it
+// falls back to doing nothing — acceptable while there are two entries, worth
+// revisiting if the nav grows.
 //
 // "How it works" (#how) was removed when that section was commented out in
-// app/page.tsx. Restore both together.
+// components/marketing/landing.tsx. Restore both together.
 const NAV_LINKS = [
-  { href: "#pricing", label: "Pricing" },
+  { href: "/plans", label: "Plans" },
   { href: "#faq", label: "FAQ" },
 ];
 

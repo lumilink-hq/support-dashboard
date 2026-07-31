@@ -20,21 +20,53 @@ export const PUBLIC_PREFIXES = [
 /**
  * Public paths matched EXACTLY.
  *
- * "/preview" is the Next.js marketing landing page, parked off the root while
- * the Wix site is still the public front door. It is deliberately reachable
- * without a session so the link can be shared for review, and it carries a
- * robots noindex so search engines don't rank it against the Wix site.
+ *   "/"        the marketing landing page. Signed-in users are redirected to
+ *              the dashboard by the route itself, not by this list.
+ *   "/home"    the same page without that redirect, so a signed-in user can
+ *              still reach the marketing site. noindex.
+ *   "/preview" retired; redirects to /home. Kept so shared links don't 404.
  *
- * "/" is NOT here: the root redirects into the dashboard, so it stays gated.
- * If you ever put "/" back, it MUST go in this list and never in
- * PUBLIC_PREFIXES — every pathname begins with "/", so a prefix entry would
- * make isPublicPath() true for every route and unauthenticate the whole
- * dashboard in one line of diff.
+ * "/" MUST stay in THIS list and never move to PUBLIC_PREFIXES. Every pathname
+ * begins with "/", so a prefix entry would make isPublicPath() return true for
+ * every route in the application and unauthenticate the whole dashboard in one
+ * character of diff, silently. scripts/test-route-access.ts asserts this.
  *
  * When adding marketing routes later: anything with sub-paths goes in
  * PUBLIC_PREFIXES, bare single pages go here.
  */
-export const PUBLIC_EXACT = ["/preview"] as const;
+export const PUBLIC_EXACT = ["/", "/home", "/preview", "/plans"] as const;
+
+/**
+ * Sanitise a `?next=` value before redirecting to it.
+ *
+ * WHY. /plans sends a signed-out visitor to /login?next=/plans so they land back
+ * on the plan they picked. Redirecting to an attacker-supplied value is an open
+ * redirect: a link to
+ *   yourdomain.com/login?next=https://evil.example/login
+ * looks like your domain, takes a real password on your real login form, then
+ * drops the user on a copy of it. Phishing that borrows your domain's
+ * credibility.
+ *
+ * Only same-site absolute paths pass. Everything else falls back.
+ *
+ * The `//` case is the one people miss: "//evil.example" starts with "/" and is
+ * a protocol-relative URL, so a naive startsWith("/") check sends the browser
+ * off-site. Backslashes are rejected because some browsers normalise "\" to "/".
+ */
+export function safeNextPath(
+  value: string | null | undefined,
+  fallback = "/conversations",
+): string {
+  if (typeof value !== "string") return fallback;
+  const v = value.trim();
+
+  if (!v.startsWith("/")) return fallback; // absolute URLs, "javascript:", ""
+  if (v.startsWith("//")) return fallback; // protocol-relative -> off-site
+  if (v.includes("\\")) return fallback; // "/\evil.example" normalises to "//"
+  if (v.includes("\n") || v.includes("\r")) return fallback; // header splitting
+
+  return v;
+}
 
 /**
  * True when `pathname` may be served to a visitor with no session.

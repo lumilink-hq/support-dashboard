@@ -59,9 +59,14 @@ if (WEBHOOK_SECRET_CONFIG_ERROR) {
   console.error(WEBHOOK_SECRET_CONFIG_ERROR);
 }
 
-/** The signing secret for a processor: explicit map entry, else the bare value. */
-function secretFor(processor: string): string | undefined {
-  return WEBHOOK_SECRETS[processor] ?? WEBHOOK_SECRET_FALLBACK ?? undefined;
+/**
+ * Signing secrets to try for a processor: its explicit map entry, else the bare
+ * value(s). More than one is normal — Stripe's test and live endpoints have
+ * different secrets and both point here, so during a cutover both must verify.
+ */
+function secretsFor(processor: string): string[] {
+  const explicit = WEBHOOK_SECRETS[processor];
+  return explicit?.length ? explicit : WEBHOOK_SECRET_FALLBACK;
 }
 
 // How far a Stripe signature timestamp may drift before we refuse it. Stripe's
@@ -296,8 +301,8 @@ Deno.serve(async (req) => {
     return json({ error: WEBHOOK_SECRET_CONFIG_ERROR }, 500);
   }
 
-  const secret = secretFor(processor);
-  if (!secret) {
+  const secrets = secretsFor(processor);
+  if (secrets.length === 0) {
     const msg =
       `No signing secret for processor '${processor}'. Set BILLING_WEBHOOK_SECRETS ` +
       `to the bare whsec_... value, or to {"${processor}":"whsec_..."}.`;
@@ -309,11 +314,18 @@ Deno.serve(async (req) => {
   const rawBody = await req.text();
 
   // 1) Verify signature BEFORE trusting anything in the body.
+  //    Every configured secret is tried: test and live endpoints have different
+  //    ones, and both legitimately deliver here during a cutover.
   let verified = false;
-  try {
-    verified = await adapter.verify(rawBody, req.headers, secret);
-  } catch {
-    verified = false;
+  for (const secret of secrets) {
+    try {
+      if (await adapter.verify(rawBody, req.headers, secret)) {
+        verified = true;
+        break;
+      }
+    } catch {
+      // Treat a throwing verifier as a failed match and try the next secret.
+    }
   }
   if (!verified) return json({ error: "Invalid signature" }, 401);
 
@@ -354,6 +366,11 @@ Deno.serve(async (req) => {
   // buyer simply had no account. Every field below is a Stripe object id or a
   // boolean — no email, no name, no card data, no raw body.
   const diagnostics = {
+    // Stripe's test/live flag. Both modes deliver to this one endpoint, so
+    // without it there is no way to filter a diagnostic query down to real
+    // money — and a table full of test-era noise makes a genuine live failure
+    // impossible to spot.
+    livemode: ev.livemode ?? null,
     external_price_id: ev.externalPriceId ?? null,
     // All of them: an invoice with a setup fee carries more than one, and
     // knowing which were offered is the difference between "price map gap" and

@@ -65,6 +65,19 @@ export function Sidebar({ clientName }: { clientName: string }) {
         })}
       </nav>
 
+      {/*
+        Points at /home, not "/". The root redirects a signed-in user straight
+        back into the dashboard, so linking there would do nothing at all.
+      */}
+      <div className="border-t border-gray-200 px-3 py-2">
+        <Link
+          href="/home"
+          className="block rounded-md px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+        >
+          View public site
+        </Link>
+      </div>
+
       <div className="flex flex-wrap gap-1.5 border-t border-gray-200 px-5 py-3">
         <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
           Email

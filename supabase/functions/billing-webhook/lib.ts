@@ -38,6 +38,13 @@ export interface CanonicalEvent {
   externalPriceIds?: string[];
   subscriptionRef?: string | null;
   currentPeriodEnd?: string | null; // ISO
+  /**
+   * Stripe's own test/live flag. Recorded so a diagnostic query can tell real
+   * money from a test purchase — the two share one endpoint, one function and
+   * one billing_events table, and without this the only way to tell them apart
+   * is squinting at the account suffix buried in an event id.
+   */
+  livemode?: boolean | null;
 }
 
 // -----------------------------------------------------------------------------
@@ -45,49 +52,70 @@ export interface CanonicalEvent {
 // -----------------------------------------------------------------------------
 
 export interface WebhookSecretConfig {
-  /** Per-processor secrets, from the JSON form. */
-  map: Record<string, string>;
-  /** A single bare secret, used for any processor with no explicit entry. */
-  fallback: string | null;
+  /** Per-processor secrets. Several per processor is normal — see below. */
+  map: Record<string, string[]>;
+  /** Bare secret(s), used for any processor with no explicit entry. */
+  fallback: string[];
   /** Set when the value was meant to be JSON and wasn't. Never thrown. */
   configError: string | null;
 }
 
+/** Accepts "a", "a,b", or ["a","b"] and normalises to a clean string array. */
+function toSecretList(v: unknown): string[] {
+  const raw = Array.isArray(v) ? v : String(v ?? "").split(",");
+  return raw
+    .map((s) => String(s).trim())
+    .filter((s) => s !== "");
+}
+
 /**
- * Read BILLING_WEBHOOK_SECRETS, accepting either form:
+ * Read BILLING_WEBHOOK_SECRETS. Every form below works:
  *
- *   {"stripe":"whsec_…","square":"…"}   per-processor map
- *   whsec_…                             a single secret, any processor
+ *   whsec_live                              one secret, any processor
+ *   whsec_live,whsec_test                   several, any processor
+ *   {"stripe":"whsec_live"}                 per-processor
+ *   {"stripe":["whsec_live","whsec_test"]}  per-processor, several
  *
- * WHY BOTH. Pasting the bare `whsec_…` Stripe shows you is the obvious move,
- * and the map only matters if you run more than one processor — which nobody
- * does on day one. Accepting only the map turned a config typo into a dead
- * function: JSON.parse threw during module import, so every delivery 5xx'd
- * before any handler ran, and the log said "Unexpected token 'w'" rather than
- * anything about configuration.
+ * WHY SEVERAL PER PROCESSOR. Stripe's test and live modes are separate
+ * endpoints with separate signing secrets, and both point at this one function.
+ * Holding a single secret means enabling live silently breaks the test endpoint
+ * — every test delivery starts returning 401 the moment you cut over, which
+ * removes your ability to verify anything at exactly the moment you most want
+ * it. Accepting a list lets both run side by side through the cutover, and
+ * covers Stripe's own secret rotation for free.
+ *
+ * WHY BOTH SHAPES. Pasting the bare `whsec_…` Stripe shows you is the obvious
+ * move; the map only matters with more than one processor. Accepting only the
+ * map once turned a config typo into a dead function: JSON.parse threw during
+ * module import, so every delivery 5xx'd before any handler ran and the log
+ * said "Unexpected token 'w'" rather than anything about configuration.
  *
  * WHY IT NEVER THROWS. A bad value must not take the endpoint down. The problem
  * is recorded and reported per-request with an actionable message instead.
  */
 export function parseWebhookSecrets(raw: string | undefined): WebhookSecretConfig {
   const trimmed = (raw ?? "").trim();
-  if (!trimmed) return { map: {}, fallback: null, configError: null };
+  if (!trimmed) return { map: {}, fallback: [], configError: null };
 
   if (trimmed.startsWith("{")) {
     try {
       const parsed = JSON.parse(trimmed);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return { map: parsed as Record<string, string>, fallback: null, configError: null };
+        const map: Record<string, string[]> = {};
+        for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+          map[k] = toSecretList(v);
+        }
+        return { map, fallback: [], configError: null };
       }
       return {
         map: {},
-        fallback: null,
+        fallback: [],
         configError: "BILLING_WEBHOOK_SECRETS parsed as JSON but is not an object.",
       };
     } catch {
       return {
         map: {},
-        fallback: null,
+        fallback: [],
         configError:
           "BILLING_WEBHOOK_SECRETS starts with '{' but is not valid JSON. " +
           'Use {"stripe":"whsec_..."} or just the bare whsec_... value.',
@@ -95,9 +123,9 @@ export function parseWebhookSecrets(raw: string | undefined): WebhookSecretConfi
     }
   }
 
-  // A bare secret. Applied to whichever processor handles the request, so it
-  // works regardless of ?processor= without anyone knowing the map shape.
-  return { map: {}, fallback: trimmed, configError: null };
+  // Bare secret(s). Applied to whichever processor handles the request, so they
+  // work regardless of ?processor= without anyone knowing the map shape.
+  return { map: {}, fallback: toSecretList(trimmed), configError: null };
 }
 
 // -----------------------------------------------------------------------------
@@ -355,7 +383,9 @@ export function parseStripeEvent(rawBody: string): CanonicalEvent | null {
     type = "ignored";
   }
 
-  if (type === "ignored") return { externalEventId: id, type: "ignored" };
+  const livemode = typeof e?.livemode === "boolean" ? e.livemode : null;
+
+  if (type === "ignored") return { externalEventId: id, type: "ignored", livemode };
 
   const meta = collectMetadata(obj);
   const priceIds = extractPriceIds(obj);
@@ -363,6 +393,7 @@ export function parseStripeEvent(rawBody: string): CanonicalEvent | null {
   return {
     externalEventId: id,
     type,
+    livemode,
     clientId: firstString(meta.client_id, obj?.client_reference_id),
     feature: asFeature(meta.feature),
     externalPriceId: priceIds[0] ?? null,

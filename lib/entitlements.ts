@@ -47,6 +47,69 @@ export const OVERAGE = {
   perCareHourUsd: 85,
 } as const;
 
+/**
+ * The public plan ladder, shared by the landing page and /plans so the two can
+ * never quote different numbers.
+ *
+ * `selfServe` marks the only tier with a Payment Link. Growth and Scale are
+ * sales-assisted until the tier layer exists: billing_price_map is feature-level,
+ * so buying Scale today would grant the same 'voice' entitlement as Starter and
+ * provisioning would apply Starter's 100-minute allowance. Publishing a link for
+ * them before that is fixed sells 600 minutes and delivers 100.
+ */
+export type PlanTier = {
+  label: string;
+  monthlyUsd: number;
+  setupFeeUsd: number;
+  includedMinutes: number;
+  highlights: string[];
+  selfServe: boolean;
+};
+
+export const PLAN_TIERS: PlanTier[] = [
+  {
+    label: STARTER_PLAN.label,
+    monthlyUsd: STARTER_PLAN.monthlyUsd,
+    setupFeeUsd: STARTER_PLAN.setupFeeUsd,
+    includedMinutes: STARTER_PLAN.includedMinutes,
+    highlights: [
+      `${STARTER_PLAN.includedMinutes} included minutes per month`,
+      `${STARTER_PLAN.numbers} local phone number`,
+      "24/7 answering and booking",
+      "Website knowledge sync",
+      "Callback ticket portal",
+      `${STARTER_PLAN.careHoursPerMonth} hours of platform care per month`,
+    ],
+    selfServe: true,
+  },
+  {
+    label: "Growth",
+    monthlyUsd: 279,
+    setupFeeUsd: 499,
+    includedMinutes: 250,
+    highlights: [
+      "250 included minutes per month",
+      "Advanced transfers",
+      "4 hours of platform care per month",
+      "Everything in Starter",
+    ],
+    selfServe: false,
+  },
+  {
+    label: "Scale",
+    monthlyUsd: 449,
+    setupFeeUsd: 799,
+    includedMinutes: 600,
+    highlights: [
+      "600 included minutes per month",
+      "2 local phone numbers",
+      "Advanced routing",
+      "8 hours of platform care per month",
+    ],
+    selfServe: false,
+  },
+];
+
 export type FeatureMeta = {
   key: Feature;
   label: string;
