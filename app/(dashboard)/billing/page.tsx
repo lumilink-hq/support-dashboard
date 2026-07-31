@@ -6,6 +6,7 @@ import {
   checkoutUrl,
   entitlementsEnforced,
   featureState,
+  getCurrentClientId,
   getEntitlements,
   getVoiceUsage,
   overageEstimate,
@@ -81,7 +82,13 @@ const PILL_LABEL: Record<FeatureState, string> = {
 };
 
 export default async function BillingPage() {
-  const [ent, usage] = await Promise.all([getEntitlements(), getVoiceUsage()]);
+  const [ent, usage, clientId] = await Promise.all([
+    getEntitlements(),
+    getVoiceUsage(),
+    // Stamped onto the checkout URL so the billing webhook can route the grant
+    // back to this tenant instead of parking it for a manual fix.
+    getCurrentClientId(),
+  ]);
 
   return (
     <div className="max-w-4xl">
@@ -97,7 +104,7 @@ export default async function BillingPage() {
           const state = featureState(row);
           // A feature that isn't sold separately never shows a checkout button,
           // even if a URL happens to be configured for it.
-          const url = f.price === null ? null : checkoutUrl(f.key);
+          const url = f.price === null ? null : checkoutUrl(f.key, clientId);
 
           return (
             <div
