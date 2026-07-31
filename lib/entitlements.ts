@@ -137,9 +137,51 @@ export function entitlementsEnforced(): boolean {
 // Hosted-checkout URL for a feature, if a processor has been wired. Kept in config
 // so choosing a processor later is configuration, not code:
 //   CHECKOUT_URL_VOICE, CHECKOUT_URL_EMAIL
-export function checkoutUrl(feature: Feature): string | null {
+//
+// When `clientId` is supplied we append Stripe's `client_reference_id`, which
+// Stripe echoes back on checkout.session.completed. That is what lets the
+// webhook route the grant to the right tenant: a bare Payment Link carries no
+// identity, so without it the event arrives unroutable and parks as 'unmapped'
+// awaiting a manual grant. The dashboard already knows who is signed in, so
+// there is no reason to make anyone reconcile that by hand.
+//
+// A landing-page visitor has no account yet and therefore no client id. Those
+// purchases are expected to park — see parseStripeEvent's note on why an
+// unroutable payment must never be guessed onto a tenant.
+export function checkoutUrl(
+  feature: Feature,
+  clientId?: string | null,
+): string | null {
   const v = process.env[`CHECKOUT_URL_${feature.toUpperCase()}`];
-  return v && v.trim() ? v.trim() : null;
+  const base = v && v.trim() ? v.trim() : null;
+  if (!base || !clientId) return base;
+
+  try {
+    const url = new URL(base);
+    url.searchParams.set("client_reference_id", clientId);
+    return url.toString();
+  } catch {
+    // A malformed CHECKOUT_URL_* shouldn't take the billing page down; fall
+    // back to the raw value and let the manual-grant path handle routing.
+    return base;
+  }
+}
+
+// The caller's own client_id, for stamping onto a checkout URL. RLS scopes the
+// row, so this can only ever return the signed-in user's tenant.
+export async function getCurrentClientId(): Promise<string | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("users")
+    .select("client_id")
+    .eq("id", user.id)
+    .maybeSingle();
+  return (data?.client_id as string | undefined) ?? null;
 }
 
 // All of the caller's entitlements, keyed by feature (missing = locked).

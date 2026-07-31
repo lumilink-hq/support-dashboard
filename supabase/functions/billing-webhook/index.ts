@@ -23,10 +23,20 @@
 // =============================================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+import {
+  type CanonicalEvent,
+  type CanonicalType,
+  type Feature,
+  parseStripeEvent,
+  parseWebhookSecrets,
+  verifyStripeSignature,
+} from "./lib.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const rawSecrets = Deno.env.get("SUPABASE_SECRET_KEYS");
-// Per-processor signing secret, JSON: {"stripe":"whsec_…","square":"…","generic":"…"}
+// Signing secret(s). Accepts EITHER form — see parseWebhookSecrets:
+//   {"stripe":"whsec_…","square":"…"}   per-processor map
+//   whsec_…                             a single secret, used for any processor
 const rawWebhookSecrets = Deno.env.get("BILLING_WEBHOOK_SECRETS") ?? "{}";
 
 if (!SUPABASE_URL) throw new Error("SUPABASE_URL is required");
@@ -36,30 +46,40 @@ const SERVICE_ROLE_SECRET = (JSON.parse(rawSecrets) as Record<string, string>)["
 if (!SERVICE_ROLE_SECRET) {
   throw new Error("Missing service role key: SUPABASE_SECRET_KEYS['default']");
 }
-const WEBHOOK_SECRETS = JSON.parse(rawWebhookSecrets) as Record<string, string>;
+
+const {
+  map: WEBHOOK_SECRETS,
+  fallback: WEBHOOK_SECRET_FALLBACK,
+  configError: WEBHOOK_SECRET_CONFIG_ERROR,
+} = parseWebhookSecrets(rawWebhookSecrets);
+
+if (WEBHOOK_SECRET_CONFIG_ERROR) {
+  // Logged once at boot as well as per-request: whichever log the operator
+  // reaches for first, the message is there.
+  console.error(WEBHOOK_SECRET_CONFIG_ERROR);
+}
+
+/** The signing secret for a processor: explicit map entry, else the bare value. */
+function secretFor(processor: string): string | undefined {
+  return WEBHOOK_SECRETS[processor] ?? WEBHOOK_SECRET_FALLBACK ?? undefined;
+}
+
+// How far a Stripe signature timestamp may drift before we refuse it. Stripe's
+// own default is 300s. Raise it only if the function is genuinely slow to be
+// invoked; a wide window is a replay window.
+const STRIPE_TOLERANCE_SECS = Number(
+  Deno.env.get("STRIPE_WEBHOOK_TOLERANCE_SECS") ?? 300,
+);
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_SECRET, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
 // ---- Canonical shape every adapter must produce ----------------------------
-type Feature = "email" | "voice";
-type CanonicalType =
-  | "subscription_activated"
-  | "subscription_renewed"
-  | "payment_failed"
-  | "subscription_canceled"
-  | "ignored";
-
-interface CanonicalEvent {
-  externalEventId: string;      // processor's unique event id (idempotency key)
-  type: CanonicalType;
-  clientId?: string | null;     // from checkout metadata, if present
-  feature?: Feature | null;     // from metadata, else resolved via price map
-  externalPriceId?: string | null;
-  subscriptionRef?: string | null;
-  currentPeriodEnd?: string | null; // ISO
-}
+// CanonicalEvent, CanonicalType and Feature now live in ./lib.ts (imported
+// above) alongside the Stripe adapter's pure logic, so scripts can unit test
+// signature verification and event mapping without Deno.serve, env or a
+// database. See scripts/test-billing-webhook.ts.
 
 interface Adapter {
   // Return true only if the signature is valid. Throwing is treated as invalid.
@@ -120,26 +140,26 @@ const adapters: Record<string, Adapter> = {
     },
   },
 
-  // --- stripe: skeleton. Fill in when chosen. ------------------------------
+  // --- stripe: IMPLEMENTED -------------------------------------------------
+  // Both halves live in ./lib.ts. Signature verification is a real HMAC-SHA256
+  // over `${t}.${rawBody}` against the endpoint secret, with a replay window;
+  // parsing maps Stripe's event types onto the canonical four.
+  //
+  // Setup: BILLING_WEBHOOK_SECRETS must contain {"stripe":"whsec_..."} — the
+  // endpoint's signing secret from the Stripe dashboard, NOT an API key. Route
+  // traffic here with ?processor=stripe on the endpoint URL, or by setting
+  // BILLING_PROCESSOR=stripe.
   stripe: {
-    async verify(_raw, _headers, secret) {
-      // TODO(processor): real check is Stripe's signature scheme —
-      //   const sig = headers.get("stripe-signature");
-      //   await stripe.webhooks.constructEventAsync(rawBody, sig, secret);
-      // Until then, refuse rather than pretend: no silent trust.
-      return secret ? sharedTokenOk(_headers, secret) : false;
+    async verify(raw, headers, secret) {
+      return await verifyStripeSignature(
+        raw,
+        headers.get("stripe-signature"),
+        secret,
+        { toleranceSecs: STRIPE_TOLERANCE_SECS },
+      );
     },
     parse(raw) {
-      // TODO(processor): map Stripe event.type + data.object into canonical.
-      //   checkout.session.completed / customer.subscription.created -> subscription_activated
-      //   invoice.paid            -> subscription_renewed
-      //   invoice.payment_failed  -> payment_failed
-      //   customer.subscription.deleted -> subscription_canceled
-      //   clientId  = data.object.metadata.client_id
-      //   feature   = data.object.metadata.feature  (or price id -> billing_price_map)
-      //   priceId   = data.object.items?.data[0]?.price?.id
-      const e = JSON.parse(raw);
-      return { externalEventId: String(e.id), type: "ignored" };
+      return parseStripeEvent(raw);
     },
   },
 
@@ -168,18 +188,65 @@ function pickProcessor(url: URL, headers: Headers): string {
   ).toLowerCase();
 }
 
-// feature: prefer explicit metadata; else look the price id up in billing_price_map.
+// feature: prefer explicit metadata; else look the price ids up in
+// billing_price_map.
+//
+// Searches EVERY price id on the event, not just the first. An invoice for a
+// plan with a one-time setup fee has two lines, and the setup line can come
+// first — matching only that one finds nothing and parks a good renewal.
 async function resolveFeature(ev: CanonicalEvent, processor: string): Promise<Feature | null> {
   if (ev.feature) return ev.feature;
-  if (!ev.externalPriceId) return null;
+
+  const ids = ev.externalPriceIds?.length
+    ? ev.externalPriceIds
+    : ev.externalPriceId
+      ? [ev.externalPriceId]
+      : [];
+  if (ids.length === 0) return null;
+
   const { data } = await supabase
     .from("billing_price_map")
     .select("feature")
     .eq("processor", processor)
-    .eq("external_price_id", ev.externalPriceId)
+    .in("external_price_id", ids)
     .eq("is_active", true)
+    .limit(1);
+  return (data?.[0]?.feature as Feature) ?? null;
+}
+
+// Fall back to the subscription we ALREADY track when an event doesn't name a
+// tenant or feature.
+//
+// WHY THIS IS REQUIRED, not a nicety. apply_billing_event parks anything that
+// arrives without BOTH a client_id and a feature. With a hosted Payment Link
+// those two facts never travel together after the first event:
+//
+//   checkout.session.completed    client_reference_id, but no price on the payload
+//   customer.subscription.created price (-> feature), but client_reference_id
+//                                 does NOT propagate to the subscription
+//   invoice.paid       (renewals) no client_reference_id anywhere, ever
+//   customer.subscription.deleted no client_reference_id anywhere, ever
+//
+// Without this lookup a renewal would never extend the period and — much worse
+// — a CANCELLATION would park as 'unmapped', leaving a customer who cancelled
+// with a live entitlement and a provisioned phone number.
+//
+// The subscription ref is a safe key: it was written by us, on the grant, from
+// Stripe's own payload. maybeSingle() returns null if somehow more than one row
+// matches, so an ambiguous ref parks rather than guessing a tenant.
+async function resolveBySubscription(
+  subscriptionRef: string | null | undefined,
+): Promise<{ clientId: string | null; feature: Feature | null }> {
+  if (!subscriptionRef) return { clientId: null, feature: null };
+  const { data } = await supabase
+    .from("entitlements")
+    .select("client_id, feature")
+    .eq("external_subscription_ref", subscriptionRef)
     .maybeSingle();
-  return (data?.feature as Feature) ?? null;
+  return {
+    clientId: (data?.client_id as string) ?? null,
+    feature: (data?.feature as Feature) ?? null,
+  };
 }
 
 Deno.serve(async (req) => {
@@ -190,13 +257,30 @@ Deno.serve(async (req) => {
   const adapter = adapters[processor];
   if (!adapter) return json({ error: `Unknown processor '${processor}'` }, 400);
 
+  // A malformed BILLING_WEBHOOK_SECRETS is a configuration fault, not a bad
+  // request. Say so explicitly: reporting it as "Invalid signature" would send
+  // whoever is debugging to rotate a secret that was never the problem.
+  if (WEBHOOK_SECRET_CONFIG_ERROR) {
+    console.error(WEBHOOK_SECRET_CONFIG_ERROR);
+    return json({ error: WEBHOOK_SECRET_CONFIG_ERROR }, 500);
+  }
+
+  const secret = secretFor(processor);
+  if (!secret) {
+    const msg =
+      `No signing secret for processor '${processor}'. Set BILLING_WEBHOOK_SECRETS ` +
+      `to the bare whsec_... value, or to {"${processor}":"whsec_..."}.`;
+    console.error(msg);
+    return json({ error: msg }, 500);
+  }
+
   // Raw body is required for signature verification — read it as text ONCE.
   const rawBody = await req.text();
 
   // 1) Verify signature BEFORE trusting anything in the body.
   let verified = false;
   try {
-    verified = await adapter.verify(rawBody, req.headers, WEBHOOK_SECRETS[processor]);
+    verified = await adapter.verify(rawBody, req.headers, secret);
   } catch {
     verified = false;
   }
@@ -216,19 +300,58 @@ Deno.serve(async (req) => {
     return json({ status: "ignored", event_id: ev.externalEventId });
   }
 
-  // 3) Resolve feature (metadata or price map) and hand off to the RPC, which
-  //    owns idempotency + all entitlement state transitions.
-  const feature = await resolveFeature(ev, processor);
+  // 3) Resolve WHO and WHAT, then hand off to the RPC, which owns idempotency
+  //    and all entitlement state transitions.
+  //
+  //    Order matters: the event's own metadata wins, then the price map, and
+  //    only then the subscription we already track. Never the reverse — an
+  //    explicit client_id on the payload must always beat an inferred one.
+  let clientId = ev.clientId ?? null;
+  let feature = await resolveFeature(ev, processor);
+
+  if (!clientId || !feature) {
+    const known = await resolveBySubscription(ev.subscriptionRef);
+    clientId = clientId ?? known.clientId;
+    feature = feature ?? known.feature;
+  }
+
+  // Minimal diagnostics, so an 'unmapped' row says WHY it was unmapped.
+  //
+  // This used to be `{}`, which made the most common failure undebuggable: the
+  // event parked, the row recorded null client_id and null feature, and nothing
+  // recorded whether the price id was unknown, the metadata was missing, or the
+  // buyer simply had no account. Every field below is a Stripe object id or a
+  // boolean — no email, no name, no card data, no raw body.
+  const diagnostics = {
+    external_price_id: ev.externalPriceId ?? null,
+    // All of them: an invoice with a setup fee carries more than one, and
+    // knowing which were offered is the difference between "price map gap" and
+    // "we only looked at the wrong line".
+    external_price_ids: ev.externalPriceIds ?? [],
+    subscription_ref: ev.subscriptionRef ?? null,
+    // Did the event itself name a tenant, or did we infer it from a known
+    // subscription? Distinguishes "link opened anonymously" from "price map gap".
+    client_id_source: ev.clientId
+      ? "event"
+      : clientId
+        ? "subscription_lookup"
+        : "none",
+    feature_source: ev.feature
+      ? "metadata"
+      : feature
+        ? "price_map_or_subscription"
+        : "none",
+  };
 
   const { data, error } = await supabase.rpc("apply_billing_event", {
     p_processor: processor,
     p_external_event_id: ev.externalEventId,
     p_event_type: ev.type,
-    p_client_id: ev.clientId ?? null,
+    p_client_id: clientId,
     p_feature: feature,
     p_subscription_ref: ev.subscriptionRef ?? null,
     p_current_period_end: ev.currentPeriodEnd ?? null,
-    p_payload: {}, // keep it lean; billing_events stores what we pass — no PII/secrets
+    p_payload: diagnostics,
   });
 
   if (error) {
