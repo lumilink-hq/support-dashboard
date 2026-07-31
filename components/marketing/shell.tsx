@@ -38,9 +38,9 @@ async function isSignedIn(): Promise<boolean> {
   }
 }
 
-function Wordmark() {
+function Wordmark({ href }: { href: string }) {
   return (
-    <Link href="/" className="flex items-center gap-2">
+    <Link href={href} className="flex items-center gap-2">
       <span
         aria-hidden
         className="grid h-7 w-7 place-items-center rounded-lg bg-gray-900 text-sm font-bold text-white"
@@ -56,8 +56,15 @@ function Wordmark() {
 
 export async function MarketingShell({
   children,
+  /**
+   * Where the wordmark links. Defaults to "/", which is correct once the
+   * marketing site owns the root. While the page is parked at /preview, that
+   * route redirects into the dashboard, so the preview passes its own path.
+   */
+  homeHref = "/",
 }: {
   children: React.ReactNode;
+  homeHref?: string;
 }) {
   const signedIn = await isSignedIn();
 
@@ -65,7 +72,7 @@ export async function MarketingShell({
     <div className="flex min-h-full flex-1 flex-col bg-white text-gray-900">
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <Wordmark />
+          <Wordmark href={homeHref} />
 
           <nav className="hidden items-center gap-8 md:flex">
             {NAV_LINKS.map((l) => (
@@ -112,7 +119,7 @@ export async function MarketingShell({
       <footer className="border-t border-gray-200 bg-gray-50">
         <div className="mx-auto max-w-6xl px-6 py-10">
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <Wordmark />
+            <Wordmark href={homeHref} />
             <nav className="flex flex-wrap gap-x-6 gap-y-2">
               {NAV_LINKS.map((l) => (
                 <a
