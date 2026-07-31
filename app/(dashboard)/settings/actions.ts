@@ -71,8 +71,34 @@ export async function updateClientSettings(formData: FormData) {
 
   const storePlatform = String(formData.get("store_platform") ?? "").trim();
 
+  // Phone number. Read on this page since forever but never writable, while
+  // provision-feature's own error told people to "add one in Settings" — an
+  // instruction the UI could not carry out. It is the single most common reason
+  // a paid client sits on "Setting up your plan".
+  //
+  // Stored E.164 because that is what Twilio and ElevenLabs both expect. We
+  // normalise the friendly forms people actually type: "(213) 463-6649",
+  // "213-463-6649", "1 213 463 6649".
+  const phoneRaw = String(formData.get("phone_number") ?? "").trim();
+  let phoneNumber: string | null = null;
+  if (phoneRaw) {
+    const digits = phoneRaw.replace(/\D/g, "");
+    if (phoneRaw.startsWith("+") && digits.length >= 8) {
+      phoneNumber = `+${digits}`;
+    } else if (digits.length === 10) {
+      phoneNumber = `+1${digits}`; // bare US number
+    } else if (digits.length === 11 && digits.startsWith("1")) {
+      phoneNumber = `+${digits}`; // US with country code
+    } else {
+      fail(
+        "Enter the phone number in international format, for example +12134636649.",
+      );
+    }
+  }
+
   const payload = {
     name: String(formData.get("name") ?? "").trim(),
+    phone_number: phoneNumber,
     support_email: supportEmails[0] ?? null,
     store_platform: storePlatform || null, // enum: empty -> null
     store_base_url: String(formData.get("store_base_url") ?? "").trim() || null,
@@ -104,6 +130,39 @@ export async function updateClientSettings(formData: FormData) {
 
   if (error) {
     fail(error.message);
+  }
+
+  // Saving a number is usually someone unblocking their own stuck setup, so
+  // nudge provisioning rather than making them wait for the next billing event.
+  //
+  // A task that parked at 'needs_human' is deliberately never auto-retried, so
+  // the cause being fixed does not restart it. Without this, the client fills in
+  // the field the error asked for and nothing happens.
+  //
+  // Best-effort throughout: the settings save has already succeeded and must not
+  // be reported as failed because a background nudge did not land.
+  if (phoneNumber) {
+    try {
+      await supabase
+        .from("provisioning_tasks")
+        .update({ status: "queued", last_error: null })
+        .eq("client_id", profile.client_id)
+        .eq("status", "needs_human");
+
+      const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      if (base) {
+        // Not awaited: provisioning can buy a number and call ElevenLabs, which
+        // outlasts a form submission. The queue is idempotent and drains on its
+        // own schedule anyway.
+        void fetch(`${base}/functions/v1/provision-feature`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        }).catch(() => {});
+      }
+    } catch {
+      // Ignore: the number is saved, and the next drain picks the task up.
+    }
   }
 
   revalidatePath("/settings");

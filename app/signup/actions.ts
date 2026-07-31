@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { safeNextPath } from "@/lib/route-access";
 
 /**
  * Self-serve signup. Creates the auth user with the workspace + name in
@@ -42,13 +43,22 @@ export async function signup(formData: FormData) {
     );
   }
 
+  // Carry the post-confirmation destination through the email link, so someone
+  // who started at /plans lands back on checkout instead of the conversations
+  // list. /auth/confirm sanitises it again before redirecting.
+  const next = safeNextPath(formData.get("next") as string | null);
+  const confirmUrl =
+    next === "/conversations"
+      ? `${origin}/auth/confirm`
+      : `${origin}/auth/confirm?next=${encodeURIComponent(next)}`;
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: { business_name: businessName, full_name: fullName },
-      emailRedirectTo: `${origin}/auth/confirm`,
+      emailRedirectTo: confirmUrl,
     },
   });
 

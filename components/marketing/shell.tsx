@@ -142,28 +142,18 @@ export async function MarketingShell({
           </div>
 
           {/*
-            TEMPORARY: these point at the Wix site because that is where the
-            published legal pages currently live, and Stripe will not approve a
-            live account without reachable terms + privacy URLs. Repoint them
-            when the apex domain moves here — and review the content first: the
-            Wix pages are still largely template text.
+            The Terms and Privacy links pointed at the Wix site, whose pages are
+            still the stock template (fictional address, 2035 copyright, a
+            shipping policy for a product with nothing to ship). Removed rather
+            than left pointing at text nobody wrote.
+
+            THEY HAVE TO COME BACK before selling to anyone outside the company.
+            You take payments, hold your clients' customer data, and store call
+            transcripts. Add /legal/terms and /legal/privacy here, and register
+            them in lib/route-access.ts PUBLIC_PREFIXES as "/legal".
           */}
-          <div className="mt-8 flex flex-col gap-2 border-t border-gray-200 pt-6 text-xs text-gray-400 md:flex-row md:items-center md:justify-between">
+          <div className="mt-8 border-t border-gray-200 pt-6 text-xs text-gray-400">
             <p>&copy; {new Date().getFullYear()} Lumilink. All rights reserved.</p>
-            <div className="flex gap-4">
-              <a
-                href="https://lumilinkhq.wixsite.com/lumilink/terms-and-conditions"
-                className="hover:text-gray-600"
-              >
-                Terms
-              </a>
-              <a
-                href="https://lumilinkhq.wixsite.com/lumilink/privacy-policy"
-                className="hover:text-gray-600"
-              >
-                Privacy
-              </a>
-            </div>
           </div>
         </div>
       </footer>

@@ -137,6 +137,36 @@ export default async function SettingsPage({
         </Section>
 
         <Section
+          title="Phone"
+          description="The number Lumi answers on."
+        >
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Your business phone number
+            </label>
+            <input
+              name="phone_number"
+              type="tel"
+              defaultValue={client.phone_number ?? ""}
+              placeholder="+1 213 463 6649"
+              disabled={!canEdit}
+              className={inputCls}
+            />
+            {client.phone_number ? (
+              <p className="mt-1 text-xs text-gray-500">
+                Calls to this number reach your agent. Changing it re-runs setup
+                against the new number.
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-amber-700">
+                Setup is waiting on this. Add the number you want Lumi to answer
+                and we&rsquo;ll finish connecting it.
+              </p>
+            )}
+          </div>
+        </Section>
+
+        <Section
           title="Inbound email"
           description="How customer emails reach the agent for this client."
         >

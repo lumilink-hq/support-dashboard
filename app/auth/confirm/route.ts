@@ -1,6 +1,7 @@
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { safeNextPath } from "@/lib/route-access";
 
 /**
  * Email confirmation landing route.
@@ -14,7 +15,12 @@ import { createClient } from "@/lib/supabase/server";
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
-  const next = searchParams.get("next") ?? "/conversations";
+
+  // MUST be sanitised: this value is concatenated onto `origin` below, and
+  // `${origin}@evil.example` parses as userinfo + host — the browser goes to
+  // evil.example while the link looked like ours. safeNextPath allows only
+  // same-site absolute paths.
+  const next = safeNextPath(searchParams.get("next"));
 
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");

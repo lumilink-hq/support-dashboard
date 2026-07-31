@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { signup } from "./actions";
+import { safeNextPath } from "@/lib/route-access";
 
 export default async function SignupPage({
   searchParams,
 }: {
   // Next 16: searchParams is async.
-  searchParams: Promise<{ error?: string; confirm?: string }>;
+  searchParams: Promise<{ error?: string; confirm?: string; next?: string }>;
 }) {
-  const { error, confirm } = await searchParams;
+  const { error, confirm, next } = await searchParams;
+  // Sanitised here and again in the action; the action is the security boundary.
+  const nextPath = safeNextPath(next);
 
   // Post-submit: account created, waiting on email confirmation.
   if (confirm) {
@@ -45,6 +48,7 @@ export default async function SignupPage({
         ) : null}
 
         <form action={signup} className="mt-6 space-y-4">
+          <input type="hidden" name="next" value={nextPath} />
           <div>
             <label
               htmlFor="business_name"

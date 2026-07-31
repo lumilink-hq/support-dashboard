@@ -219,21 +219,18 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
           </div>
 
           {/*
-            Honest empty frame rather than a stock photo. Replace with a real
-            capture of /conversations (client names masked) before launch — the
-            reference sites are ~80% product screenshots for a reason.
+            SWAP THIS FOR A REAL SCREENSHOT. Capture /conversations with client
+            names masked and drop it in public/. Both reference sites are around
+            80% product imagery, and it does more for credibility than any
+            styling work.
+
+            Until then this is a quiet empty frame rather than instructions to
+            the reader — a visitor should never be told what is missing.
           */}
-          <div className="aspect-[4/3] rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100 shadow-sm">
-            <div className="flex h-full items-center justify-center">
-              <p className="px-8 text-center text-sm text-gray-400">
-                Product screenshot goes here
-                <br />
-                <span className="text-xs">
-                  (capture /conversations, mask client names)
-                </span>
-              </p>
-            </div>
-          </div>
+          <div
+            aria-hidden
+            className="aspect-[4/3] rounded-xl border border-gray-200 bg-gray-50 shadow-sm"
+          />
         </div>
       </Section>
 
