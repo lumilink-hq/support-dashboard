@@ -9,11 +9,13 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
-// In-page anchors only. Every link here resolves to a section that exists on the
-// landing page — no nav entry points at a route that hasn't been built, because
-// a dead nav link on a marketing site reads as an abandoned product.
+// In-page anchors only. Every link here has to resolve to a section that is
+// actually rendered on the landing page: a nav link that scrolls nowhere reads
+// as a broken site.
+//
+// "How it works" (#how) was removed when that section was commented out in
+// app/page.tsx. Restore both together.
 const NAV_LINKS = [
-  { href: "#how", label: "How it works" },
   { href: "#pricing", label: "Pricing" },
   { href: "#faq", label: "FAQ" },
 ];

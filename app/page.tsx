@@ -20,9 +20,9 @@ import { MarketingShell } from "@/components/marketing/shell";
 import { OVERAGE, STARTER_PLAN } from "@/lib/entitlements";
 
 export const metadata: Metadata = {
-  title: "Lumilink — Your AI receptionist, ready 24/7",
+  title: "Lumilink | Your AI receptionist, ready 24/7",
   description:
-    "Lumilink answers every call, quotes from your price list, and books the job on your real calendar — around the clock, for small local and service businesses.",
+    "Lumilink answers every call, quotes from your price list, and books the job on your real calendar. Built for small local and service businesses.",
 };
 
 // Where both primary CTAs point. Swap to a Cal.com/Calendly URL once booking is
@@ -73,77 +73,79 @@ const PILLARS = [
   {
     n: "01",
     title: "Never miss a call",
-    body: "Lumi answers when you can't — after hours, on a job site, or when three people ring at once. Missed calls are lost jobs; this is the whole point.",
+    body: "Lumi answers when you can't: after hours, on a job site, or when three people ring at once. A missed call is a job that goes to whoever picked up.",
   },
   {
     n: "02",
     title: "Costs less than the calls you're missing",
-    body: `Starter is $${STARTER_PLAN.monthlyUsd} a month with ${STARTER_PLAN.includedMinutes} included minutes. One booked job usually covers it.`,
+    body: `Starter is $${STARTER_PLAN.monthlyUsd} a month with ${STARTER_PLAN.includedMinutes} included minutes. One booked job covers it.`,
   },
   {
     n: "03",
     title: "You can see everything",
-    body: "Every call, transcript, booking and callback ticket lands in your dashboard. No black box, no guessing what the AI told your customer.",
+    body: "Every call, transcript, booking and callback ticket lands in your dashboard. You can read what Lumi told your customer, word for word.",
   },
 ];
 
 const CAPABILITIES = [
   {
     title: "Answers every call, 24/7",
-    body: "After-hours, overflow and missed-call capture. Callers reach a real conversation instead of voicemail.",
+    body: "After hours, overflow, and the calls that arrive while you're on a job. Every caller reaches a real conversation.",
   },
   {
     title: "Books real appointments",
-    body: "Checks your live availability, holds the slot and confirms it. No double-booking, no calling people back to rearrange.",
+    body: "Checks your live availability, holds the slot, and confirms it. You stop ringing people back to rearrange.",
   },
   {
     title: "Quotes from your price list",
-    body: "Lumi reads the prices you set. It never invents a number, and it says so when a job needs a proper quote.",
+    body: "Lumi reads the prices you set. When a job needs a site visit before anyone can price it, it says so.",
   },
   {
     title: "Knows your business",
-    body: "Syncs what's already on your website — services, hours, policies. Included in every plan, with no connector fee.",
+    body: "Syncs the services, hours, and policies already on your website. Included in every plan, with no connector fee.",
   },
   {
     title: "Nothing disappears",
-    body: "Anything Lumi can't finish becomes a callback ticket in a follow-up queue, so no customer request quietly evaporates.",
+    body: "When Lumi can't finish a call, it logs a callback ticket in your follow-up queue. You decide who rings back.",
   },
   {
     title: "Reschedules and cancels",
-    body: "Customers move their own appointments by phone instead of playing voicemail tag with you.",
+    body: "Customers move their own appointments by phone, without waiting for you to call them back.",
   },
 ];
 
-const STEPS = [
-  {
-    n: "1",
-    title: "A 20-minute discovery call",
-    body: "We go through your services, prices and hours — the things Lumi needs in order to answer accurately.",
-  },
-  {
-    n: "2",
-    title: "We build and test your agent",
-    body: "Your setup fee covers implementation, knowledge setup, testing and launch. You hear it before your customers do.",
-  },
-  {
-    n: "3",
-    title: "Your number goes live",
-    body: "Forward your existing number or use a new local one, then watch every call land in the dashboard.",
-  },
-];
+// Unused while the "How it works" section is commented out below. Kept rather
+// than deleted so uncommenting the section is a one-block change.
+// const STEPS = [
+//   {
+//     n: "1",
+//     title: "A 20-minute discovery call",
+//     body: "We go through your services, prices, and hours: what Lumi needs to answer a customer correctly.",
+//   },
+//   {
+//     n: "2",
+//     title: "We build and test your agent",
+//     body: "Your setup fee covers implementation, knowledge setup, testing, and launch. You hear it before your customers do.",
+//   },
+//   {
+//     n: "3",
+//     title: "Your number goes live",
+//     body: "Forward your existing number or use a new local one, then watch every call land in the dashboard.",
+//   },
+// ];
 
 const FAQS = [
   {
     q: "What happens if Lumi can't handle a call?",
-    a: "It offers a transfer, or takes the details and logs a callback ticket for you to pick up. It doesn't pretend to know things it doesn't, and it doesn't leave anyone stuck in a loop.",
+    a: "It offers a transfer, or takes the details and logs a callback ticket for you to pick up. When it doesn't know something, it says so.",
   },
   {
     q: `Why are calls capped at ${STARTER_PLAN.maxCallMinutes} minutes?`,
-    a: "Because a caller going in circles with an AI is a worse experience than a callback from a person. Lumi warns before the limit, closes the conversation properly, and hands anything unresolved to you.",
+    a: "A caller going in circles with an AI has a worse time than one who gets a callback from a person. Lumi warns before the limit, closes the conversation, and hands anything unresolved to you.",
   },
   {
     q: "Does it sound robotic?",
-    a: "It's a natural voice with real conversational turn-taking, not a phone tree. The honest answer is that you should hear it yourself before deciding — that's what the discovery call is for.",
+    a: "It's a natural voice with real conversational turn-taking. Judge it yourself on the discovery call rather than taking our word for it.",
   },
   {
     q: "Can I keep my phone number?",
@@ -151,11 +153,11 @@ const FAQS = [
   },
   {
     q: "What happens if I go over my minutes?",
-    a: `Additional minutes are billed at $${OVERAGE.perVoiceMinuteUsd.toFixed(2)} each. Minutes used against your allowance are visible in the dashboard at any time, so it isn't a surprise on the invoice.`,
+    a: `We bill additional minutes at $${OVERAGE.perVoiceMinuteUsd.toFixed(2)} each. You can check minutes used against your allowance in the dashboard whenever you like, so you'll know before the invoice arrives.`,
   },
   {
     q: "What's the setup fee for?",
-    a: "Building your agent: loading your services and prices, connecting your calendar, testing against real scenarios, and launching it. Charged once, at the start.",
+    a: "We build your agent: load your services and prices, connect your calendar, test it against real scenarios, and launch it. You pay it once, at the start.",
   },
 ];
 
@@ -193,7 +195,7 @@ export default function LandingPage() {
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-gray-600">
               Lumi answers every call, quotes from your price list, and books the
-              job on your real calendar — then shows you exactly what was said.
+              job on your real calendar. You see every word that was said.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -270,11 +272,10 @@ export default function LandingPage() {
         <div className="max-w-2xl">
           <Eyebrow>What Lumi does</Eyebrow>
           <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
-            One agent that actually finishes the job
+            One agent that finishes the job
           </h2>
           <p className="mt-3 text-gray-600">
-            Not a phone tree, not a voicemail transcriber — a conversation that
-            ends with an appointment on your calendar.
+            A conversation that ends with an appointment on your calendar.
           </p>
         </div>
 
@@ -308,23 +309,25 @@ export default function LandingPage() {
               Lumi won&rsquo;t trap your customer in a loop
             </h2>
             <p className="mt-4 leading-relaxed text-gray-300">
-              Every AI call is capped at {STARTER_PLAN.maxCallMinutes} minutes.
-              As the limit approaches, Lumi stops opening new topics, finishes
-              what it&rsquo;s doing, and offers a transfer or a callback — then
-              says goodbye properly instead of cutting off mid-sentence.
+              We cap every AI call at {STARTER_PLAN.maxCallMinutes} minutes. Near
+              the limit, Lumi stops opening new topics, finishes what it&rsquo;s
+              doing, and offers a transfer or a callback. It says goodbye rather
+              than cutting off mid-sentence.
             </p>
             <p className="mt-3 leading-relaxed text-gray-300">
-              We publish this because you will hit it, and because an AI that
-              keeps a frustrated caller on the line for nine minutes is worse for
-              your business than one that hands them to a human at two.
+              We publish this because you will hit it. An AI that keeps a
+              frustrated caller on the line for nine minutes costs you more than
+              one that hands them to a person at two.
             </p>
           </div>
         </div>
       </Section>
-
       {/* ---------------------------------------------------------------- */}
-      {/* How it works                                                     */}
+      {/* How it works — HIDDEN. Uncomment this block and the STEPS array   */}
+      {/* above together; the nav link in components/marketing/shell.tsx    */}
+      {/* was removed at the same time, so put "#how" back there too.       */}
       {/* ---------------------------------------------------------------- */}
+      {/*
       <Section id="how" className="border-t border-gray-200 bg-gray-50 py-20">
         <Eyebrow>How it works</Eyebrow>
         <h2 className="mt-4 max-w-2xl text-3xl font-semibold tracking-tight text-gray-900">
@@ -347,6 +350,7 @@ export default function LandingPage() {
           ))}
         </div>
       </Section>
+      */}
 
       {/* ---------------------------------------------------------------- */}
       {/* Pricing                                                          */}
@@ -355,11 +359,11 @@ export default function LandingPage() {
         <div className="max-w-2xl">
           <Eyebrow>Pricing</Eyebrow>
           <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
-            Straightforward, and we tell you where it stops
+            What you pay, and where the limits are
           </h2>
           <p className="mt-3 text-gray-600">
-            Hard minute allowances rather than an &ldquo;unlimited&rdquo; plan
-            with a fair-use clause buried in the terms.
+            Every plan has a fixed minute allowance. We&rsquo;d rather give you
+            the number than call it unlimited and add a fair-use clause.
           </p>
         </div>
 
@@ -449,12 +453,17 @@ export default function LandingPage() {
           ))}
         </div>
 
+        {/* ---------------------------------------------------------------- */}
+        {/* What's not included — HIDDEN.                                    */}
+        {/*                                                                  */}
+        {/* Worth knowing what this removes: the landing page no longer       */}
+        {/* states the $0.30/min overage anywhere except the FAQ. /billing    */}
+        {/* still carries the full disclosure, and that is the page a         */}
+        {/* customer sees before checkout, so the pre-purchase disclosure     */}
+        {/* survives. If a Stripe Payment Link ever gets linked straight from */}
+        {/* here, bypassing /billing, put this block back first.              */}
+        {/* ---------------------------------------------------------------- */}
         {/*
-          Overage terms belong on the pricing page, inside the decision — not in
-          a terms page nobody opens. A metered plan whose meter is a surprise
-          generates chargebacks, and one $15 dispute costs more than the overage
-          it was hiding ever collected.
-        */}
         <div className="mt-8 rounded-lg border border-gray-200 bg-gray-50 p-5">
           <h3 className="text-sm font-semibold text-gray-900">
             What&rsquo;s not included
@@ -476,6 +485,7 @@ export default function LandingPage() {
             are charged once. Enterprise pricing is quoted per organisation.
           </p>
         </div>
+        */}
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -484,7 +494,7 @@ export default function LandingPage() {
       <Section id="faq" className="border-t border-gray-200 bg-gray-50 py-20">
         <Eyebrow>Questions</Eyebrow>
         <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
-          The things people actually ask
+          What people ask before signing up
         </h2>
 
         <dl className="mt-10 grid gap-x-12 gap-y-8 md:grid-cols-2">
@@ -508,8 +518,8 @@ export default function LandingPage() {
             Stop losing jobs to voicemail
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-gray-600">
-            Twenty minutes to tell us about your business. About a week until
-            Lumi is answering your phone.
+            Tell us about your business in twenty minutes. Lumi is answering your
+            phone about a week later.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link
