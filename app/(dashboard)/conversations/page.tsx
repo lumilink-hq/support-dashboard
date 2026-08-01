@@ -4,9 +4,12 @@ import { StatusBadge, FlagChip, ChannelBadge } from "@/components/status-badge";
 import { timeAgo } from "@/lib/format";
 import type { ConversationRow } from "@/lib/types";
 
+// The Email tab is hidden while that channel is paused. The ?channel=email
+// FILTER still works if you navigate to it directly, and existing email threads
+// still appear under All — hiding a tab should not hide history a client may
+// need. Restore the entry to bring the tab back.
 const TABS = [
   { key: "", label: "All" },
-  { key: "email", label: "Email" },
   { key: "voice", label: "Voice" },
 ] as const;
 
@@ -43,7 +46,7 @@ export default async function ConversationsPage({
         </span>
       </div>
       <p className="mt-1 text-sm text-gray-500">
-        Email threads and phone calls handled by the agent, newest activity first.
+        Calls handled by the agent, newest activity first.
       </p>
 
       <div className="mt-4 flex gap-1">

@@ -31,21 +31,35 @@ export async function updateClientSettings(formData: FormData) {
   }
 
   // Current settings JSON, so we merge rather than clobber unrelated keys.
+  // brand_tone_config comes along for the same reason: fields hidden from the
+  // form must keep their stored value rather than being blanked.
   const { data: existing } = await supabase
     .from("clients")
-    .select("settings")
+    .select("settings, brand_tone_config")
     .eq("id", profile.client_id)
     .maybeSingle();
   const currentSettings =
     (existing?.settings as Record<string, unknown> | null) ?? {};
+  const existingTone =
+    (existing?.brand_tone_config as Record<string, unknown> | null) ?? {};
 
   // Support emails: comma-separated -> array. First becomes the primary
   // support_email column (kept for the existing pipeline); full list lives in
   // settings.support_emails.
-  const supportEmails = String(formData.get("support_emails") ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  //
+  // ABSENT IS NOT EMPTY. The email sections are hidden from the form while the
+  // channel is paused, so these fields no longer post. Reading a missing field
+  // as "" would parse to an empty array and write support_email = null on the
+  // next save of any unrelated setting — quietly destroying the address the
+  // email pipeline routes on, for every client, the first time someone edited
+  // their business hours. Only touch these when the form actually submitted them.
+  const emailFieldPresent = formData.has("support_emails");
+  const supportEmails = emailFieldPresent
+    ? String(formData.get("support_emails") ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : ((currentSettings.support_emails as string[] | undefined) ?? []);
 
   // Parse business hours JSON before touching anything else.
   const businessHoursRaw = String(formData.get("business_hours") ?? "").trim();
@@ -107,9 +121,17 @@ export async function updateClientSettings(formData: FormData) {
       sign_off: String(formData.get("sign_off") ?? "").trim(),
       use_emoji: formData.get("use_emoji") === "on",
       // Email-only guidance (consumed by the email agent via get_client_config).
-      custom_instructions: String(
-        formData.get("custom_instructions") ?? "",
-      ).trim(),
+      // Same absent-vs-empty rule as support_emails: the "Email instructions"
+      // section is hidden while the channel is paused, so preserve whatever is
+      // stored instead of blanking it on an unrelated save.
+      custom_instructions: formData.has("custom_instructions")
+        ? String(formData.get("custom_instructions") ?? "").trim()
+        : String(
+            (
+              (existingTone as Record<string, unknown> | null)
+                ?.custom_instructions ?? ""
+            ),
+          ).trim(),
       // Phone-only guidance (consumed by voice-personalization's prompt builder).
       voice_instructions: String(
         formData.get("voice_instructions") ?? "",

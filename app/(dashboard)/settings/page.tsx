@@ -130,8 +130,8 @@ export default async function SettingsPage({
             </label>
             <input value={client.slug} disabled className={inputCls} />
             <p className="mt-1 text-xs text-gray-400">
-              Your unique handle. It can&apos;t be changed here because your
-              inbound email address is built from it.
+              Your unique handle. It can&apos;t be changed here because other
+              parts of your setup are keyed to it.
             </p>
           </div>
         </Section>
@@ -166,6 +166,18 @@ export default async function SettingsPage({
           </div>
         </Section>
 
+        {/* ----------------------------------------------------------------
+          INBOUND EMAIL — HIDDEN. The email channel is paused.
+
+          The fields are commented out rather than deleted, and the save action
+          now distinguishes an ABSENT field from an EMPTY one. Without that,
+          hiding these inputs would set support_email = null the next time
+          anyone saved an unrelated setting, wiping the address the email
+          pipeline routes on.
+
+          Restore this block and the Email instructions block together.
+        ---------------------------------------------------------------- */}
+        {/*
         <Section
           title="Inbound email"
           description="How customer emails reach the agent for this client."
@@ -199,6 +211,8 @@ export default async function SettingsPage({
             </p>
           </div>
         </Section>
+
+        */}
 
         <Section
           title="Store"
@@ -297,6 +311,12 @@ export default async function SettingsPage({
           </label>
         </Section>
 
+        {/* ----------------------------------------------------------------
+          EMAIL INSTRUCTIONS — HIDDEN while the email channel is paused.
+          The save action preserves brand_tone_config.custom_instructions when
+          this field is absent, so the stored guidance survives.
+        ---------------------------------------------------------------- */}
+        {/*
         <Section
           title="Email instructions"
           description="Extra guidance the email agent follows when drafting replies — policies, phrasing, what to emphasize or avoid. Applies to email only; the phone agent has its own box below."
@@ -320,9 +340,11 @@ export default async function SettingsPage({
           </div>
         </Section>
 
+        */}
+
         <Section
           title="Phone instructions"
-          description="Extra guidance the phone agent follows on live calls, on top of the built-in booking flow. Applies to voice only; it doesn't change the email agent."
+          description="Extra guidance the phone agent follows on live calls, on top of the built-in booking flow."
         >
           <div>
             <textarea

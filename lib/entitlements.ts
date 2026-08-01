@@ -146,23 +146,33 @@ export const FEATURES: FeatureMeta[] = [
     setupFee: `$${STARTER_PLAN.setupFeeUsd} one-time setup`,
     areas: ["/appointments", "/leads", "/services"],
   },
-  {
-    key: "email",
-    label: "Email support",
-    tagline: "Draft and send replies automatically",
-    blurb:
-      "Incoming support email is triaged, drafted, and answered with your order and shipping data — with a human review queue for anything unusual.",
-    bullets: [
-      "Automatic triage & drafting",
-      "Order + shipping lookups",
-      "Human review queue",
-    ],
-    // Not a priced SKU. The CFO model removed email pricing entirely; email is
-    // an included capability. The entitlement row still gates page access.
-    price: null,
-    setupFee: null,
-    areas: ["/conversations", "/review-queue"],
-  },
+  // EMAIL IS WITHDRAWN FOR NOW.
+  //
+  // The CFO model removed email pricing entirely, and the channel is being cut
+  // while voice is the focus. Its card is gone from /billing and its settings
+  // are hidden, so nothing offers customers a channel we are not running.
+  //
+  // The PLUMBING STAYS: feature_t still has 'email', the entitlements table can
+  // still hold an email row, and billing-webhook can still resolve one. Removing
+  // any of that would be a destructive migration for a feature described as
+  // paused. This array only drives what the dashboard renders.
+  //
+  // To bring it back: restore the entry below, un-hide the two Settings
+  // sections, and put the Email tab back on /conversations.
+  //
+  // {
+  //   key: "email",
+  //   label: "Email support",
+  //   tagline: "Draft and send replies automatically",
+  //   blurb: "Incoming support email is triaged, drafted, and answered with
+  //           your order and shipping data, with a human review queue for
+  //           anything unusual.",
+  //   bullets: ["Automatic triage & drafting", "Order + shipping lookups",
+  //             "Human review queue"],
+  //   price: null,
+  //   setupFee: null,
+  //   areas: ["/conversations", "/review-queue"],
+  // },
 ];
 
 export function featureMeta(feature: Feature): FeatureMeta {

@@ -78,10 +78,9 @@ export function Sidebar({ clientName }: { clientName: string }) {
         </Link>
       </div>
 
+      {/* The Email chip is gone while that channel is paused. Restore it here
+          alongside the Settings sections and the /conversations tab. */}
       <div className="flex flex-wrap gap-1.5 border-t border-gray-200 px-5 py-3">
-        <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-          Email
-        </span>
         <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
           Voice
         </span>
