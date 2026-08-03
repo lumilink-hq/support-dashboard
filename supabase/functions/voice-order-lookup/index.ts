@@ -33,6 +33,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import {
   checkCallTime,
+  formatPlacedOn,
   shopifyOrderQueries,
   timeNotice,
   type TimeCheck,
@@ -117,6 +118,8 @@ type LookupResponse = {
   order_number?: string;
   status?: string | null;
   placed_at?: string | null;
+  // Store-local, speech-ready. What the agent reads aloud.
+  placed_on?: string | null;
   items?: LineItemLite[];
   total?: string | null;
   currency?: string | null;
@@ -322,6 +325,12 @@ Deno.serve(async (req) => {
   );
   if (cfgErr) return json({ error: cfgErr.message }, 400);
 
+  // IANA name from client_timezone() via get_client_config (0029). Always
+  // present and already validated; UTC only if the client set nothing.
+  const clientTimezone: string = config?.timezone ?? "UTC";
+  // 'callback' (default) | 'email'. Decides where the agent sends a caller it
+  // cannot finish with; see the escalation copy below.
+  const escalationMode: string = config?.escalation_mode === "email" ? "email" : "callback";
   const storeBaseUrl: string | null = config?.store_base_url ?? null;
   const platform: string = String(
     config?.store_platform ?? "woocommerce",
@@ -709,6 +718,11 @@ Deno.serve(async (req) => {
     order_number: canonicalOrderNumber,
     status: n.store_status,
     placed_at: n.order_placed_at,
+    // Already converted to the store's timezone and worded for speech. The
+    // agent must read THIS, not placed_at: the raw ISO is a UTC instant, and
+    // reading its calendar date tells an evening caller their order was placed
+    // tomorrow. See formatPlacedOn.
+    placed_on: formatPlacedOn(n.order_placed_at, clientTimezone),
     items: n.line_items ?? [],
     total: n.order_total != null ? String(n.order_total) : null,
     currency: n.currency,
@@ -720,9 +734,18 @@ Deno.serve(async (req) => {
     flagged,
     flag_reason: flagReason,
     should_escalate: flagged,
+    // The escalation wording is config-driven. With the email channel paused,
+    // sending a caller to a support inbox points them at something nobody is
+    // reading — so the default takes their details and creates a callback
+    // ticket, which is a plan feature ("no customer request disappears").
+    // A client running a real inbox can set settings.escalation_mode = 'email'.
     message: flagged
-      ? "Order is flagged — give a holding answer and escalate (transfer in hours, else callback)."
-      : "Answer the caller's question from these fields.",
+      ? escalationMode === "email"
+        ? "Order is flagged — give a holding answer and escalate (transfer in hours, else offer the support email)."
+        : "Order is flagged — give a holding answer, take the caller's details and create a callback ticket. Do NOT give out an email address."
+      : escalationMode === "email"
+        ? "Answer the caller's question from these fields. Say dates using placed_on, not placed_at."
+        : "Answer the caller's question from these fields. Say dates using placed_on, not placed_at. If you cannot resolve it, take details for a callback rather than referring them to email.",
     }),
   );
 });

@@ -214,9 +214,17 @@ Deno.serve(async (req) => {
       reason: a?.reason,
       minutes_used: a?.minutes_used,
     });
+    // Only offer an email address when the client actually runs an inbox.
+    // settings.escalation_mode defaults to 'callback' (0029): with the email
+    // channel paused, "email us at…" sends the caller somewhere nobody reads.
+    const wantsEmailEscalation =
+      ((clientData.settings as Record<string, unknown> | null)
+        ?.escalation_mode ?? "callback") === "email";
     return json(
       buildDeflectResponse(cfg, services, {
-        supportEmail: (clientData.support_email as string | null) ?? null,
+        supportEmail: wantsEmailEscalation
+          ? ((clientData.support_email as string | null) ?? null)
+          : null,
       }),
     );
   }

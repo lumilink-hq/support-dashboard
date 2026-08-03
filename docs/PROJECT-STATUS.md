@@ -1,257 +1,292 @@
-# Lumilink — Project Status & Next Steps
+# Lumilink — Project Status
 
-**Updated 2026-07-29.** This is the handover document. If you are a new Claude session, or J
-on a different machine: **read this file first**, then only the linked docs you need.
+**Updated 2026-08-03.** This is the handover document. If you are a new Claude session,
+or J on a different machine: **read this file first**, then only the linked docs you need.
 
-Goal right now: **a working Tsunami demo.** Call limits are built but deliberately parked —
-the ticket system is the priority because it's the only escalation path that exists.
-
-> **→ To finish the build, follow `docs/TSUNAMI-GO-LIVE.md`.** It's the ordered runbook:
-> retire Comfort Air, hand over the number, configure, deploy, build the agent. This file is
-> the map; that one is the route.
->
-> **Decision 2026-07-29: Comfort Air is being retired and the demo number `+12135332469`
-> moved to Tsunami.** All resources go to the orders agent. Scheduling data is left intact —
-> dormant, not deleted.
+The previous version of this file was written 2026-07-29 and had gone badly stale — it
+stopped at migration `0014`, called the callbacks dashboard "the last build item" (it
+shipped), and pointed at a Comfort Air demo that has since been retired. If something
+here disagrees with an older doc, this file wins. `docs/FEATURE-GAPS.md` (2026-08-03) is
+the companion: this one is what exists, that one is what's missing.
 
 ---
 
 ## 0. Orientation in 60 seconds
 
 Lumilink is a multi-tenant AI customer-support platform. Next.js dashboard + Supabase
-(Postgres/RLS/Vault) + ElevenLabs voice agents. Two channels:
+(Postgres/RLS/Vault) + ElevenLabs voice agents + Stripe.
 
-- **Email — LIVE in production.** Orchestrated by Zapier: Gmail → resolve client by
-  `+<slug>` plus-address → fetch store + shipping → Claude → send → log to Supabase.
-- **Voice — being built.** ElevenLabs Agents + native Twilio (no media server). Supabase Edge
-  Functions do all the work; **Zapier is not involved in voice at all.**
-
-Two pilot clients: **Bud Club** (`woo-store`, WooCommerce) and **Tsunami** (`shopify-store`,
-Shopify — the active one). Plus a demo tenant, **Comfort Air** (`comfort-air-demo`, HVAC
-scheduling).
+- **Voice — the product.** ElevenLabs Agents + native Twilio (no media server). Supabase
+  Edge Functions do all the work; **Zapier is not involved in voice at all.**
+- **Email — live in production, hidden in the UI.** The Zapier pipeline still runs
+  (Gmail → resolve client by `+<slug>` plus-address → store + shipping → Claude → send →
+  log). The dashboard tab and sidebar chip are hidden while the channel is paused;
+  existing threads still appear under All, and `?channel=email` still works if you
+  navigate to it directly.
 
 Supabase project ref `xqsxjxrzpxhosedkmufg`. Functions base URL
-`https://xqsxjxrzpxhosedkmufg.functions.supabase.co/<fn>`. Supabase CLI v2.109.1.
+`https://xqsxjxrzpxhosedkmufg.functions.supabase.co/<fn>`.
 
-> **Tsunami sells THCA flower and hemp products.** Two consequences that are easy to miss:
-> Twilio **prohibits cannabis/CBD SMS** in the US/CA regardless of state law (Programmable
-> **Voice is explicitly exempt**) — so no SMS anywhere in this product for this client. And
-> discretion is their selling point, so the agent must not read order contents to an
-> unverified caller.
+### Tenants
 
----
+| Tenant | Slug | Platform | State |
+|---|---|---|---|
+| Tsunami | `shopify-store` | Shopify | active — the real client |
+| Bud Club | `budmember001` | WooCommerce | configured; no phone exists |
+| Northlake Supply | `northlake-demo` | fictional | demo tenant, `supabase/seed/demo_orders_client.sql` |
+| Comfort Air | `comfort-air-demo` | HVAC scheduling | **retired**, dormant not deleted |
 
-## 1. THE PHONE NUMBER — one number, one tenant, and the trap in between
-
-**Current plan:** `+12135332469` moves from `comfort-air-demo` to `shopify-store` (Tsunami).
-Comfort Air is retired. Exact SQL in `docs/TSUNAMI-GO-LIVE.md` §1.
-
-**The trap that will cost you an hour if you hit it blind.** Two migrations disagree about
-what `is_active` means:
-
-- `resolve_client_by_number` (`0006`) **filters on `is_active`** — deactivating a client stops
-  it answering calls.
-- The unique index `uq_clients_phone_digits` (`0010`) is `where phone_number is not null` and
-  has **no `is_active` filter** — a deactivated client *still holds its number*.
-
-So **deactivating Comfort Air does not free the number.** You must set its `phone_number` to
-NULL, or Tsunami's `update` fails with a unique violation. And if the number is switched
-**only in the ElevenLabs UI**, the database still maps those digits to Comfort Air: calls
-route to the wrong tenant, or return "this phone line isn't configured for a store." Verify
-with the query in `TSUNAMI-GO-LIVE.md` §0 before debugging anything else.
-
-That constraint exists because the collision already happened once — two clients shared a
-number, resolution returned an arbitrary one, and the scheduling demo silently served empty
-slots. One number cannot serve two tenants: ElevenLabs binds a number to one agent, and
-`resolve_client_by_number` maps it to one client. Don't work around it.
-
-### The web widget needs no number at all
-
-A browser call has no dialed number; `voice-order-lookup` routes by **client slug**. So the
-tsunami.store embed works independently of all of the above, and both paths can run at once —
-phone by number, web by slug.
-
-```sql
-update clients
-   set settings = settings || jsonb_build_object('web_lookup_enabled', true)
- where slug = 'shopify-store';
-```
-
-**Do NOT set `is_demo = true` on the real Tsunami row** to enable web routing. That flag marks
-sandbox tenants, and setting it on a live client disables the guard keeping the public widget
-away from real customer data. `web_lookup_enabled` is the explicit, safe opt-in.
-
-### Restoring Comfort Air later
-
-Two `update`s plus reassigning a number in ElevenLabs — rollback SQL is in
-`TSUNAMI-GO-LIVE.md` §7. Its `services` and `appointments` data is untouched.
+> **Tsunami sells THCA flower and hemp products.** Twilio **prohibits cannabis/CBD SMS**
+> in the US/CA regardless of state law — Programmable **Voice is explicitly exempt**. So
+> no SMS anywhere in this product for this client. Note this is client-specific: SMS is
+> fine for HVAC/trades tenants if the scheduling side is ever revived. And discretion is
+> Tsunami's selling point, so the agent must not read order contents to an unverified
+> caller.
 
 ---
 
-## 2. What is BUILT (all uncommitted — see §7)
+## 1. What is built
 
-| Thing | Where | Verified |
+### Backend — migrations `0001`–`0030`
+
+| Area | Migrations | State |
 |---|---|---|
-| Shopify order lookup | `functions/voice-order-lookup/{lib,index}.ts` | 141 unit checks |
-| Web slug routing + caller verification | same | included above |
-| Usage metering + caps | `migrations/0012_voice_usage_caps.sql` | SQL suite, real PG16 |
-| Staleness fix (the WISMO bug) | `migrations/0013_stale_exempt_statuses.sql` | SQL suite, real PG16 |
-| Limiter layer 3 (mid-call wrap-up) | `voice-order-lookup/index.ts` | — |
-| Limiter layers 1 & 4 (logic only) | `voice-personalization/lib.ts`, `voice-call-logger/lib.ts` | 42 unit checks |
-| **Tickets + callbacks** | `migrations/0014_tickets_callbacks.sql` | applied + smoke-tested |
-| **`request_callback` tool** | `functions/voice-ticket/{lib,index}.ts` | parses; helpers sanity-checked |
-| Tool schemas | `docs/elevenlabs-tools/{lookup_order,request_callback}.json` | valid JSON |
-| Shopify policy fetcher | `scripts/fetch-shopify-policies.mjs` | — |
+| Core schema, RLS, email integration | `0001`–`0005` | live |
+| Voice integration (resolve/ingest/log) | `0006` | live |
+| Scheduling + reschedule/cancel | `0007`, `0009` | built, **dormant** |
+| Entitlements + billing + event ordering | `0008`, `0011`, `0015`, `0026` | live |
+| Phone uniqueness | `0010` | live |
+| Usage caps + metering | `0012`, `0025`, `0027` | live |
+| Order staleness (the WISMO fix) | `0013` | live |
+| Tickets + callbacks | `0014`, `0016` | live |
+| Order number prefix / Woo scheme | `0017`, `0022` | live |
+| Product cache, search, stock, deals | `0018`–`0021`, `0023`, `0024` | live |
+| Entitlement gate on voice | `0028` | committed — **verify it's applied** |
+| Config timezone + escalation mode | `0029` | uncommitted |
+| Strip support email from policies | `0030` | uncommitted |
 
-### Test commands
+### Edge functions — 11
+
+`voice-order-lookup` · `voice-product-lookup` · `voice-personalization` ·
+`voice-call-logger` · `voice-ticket` · `product-sync` · `scheduling` ·
+`billing-webhook` · `provision-feature` · `zapier-upsert-allowlist` ·
+`shopify-product-sync` *(renamed to `product-sync` — delete the old deployed copy)*
+
+### Dashboard — 7 pages, all shipped
+
+`/conversations` (+ detail with transcript and an `<audio>` element ready for
+recordings) · `/appointments` · `/leads` · `/review-queue` · `/services` · `/settings` ·
+`/billing`. Marketing: `/home`, `/plans`, `/preview`, `/demo/orders`, `/demo/hvac`
+(parked), `/login`, `/signup`.
+
+**`/review-queue` is complete**, contrary to the old status doc: a Callbacks-due tab
+reading the `callbacks_due` view, `tel:` click-to-call, attempt logging through
+`record_callback_attempt`, ticket-number chips, and an overdue counter badge.
+
+**`/billing` is complete**: plan state from `entitlements`, a live minutes meter off
+`voice_usage_current`, overage disclosure, and tenant-routed checkout.
+
+### Billing — live
+
+Stripe is wired end to end and **a real purchase has completed**. Prices, products and
+the Starter Payment Link are recorded in `docs/STRIPE-GO-LIVE.md`. Only Starter is
+self-serve; Growth and Scale are sales-assisted because `billing_price_map` is
+feature-level — buying Scale today would grant the same `voice` entitlement as Starter
+and provision 100 minutes instead of 600.
+
+### Usage limiter — all four layers wired (verified 2026-08-03)
+
+Layer 1 in `voice-personalization`, layer 2 as `default_max_call_secs` = 105, layer 3 in
+`voice-order-lookup`, layer 4 in `voice-call-logger`. See `docs/LIMITER-WIRING.md`.
+**Caps are deliberately not set**, so nothing currently enforces a limit — that was the
+decision on 2026-07-29 so nothing could accidentally block the demo.
+
+### Tests — 9 suites, all green on 2026-08-03
 
 ```bash
-npx tsx scripts/test-voice-lookup-shopify.ts    # 141
-npx tsx scripts/test-limiter-helpers.ts         # 42
-npx tsx scripts/test-voice-logger.ts            # pre-existing
+node --experimental-strip-types scripts/test-voice-lookup-shopify.ts   # orders, both platforms
+node --experimental-strip-types scripts/test-product-sync.ts           # 156
+node --experimental-strip-types scripts/test-product-lookup.ts         # 119
+node --experimental-strip-types scripts/test-voice-personalization.ts  # 86
+node --experimental-strip-types scripts/test-limiter-helpers.ts        # 42
+node --experimental-strip-types scripts/test-voice-logger.ts
+node --experimental-strip-types scripts/test-route-access.ts
+node --experimental-strip-types scripts/test-contact-rule.ts
+node --experimental-strip-types scripts/test-order-date-tz.ts
 psql "$DATABASE_URL" -f scripts/test_voice_usage_caps.sql
 psql "$DATABASE_URL" -f scripts/test_evaluate_flag_stale.sql
 ```
 
-All SQL suites roll themselves back. **A local Postgres is enough** — no Supabase needed: PG16
-plus a shim creating roles `service_role`/`authenticated`/`anon`, schema `auth` with
-`auth.users` + `auth.uid()` reading `request.jwt.claim.sub`, and schema `vault` with a
-`decrypted_secrets` table. Then apply `0001/0002/0005/0006` and whatever is under test.
+`npx tsx` also works but needs a network install. All SQL suites roll themselves back;
+**a local Postgres is enough** — PG16 plus a shim creating roles
+`service_role`/`authenticated`/`anon`, schema `auth` with `auth.users` + `auth.uid()`
+reading `request.jwt.claim.sub`, and schema `vault` with a `decrypted_secrets` table.
+Then apply `0001/0002/0005/0006` and whatever is under test.
 
 ---
 
-## 3. Non-obvious things that will bite you
+## 2. Non-obvious things that will bite you
 
 Ordered by how much time they'll cost if rediscovered.
 
-1. **The secrets RPC returns Shopify creds under the key `"woocommerce"`.**
-   `get_client_integration_secrets` (migration `0002`) predates Shopify: it reads the generic
-   `clients.store_credentials_ref` but labels the result `woocommerce` for every platform.
-   `pickShopifyCreds()` accepts `shopify` → `store` → `woocommerce`. Reading only
-   `secrets.shopify` silently yields **no credentials** and looks like a Vault problem.
+1. **Editing an applied migration changes nothing.** `supabase db push` skips anything
+   already in `schema_migrations`. `0025` was applied saying 180s, edited to 105
+   afterwards, and production kept 180 — silently, for days. `0027` exists only to fix
+   that. Migrations are immutable history; a value change needs a new file.
 
-2. **ElevenLabs sends every tool parameter on every call, filling unused ones with EMPTY
+2. **The secrets RPC returns Shopify creds under the key `"woocommerce"`.**
+   `get_client_integration_secrets` (`0002`) predates Shopify: it reads the generic
+   `clients.store_credentials_ref` but labels the result `woocommerce` for every
+   platform. `pickShopifyCreds()` accepts `shopify` → `store` → `woocommerce`. Reading
+   only `secrets.shopify` silently yields no credentials and looks like a Vault problem.
+
+3. **ElevenLabs sends every tool parameter on every call, filling unused ones with EMPTY
    STRINGS.** Phone arrives as `{called_number:"+1…", client_ref:""}`, web as
-   `{called_number:"", client_ref:"slug"}`. Treating `""` as present routes a web call down
-   the phone path and 400s. `extractClientRef()` handles it — reuse it, don't reimplement.
+   `{called_number:"", client_ref:"slug"}`. Treating `""` as present routes a web call
+   down the phone path and 400s. `extractClientRef()` handles it — reuse it.
 
-3. **A browser call has no Twilio call SID.** Use the ElevenLabs conversation id as the
+4. **`supabase-js` returns RPC errors in `error`, it does not throw.** A `try/catch`
+   around an RPC catches nothing, and the failure branch never runs. Check `error`
+   explicitly. This is why the layer-1 gate is written the way it is.
+
+5. **A browser call has no Twilio call SID.** Use the ElevenLabs conversation id as the
    idempotency key (`usageKeyFor`, `buildExternalRef`). Without this, web calls are
    unmeterable and un-ticketable.
 
-4. **Every new VIEW needs `with (security_invoker = true)`.** Migration `0001` ends with
-   `alter default privileges ... grant select, insert, update, delete on tables` — and in
-   Postgres that covers **views**. So every new view is auto-granted to `authenticated`, and a
-   plain view runs with its *owner's* rights, bypassing RLS. A usage view built without this
-   returned all four tenants' rows to a signed-in user. Cross-tenant/aggregate views must
-   also be explicitly `revoke`d.
+6. **Every new VIEW needs `with (security_invoker = true)`.** `0001` ends with
+   `alter default privileges … grant select, insert, update, delete on tables` — in
+   Postgres that covers **views**. So every new view is auto-granted to `authenticated`,
+   and a plain view runs with its *owner's* rights, bypassing RLS. A usage view built
+   without this returned all four tenants' rows to a signed-in user. Cross-tenant or
+   aggregate views must also be explicitly `revoke`d.
 
-5. **Shopify `name:1001` is a token match, not exact** — it also returns `#1001-A`. Always
-   exact-match the name afterwards (`pickExactOrder`), or you'll read a stranger's order out
-   loud.
+7. **The `is_active` / unique-index trap.** `resolve_client_by_number` (`0006`) filters
+   on `is_active`, but `uq_clients_phone_digits` (`0010`) is
+   `where phone_number is not null` with **no `is_active` filter**. So a deactivated
+   client still holds its number, and reassigning it fails with a unique violation.
+   Correct order, one transaction: null the old holder's phone → set `is_active=false` →
+   assign to the new tenant. Verify with:
+   ```sql
+   select slug, is_active, phone_number from clients where phone_number is not null;
+   ```
 
-6. **Shopify GraphQL returns HTTP 200 for query errors and throttling.** Check the body
+8. **Shopify `name:1001` is a token match, not exact** — it also returns `#1001-A`.
+   Always exact-match afterwards (`pickExactOrder`), or you'll read a stranger's order
+   out loud.
+
+9. **Shopify GraphQL returns HTTP 200 for query errors and throttling.** Check the body
    (`shopifyErrorFrom`) or you'll treat an error as an empty result.
 
-7. **`read_orders` only reaches back 60 days.** Older orders need `read_all_orders`, which
-   requires Shopify approval and is not instant. **Demo with recent orders.**
+10. **`read_orders` only reaches back 60 days.** Older orders need `read_all_orders`,
+    which requires Shopify approval and is not instant. **Demo with recent orders.**
 
-8. **Voice and email write the SAME `orders_cache` row** on `(client_id, order_number)`. The
-   Shopify query/mapping in `voice-order-lookup/lib.ts` is deliberately aligned field-for-field
-   with the production email Zap — API version **2026-04**, line items from `title` +
-   `originalUnitPriceSet`, `customer.email` before order email, `shipping_status` from
-   `fulfillment.status`. **Bump the API version in both channels together, never one alone.**
+11. **Voice and email write the SAME `orders_cache` row** on `(client_id, order_number)`.
+    The Shopify mapping in `voice-order-lookup/lib.ts` is deliberately aligned
+    field-for-field with the production email Zap. **Bump the API version in both
+    channels together, never one alone.**
 
-9. **Idempotent RPCs must REPORT duplicates, not swallow them.** `record_call_usage` and
-   `create_ticket` both return a `duplicate` flag. A silent `on conflict do nothing` is what
-   made agent replies vanish from the dashboard on the email side; a silent double-count would
-   falsely trip a usage cap and take a client's line down.
+12. **Idempotent RPCs must REPORT duplicates, not swallow them.** `record_call_usage` and
+    `create_ticket` both return a `duplicate` flag. A silent `on conflict do nothing` is
+    what made agent replies vanish from the dashboard on the email side; a silent
+    double-count would falsely trip a usage cap and take a client's line down.
 
-10. **CRLF phantom diffs.** `git status` will show ~35 files modified with zero real changes.
-    Always check `git diff --stat --ignore-cr-at-eol` before believing it. Details in
-    `docs/COMMIT-CHECKLIST.md` §1.
+13. **`settings.policies` is surfaced verbatim as `{{store_policies}}`** — anything
+    written there is fair game for any question the caller asks. A support address in
+    that blob got read out on a live call even though `escalation_mode` was `callback`
+    (`0030`). `escalation_mode` governs what the agent *does*, not what it *knows*.
 
-11. **Files have silently disappeared from the repo folder after a successful write** (six of
-    them on 2026-07-29, including the CFO xlsx). Cause unknown — possibly `git clean`/`git
-    stash -u`, possibly OneDrive. **If a build fails with "module not found", check the file
-    exists before debugging the code.** Getting this into git is the real fix.
+14. **CRLF phantom diffs.** `git status` shows files modified with zero real changes.
+    Check `git diff --stat --ignore-cr-at-eol` before believing it.
+
+15. **Files have silently disappeared from this folder after a successful write** (six on
+    2026-07-29, including the CFO xlsx). Cause unknown — possibly `git clean`/`git stash
+    -u`, possibly OneDrive. **If a build fails with "module not found", check the file
+    exists before debugging the code.**
+
+16. **Railway builds from the pushed commit, not your working tree.** Three import pairs
+    break the build if committed apart — `docs/DEPLOY-CHECKLIST.md` lists them. `git
+    commit -a` does not pick up untracked files, and new files are the usual casualty.
 
 ---
 
-## 4. Decisions already made (don't relitigate)
+## 3. Decisions already made (don't relitigate)
 
 | Decision | Rationale |
 |---|---|
+| **Claude, not Gemini**, across the product | changed 2026-07-29 |
 | Tsunami demo on **tsunami.store web widget**, live Shopify data | J built and maintains that site |
 | **Caller verification required on web** (email or ZIP) | a public page is otherwise an unauthenticated API over the order book |
-| **Separate ElevenLabs agent for orders** | the demo agent has a hardcoded Comfort Air HVAC prompt; agents are free, billing is per minute |
-| **Claude, not Gemini**, across the product | changed 2026-07-29 |
-| **No LLM call for status normalization in voice** | the email Zap uses Gemini for this; mid-call that's dead air. `normalizeStatus()` encodes the same rules deterministically |
-| **No SMS, ever, for this client** | Twilio prohibits cannabis/CBD messaging; voice is exempt |
-| **No AI-placed outbound callbacks** | TCPA exposure + it's a cost loop we control. Schema supports it, switched off |
-| **100 voice minutes/month** for Tsunami | it's the CFO model's Starter tier (`$149/mo`, `B13`) |
-| **2-minute call policy**, `max_call_secs` 180 | CFO model `B15`, listed *Required, before Tsunami*. Earlier 300s/420s recommendations are **withdrawn** |
+| **`web_lookup_enabled`, never `is_demo`, on a real client** | `is_demo` disables the guard keeping the public widget away from real customer data |
+| **Separate ElevenLabs agent per use case** | prompts and tools are disjoint; agents are free, billing is per minute |
+| **No LLM call for status normalization in voice** | mid-call that's dead air; `normalizeStatus()` encodes the same rules deterministically |
+| **No SMS for Tsunami** | Twilio prohibits cannabis/CBD messaging; voice is exempt |
+| **No AI-placed outbound callbacks** | TCPA exposure + a cost loop we control. Schema supports it, switched off |
+| **2-minute call policy**, ceiling 105s | CFO model `B15`; earlier 180s/300s recommendations are withdrawn |
 | Extend `review_queue`, don't build a `tickets` table | two inboxes that disagree |
-| **Retire Comfort Air**, move its number to Tsunami (2026-07-29) | one demo to focus on; scheduling data left dormant, not deleted |
+| **Retire Comfort Air** (2026-07-29) | one demo to focus on; scheduling data dormant, not deleted |
+| **Escalation defaults to callback, not email** (`0029`) | the email channel is paused — pointing a caller at that inbox sends them nowhere |
+| Only **Starter** is self-serve | `billing_price_map` is feature-level; a Scale purchase would provision Starter's 100 minutes |
 
 ---
 
-## 5. NEXT STEPS — in order
+## 4. Next steps
 
-### 5a. Make the demo work (current focus)
+Full analysis in **`docs/FEATURE-GAPS.md`**. The short version, in order:
 
-**Follow `docs/TSUNAMI-GO-LIVE.md`** — it has the SQL, the agent prompt, and the tool config
-in order. Summary of the sequence:
+### Now
 
-| # | Step | Where |
-|---|---|---|
-| 0 | Verify the number switch actually landed in the DB | GO-LIVE §0 |
-| 1 | Retire Comfort Air, hand over the number | §1 |
-| 2 | Shopify token → Vault; `web_lookup_enabled`; **staleness rules**; business hours; policy blob | §2 |
-| 3 | `db push` + deploy `voice-order-lookup` and `voice-ticket` | §3 |
-| 4 | Build the new ElevenLabs orders agent (prompt + 3 tools + post-call webhook) | §4 |
-| 5 | **Dashboard: ticket number, `tel:` callback link, `callbacks_due`** — the last build item | §5 |
-| 6 | Walk the five call scenarios before demoing | §6 |
-| 7 | Embed on tsunami.store behind the age gate | web-demo checklist |
+1. **Commit the tree.** 12 modified files and ~20 untracked, including migrations `0029`
+   and `0030`. Given §2.15, this is the highest-value housekeeping task, not a
+   formality. Follow `docs/DEPLOY-CHECKLIST.md` A1 — the import pairs go together.
+2. **Verify `0028` is applied, not just committed.** Until it is, a cancelled client's
+   phone still answers and burns ElevenLabs and Twilio minutes you can't bill.
+   Also confirm `select default_max_call_secs from platform_settings;` returns 105.
+3. **Resend integration.** There is no email-sending code anywhere in the repo. It
+   unblocks three things at once: Supabase Auth SMTP (currently shared, rate-limited,
+   lands in spam), the `crossed_warning` 80%-usage alert that fires and reaches nobody,
+   and overdue-callback notifications.
+4. **Sentry** on the Next app and at minimum `billing-webhook`, `voice-personalization`,
+   `voice-order-lookup`. Note the Deno SDK does not instrument `Deno.serve`, so there's
+   no scope separation between requests — use `Sentry.withScope()` and keep tenant ids
+   out of global tags.
+5. **Uptime check on the phone path.** If `voice-personalization` fails, calls still
+   connect and the agent answers with the generic fallback prompt. Nothing else will
+   tell you.
 
-The single highest-impact line in there is the `stale_exempt_statuses` update in §2c. Without
-it nearly every "where's my order?" call escalates instead of answering.
+### Next
 
-### 5b. Parked (built or specced, deliberately not now)
+6. **Onboarding wizard** (`docs/onboarding-plan.md`, designed, nothing built). Today a
+   client pays and provisioning parks at `needs_human` for "no phone number set." The
+   Twilio buying half already exists in `provision-feature`; what's missing is number
+   search, selection, and re-queueing the parked task.
+7. **Website knowledge sync** — sold in `FEATURES`, on the landing page, on `/plans` and
+   in the CFO model; implemented nowhere. Build the minimal version or cut the claim.
+8. **Number release policy.** `0028` stops a cancelled line answering; nothing stops the
+   Twilio number costing $1.15/month forever.
 
-- Wiring limiter layers 1 & 4 — the two `index.ts` inserts in `docs/LIMITER-WIRING.md`.
-- The 2-minute call policy prompt.
-- `lookup_order.json` / `request_callback.json` for `docs/elevenlabs-tools/`.
-- `.gitattributes` (CRLF fix).
-- Testing pass — explicitly deferred by J on 2026-07-29.
+### Then
+
+9. `/insights` page — calls, avg duration, deflection rate, escalations by reason.
+10. `/conversations` search + pagination (it currently selects every row).
+11. Team invites, then review-queue assignment (`review_queue.assignee` has existed
+    since `0001` and no UI surfaces it).
 
 ---
 
-## 6. Where things live
+## 5. Where things live
 
 | File | What |
 |---|---|
 | `docs/PROJECT-STATUS.md` | **this file — start here** |
-| `docs/TSUNAMI-GO-LIVE.md` | **the runbook to finish the build** |
+| `docs/FEATURE-GAPS.md` | what's missing, with ordering |
+| `docs/launch-readiness.md` | operational + branding gaps before real traffic |
+| `docs/DEPLOY-CHECKLIST.md` | the Railway build trap and the commit pairs |
+| `docs/STRIPE-GO-LIVE.md` | prices, payment link, webhook metadata |
+| `docs/DEMO-SWITCH-ON.md` | turning the Northlake demo on once a number exists |
+| `docs/onboarding-plan.md` | the wizard design |
+| `docs/LIMITER-WIRING.md` | all four limiter layers, what each does |
+| `docs/woocommerce-parity.md` | the seven Woo bugs and the onboarding runbook |
+| `docs/TSUNAMI-GO-LIVE.md` | Tsunami runbook (partly historical now) |
 | `docs/elevenlabs-tools/*.json` | version-controlled ElevenLabs tool schemas |
-| `docs/COMMIT-CHECKLIST.md` | git state, CRLF trap, suggested commits |
-| `docs/tsunami-voice-orders-plan.md` | the full original plan + cost model |
-| `docs/tsunami-config-and-limits-reassessment.md` | per-client config SQL, caps, the staleness finding |
-| `docs/tsunami-web-demo-checklist.md` | web embed checklist |
-| `docs/cfo-hub-developer-inputs.md` | CFO model review + the cells J owns |
-| `docs/LIMITER-WIRING.md` | the two remaining index.ts inserts |
-| `docs/email-agent-zap-build.md` | how the live email channel works |
-
----
-
-## 7. Repo state
-
-**Nothing is committed.** On `main`, last commit `82b11d5 Demo widget restored`. Roughly 4
-files with real changes plus ~20 new ones; ~35 more show as modified but are CRLF-only noise.
-
-`docs/COMMIT-CHECKLIST.md` has the full procedure — but note its §5 file lists are **stale**:
-`0013`, `0014`, `voice-ticket/`, `test_evaluate_flag_stale.sql`, `test-limiter-helpers.ts` and
-`LIMITER-WIRING.md` all landed after it was written.
-
-Given files have already vanished from this folder once, **committing is now the highest-value
-housekeeping task**, not a formality.
+| `docs/email-agent-zap-build.md` | how the paused email channel works |
+| `docs/COMMIT-CHECKLIST.md` | git state + CRLF trap (§5 file lists are stale) |

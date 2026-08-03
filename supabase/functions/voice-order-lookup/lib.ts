@@ -935,3 +935,70 @@ query ShopPolicies {
     shopPolicies { type title body url }
   }
 }`.trim();
+
+/**
+ * Render an order's timestamp as a date the agent can SAY, in the store's own
+ * timezone.
+ *
+ * WHY THIS EXISTS. order_placed_at is a UTC instant. Handing the raw ISO string
+ * to the model means it reads the UTC calendar date, which is a different day
+ * from the caller's for every evening order west of Greenwich. An order placed
+ * at 18:00 on 31 July in Los Angeles is 2026-08-01T01:00:00Z, and the agent told
+ * a caller it was placed on "August 1" the day they placed it. Nothing errors;
+ * the agent is simply wrong, confidently, about the one fact the caller can
+ * check.
+ *
+ * The model cannot fix this itself — nothing in the payload tells it which
+ * timezone the store keeps — so the conversion happens here and the agent is
+ * given a finished string.
+ *
+ * @param iso  UTC ISO timestamp, or null
+ * @param tz   IANA name from get_client_config.timezone. Falls back to UTC.
+ * @param now  Injectable clock, so "today"/"yesterday" are testable.
+ */
+export function formatPlacedOn(
+  iso: string | null | undefined,
+  tz: string | null | undefined,
+  now: Date = new Date(),
+): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+
+  // An invalid tz must never throw inside a live call. Same posture as
+  // client_timezone(), which validates against pg_timezone_names.
+  const zone = (() => {
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: tz ?? "UTC" });
+      return tz ?? "UTC";
+    } catch {
+      return "UTC";
+    }
+  })();
+
+  // Compare CALENDAR DAYS in the store's zone, not elapsed hours. An order from
+  // 23:50 last night is "yesterday" even though it is 40 minutes old.
+  const dayKey = (x: Date) =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: zone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(x);
+
+  const orderDay = dayKey(d);
+  const today = dayKey(now);
+  const yesterday = dayKey(new Date(now.getTime() - 86_400_000));
+
+  if (orderDay === today) return "today";
+  if (orderDay === yesterday) return "yesterday";
+
+  // Weekday included because "Thursday the 31st" is easier to place in memory
+  // than a bare date when you are hearing it rather than reading it.
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  }).format(d);
+}

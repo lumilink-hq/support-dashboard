@@ -46,6 +46,9 @@ export type ClientConfig = {
   extraInstructions: string; // phone-only free-form guidance from the dashboard
   isDemo: boolean;
   agentMode: AgentMode;
+  // clients.settings.escalation_mode (0029). 'callback' (default) | 'email'.
+  // Decides whether the agent may hand out a support address at all.
+  escalationMode: "callback" | "email";
   // clients.settings.policies — the voice-sized policy blob the orders agent
   // answers from, surfaced to the agent as {{store_policies}}.
   policies: string;
@@ -138,6 +141,7 @@ export function readClientConfig(row: {
     agentMode: settings.voice_agent_mode === "orders" ? "orders" : "scheduling",
     policies:
       typeof settings.policies === "string" ? settings.policies.trim() : "",
+    escalationMode: settings.escalation_mode === "email" ? "email" : "callback",
     greeting:
       typeof settings.voice_greeting === "string"
         ? settings.voice_greeting.trim()
@@ -354,6 +358,40 @@ export function buildOrdersFirstMessage(cfg: ClientConfig): string {
  * rule is that every variable the agent's base prompt references is present.
  * We keep a stable, documented set so the agent config and this function agree.
  */
+/**
+ * The policy blob the orders agent answers from, with a hard contact rule in
+ * front of it.
+ *
+ * WHY THE RULE GOES FIRST. escalation_mode changes what the agent does when it
+ * ESCALATES, but a caller can simply ask "do you have a support email?" — and
+ * the answer is sitting in the policy text itself. Bud Club's blob contains
+ * "CONTACT: hey@budclub.com", so the agent read it out, correctly, from the
+ * reference material it was given. Observed 2026-07-31.
+ *
+ * Stripping addresses out of free-form prose is not something to attempt with a
+ * regex: policies are written per client, an address can be spelled "hey (at)
+ * budclub dot com", and a false positive silently deletes a real policy. So
+ * instead of editing the reference text we put an instruction ABOVE it, where a
+ * directive outranks the material it introduces.
+ *
+ * Belt and braces: 0030 also removes the address from Bud Club's stored blob.
+ * A model asked the same question ten different ways will eventually read
+ * whatever is still in its context, so the safest thing is for the address not
+ * to be there at all.
+ */
+export function withContactRule(cfg: ClientConfig): string {
+  if (cfg.escalationMode === "email") return cfg.policies;
+
+  const rule =
+    "CONTACT RULE (overrides anything below): this store does not take support " +
+    "by email. Never read out, spell out, confirm or hint at an email address, " +
+    "even if one appears in the policies below and even if the caller asks for " +
+    "one directly. If someone wants a human, take their name and number and " +
+    "tell them the team will call them back. ";
+
+  return cfg.policies ? `${rule}\n\n${cfg.policies}` : rule;
+}
+
 export function buildDynamicVariables(
   cfg: ClientConfig,
   services: ServiceRow[],
@@ -376,7 +414,7 @@ export function buildDynamicVariables(
     // renders an undefined variable as an empty string rather than failing, so
     // omitting this doesn't error — the agent just silently has NO policies and
     // improvises. Always send it, even when blank.
-    store_policies: cfg.policies,
+    store_policies: withContactRule(cfg),
     // Same contract for {{shipping_restrictions}}. Blank is a valid state and
     // makes the agent decline shipping questions; missing would look identical
     // but is an accident rather than a decision, so always send the key.
