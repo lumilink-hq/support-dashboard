@@ -6,6 +6,7 @@
 // Server component: it reads the session so the nav CTA can say "Go to
 // dashboard" instead of "Get started" for someone already signed in.
 
+import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
@@ -42,18 +43,32 @@ async function isSignedIn(): Promise<boolean> {
   }
 }
 
+/**
+ * The wordmark.
+ *
+ * Was a hand-built "L" tile plus the word "Lumilink" in the UI font, which was a
+ * placeholder standing in for a logo that did not exist yet. It does now
+ * (2026-08-12).
+ *
+ * TWO FILES, ONE FOR EACH BACKGROUND. public/lumilink-wordmark.png is dark ink
+ * for light surfaces; -light.png is white ink for dark ones. Both are
+ * transparent PNGs cut from the supplied artwork with the antialiasing kept, so
+ * neither carries a white box that would show a seam on the gray-50 footer.
+ *
+ * `priority` because it sits in the header above the fold on every page — a
+ * lazily-loaded logo pops in after paint and reads as a slow site.
+ */
 function Wordmark({ href }: { href: string }) {
   return (
-    <Link href={href} className="flex items-center gap-2">
-      <span
-        aria-hidden
-        className="grid h-7 w-7 place-items-center rounded-lg bg-gray-900 text-sm font-bold text-white"
-      >
-        L
-      </span>
-      <span className="text-base font-semibold tracking-tight text-gray-900">
-        Lumilink
-      </span>
+    <Link href={href} className="flex items-center" aria-label="Lumilink — home">
+      <Image
+        src="/lumilink-wordmark.png"
+        alt="Lumilink"
+        width={1000}
+        height={192}
+        priority
+        className="h-6 w-auto"
+      />
     </Link>
   );
 }

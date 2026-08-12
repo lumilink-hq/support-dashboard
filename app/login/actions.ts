@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { safeNextPath } from "@/lib/route-access";
+import { landingPathAfterAuth } from "@/lib/post-auth";
 
 export async function login(formData: FormData) {
   const email = String(formData.get("email") ?? "");
@@ -24,7 +25,10 @@ export async function login(formData: FormData) {
     redirect(`/login?${qs}`);
   }
 
-  redirect(next);
+  // Setup before inbox: a client with blocking onboarding steps outstanding is
+  // not live, and an empty conversations list does not tell them why. Only
+  // overrides the DEFAULT destination — see lib/post-auth.ts.
+  redirect(await landingPathAfterAuth(next));
 }
 
 export async function signout() {

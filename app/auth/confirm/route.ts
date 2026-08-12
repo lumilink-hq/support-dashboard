@@ -2,6 +2,7 @@ import { type EmailOtpType } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { safeNextPath } from "@/lib/route-access";
+import { landingPathAfterAuth } from "@/lib/post-auth";
 
 /**
  * Email confirmation landing route.
@@ -28,15 +29,20 @@ export async function GET(request: NextRequest) {
 
   const supabase = await createClient();
 
+  // Where to land once the session exists. This is a brand-new customer's very
+  // first authenticated request, so it is the single most important place to
+  // send someone into onboarding rather than an empty dashboard.
+  const landing = async () => `${origin}${await landingPathAfterAuth(next)}`;
+
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
+    if (!error) return NextResponse.redirect(await landing());
   } else if (tokenHash && type) {
     const { error } = await supabase.auth.verifyOtp({
       type,
       token_hash: tokenHash,
     });
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
+    if (!error) return NextResponse.redirect(await landing());
   }
 
   return NextResponse.redirect(

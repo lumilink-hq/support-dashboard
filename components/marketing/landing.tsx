@@ -116,7 +116,7 @@ const CAPABILITIES = [
 //   {
 //     n: "3",
 //     title: "Your number goes live",
-//     body: "Forward your existing number or use a new local one, then watch every call land in the dashboard.",
+//     body: "We provision your local number and point it at your agent, then every call lands in the dashboard.",
 //   },
 // ];
 
@@ -134,8 +134,8 @@ const FAQS = [
     a: "It's a natural voice with real conversational turn-taking. Judge it yourself on the discovery call rather than taking our word for it.",
   },
   {
-    q: "Can I keep my phone number?",
-    a: `Yes. Forward your existing number to Lumi, or we'll provide a local one. Starter includes ${STARTER_PLAN.numbers} number.`,
+    q: "Do I need a phone number?",
+    a: `No — we provide one. We buy and configure a local number for you as part of setup, and it's live before your first call. Starter includes ${STARTER_PLAN.numbers}. Porting an existing number isn't supported yet.`,
   },
   {
     q: "What happens if I go over my minutes?",
@@ -143,7 +143,7 @@ const FAQS = [
   },
   {
     q: "What's the setup fee for?",
-    a: "We build your agent: load your services and prices, connect your calendar, test it against real scenarios, and launch it. You pay it once, at the start.",
+    a: "We build your agent: provision your phone number, load your services and prices, connect your calendar, test it against real scenarios, and launch it. You pay it once, at the start.",
   },
 ];
 

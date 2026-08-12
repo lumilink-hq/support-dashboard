@@ -98,8 +98,8 @@ const FAQS = [
     a: "It offers a transfer, or takes the details and logs a callback ticket for you to pick up. When it doesn't know something, it says so.",
   },
   {
-    q: "Can I keep my phone number?",
-    a: `Yes. Forward your existing number to Lumi, or we'll provide a local one. Starter includes ${STARTER_PLAN.numbers} number.`,
+    q: "Do I need a phone number?",
+    a: `No — we provide one. We buy and configure a local number for you as part of setup, and it's live before your first call. Starter includes ${STARTER_PLAN.numbers}. Porting an existing number isn't supported yet.`,
   },
   {
     q: `Why are calls capped at ${STARTER_PLAN.maxCallMinutes} minutes?`,
@@ -111,7 +111,7 @@ const FAQS = [
   },
   {
     q: "What's the setup fee for?",
-    a: "We build your agent: load your services and prices, connect your calendar, test it against real scenarios, and launch it. You pay it once, at the start.",
+    a: "We build your agent: provision your phone number, load your services and prices, connect your calendar, test it against real scenarios, and launch it. You pay it once, at the start.",
   },
 ];
 
