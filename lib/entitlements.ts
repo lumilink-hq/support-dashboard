@@ -76,6 +76,49 @@ export const OVERAGE = {
 } as const;
 
 /**
+ * Observed average call length, used ONLY to translate a minute allowance into
+ * the call count we advertise.
+ *
+ * WHY THIS EXISTS (2026-08-12). We now position plans in CALLS, because "100
+ * minutes" is a number no contractor or store owner can act on and "about 65
+ * calls" is one they can compare against the calls they already miss. Nothing
+ * about the SYSTEM changes: plan_tiers.included_minutes is still the allowance,
+ * set_plan_tier_caps still applies minutes, record_call_usage still counts
+ * minutes, and overage is still billed per minute. This is the marketing unit,
+ * not the metered one.
+ *
+ * The number itself: the calls on file run well under the ceiling (one live
+ * transcript at 45s), so 1.5 is a deliberately conservative middle. Because
+ * max_call_secs is 105s, a call can never exceed 1.75 minutes — which is what
+ * makes a call count safe to quote at all. Divide by 1.75 instead of this
+ * constant and you get the floor a customer cannot beat.
+ *
+ * REVISIT WHEN REAL USAGE ARRIVES. Seven calls in a fortnight is not a sample.
+ */
+export const AVG_CALL_MINUTES = 1.5;
+
+/**
+ * The advertised call count for a minute allowance.
+ *
+ * DERIVED, NEVER TYPED. The minute caps are changing shortly; every page that
+ * quotes a call count must move with them automatically, or we recreate the
+ * exact drift this file exists to prevent. Rounded down to a multiple of five
+ * so the marketing number is never larger than the arithmetic.
+ */
+export function advertisedCalls(includedMinutes: number): number {
+  return Math.floor(includedMinutes / AVG_CALL_MINUTES / 5) * 5;
+}
+
+/**
+ * The call count a customer CANNOT beat, at the enforced ceiling. Use this
+ * wherever the claim has to be defensible rather than typical — contracts,
+ * comparison tables, anything a customer could hold you to.
+ */
+export function guaranteedCalls(includedMinutes: number): number {
+  return Math.floor(includedMinutes / STARTER_PLAN.maxCallMinutes / 5) * 5;
+}
+
+/**
  * A tier's stable machine key. Matches plan_tiers.tier in the database and the
  * `plan_tier` metadata value on the Stripe Payment Link. Changing one of these
  * strings without changing all three breaks the chain silently.
@@ -114,8 +157,12 @@ export const PLAN_TIERS: PlanTier[] = [
     monthlyUsd: STARTER_PLAN.monthlyUsd,
     setupFeeUsd: STARTER_PLAN.setupFeeUsd,
     includedMinutes: STARTER_PLAN.includedMinutes,
+    // Calls first, minutes in brackets. The bracket is not decoration: the
+    // dashboard meter, the overage line and the invoice are all in minutes, so
+    // a customer who has only ever been told "calls" meets a unit they have
+    // never seen at exactly the wrong moment.
     highlights: [
-      `${STARTER_PLAN.includedMinutes} included minutes per month`,
+      `About ${advertisedCalls(STARTER_PLAN.includedMinutes)} calls a month (${STARTER_PLAN.includedMinutes} minutes)`,
       `${STARTER_PLAN.numbers} local phone number`,
       "24/7 answering and booking",
       "Website knowledge sync",
@@ -132,7 +179,7 @@ export const PLAN_TIERS: PlanTier[] = [
     setupFeeUsd: SETUP_FEE_USD,
     includedMinutes: 250,
     highlights: [
-      "250 included minutes per month",
+      `About ${advertisedCalls(250)} calls a month (250 minutes)`,
       "Advanced transfers",
       "4 hours of platform care per month",
       "Everything in Starter",
@@ -147,7 +194,7 @@ export const PLAN_TIERS: PlanTier[] = [
     setupFeeUsd: SETUP_FEE_USD,
     includedMinutes: 600,
     highlights: [
-      "600 included minutes per month",
+      `About ${advertisedCalls(600)} calls a month (600 minutes)`,
       "2 local phone numbers",
       "Advanced routing",
       "8 hours of platform care per month",

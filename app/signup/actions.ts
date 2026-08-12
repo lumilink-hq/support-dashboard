@@ -64,7 +64,7 @@ export async function signup(formData: FormData) {
       : `${origin}/auth/confirm?next=${encodeURIComponent(next)}`;
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -90,6 +90,47 @@ export async function signup(formData: FormData) {
         .join(" ") ||
       "Sign-up failed. Please try again.";
     fail(detail);
+  }
+
+  // ---------------------------------------------------------------------------
+  // THE TWO SILENT SUCCESSES.
+  //
+  // signUp resolves without an error in two cases where NO EMAIL IS SENT, and
+  // the old code redirected to "check your inbox" for both. Someone then waits
+  // for a message that was never going to arrive, and the logs say nothing —
+  // which is exactly how "our confirmation emails aren't working" turns into a
+  // day of looking in the wrong place.
+  //
+  // 1. EMAIL ALREADY REGISTERED. With confirmation enabled, Supabase returns a
+  //    success with an obfuscated user and an EMPTY `identities` array rather
+  //    than admitting the address exists (user-enumeration protection). No mail
+  //    is sent, because the account already exists.
+  //
+  //    We keep that protection — the message below does not confirm the address
+  //    is registered, it just points at sign-in and reset, which is useful to
+  //    both a returning user and a stranger, and reveals nothing either way.
+  //
+  // 2. EMAIL CONFIRMATION TURNED OFF in the project's Auth settings. Then
+  //    signUp returns a live SESSION, the user is already signed in, and no
+  //    confirmation mail exists to send. Telling them to check their inbox
+  //    while they are holding a valid session is a config bug wearing a
+  //    success message, so we log it loudly and send them into the app.
+  // ---------------------------------------------------------------------------
+  if (data?.user && (data.user.identities?.length ?? 0) === 0) {
+    fail(
+      "That email can't be signed up right now. If you already have an account, sign in instead — or reset your password.",
+    );
+  }
+
+  if (data?.session) {
+    console.warn(
+      "[signup] Supabase returned a session on signUp, which means email " +
+        "confirmation is DISABLED for this project. No confirmation email was " +
+        "sent. Enable it under Authentication > Providers > Email, and make " +
+        "sure custom SMTP is configured — the built-in service refuses to " +
+        "deliver to addresses outside the project team. See docs/AUTH-EMAIL-SETUP.md.",
+    );
+    redirect(next);
   }
 
   redirect("/signup?confirm=1");

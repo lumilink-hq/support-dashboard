@@ -12,7 +12,12 @@
 // lib/entitlements.ts, which mirrors the CFO workbook.
 
 import Link from "next/link";
-import { OVERAGE, PLAN_TIERS, STARTER_PLAN } from "@/lib/entitlements";
+import {
+  advertisedCalls,
+  OVERAGE,
+  PLAN_TIERS,
+  STARTER_PLAN,
+} from "@/lib/entitlements";
 
 // Where every primary CTA points. Swap to a Cal.com/Calendly URL once booking
 // is set up; one place so that stays a one-line change.
@@ -108,7 +113,7 @@ export function CapabilityGrid({
  */
 export function PricingGrid({
   heading = "What you pay, and where the limits are",
-  blurb = "Every plan has a fixed minute allowance. We'd rather give you the number than call it unlimited and add a fair-use clause.",
+  blurb = "Every plan comes with a set number of calls. We'd rather give you the number than call it unlimited and add a fair-use clause.",
 }: {
   heading?: string;
   blurb?: string;
@@ -312,6 +317,14 @@ export function ClosingCta({
 }
 
 /** The overage line, shared so no page can quote a different rate. */
-export const OVERAGE_ANSWER = `We bill additional minutes at $${OVERAGE.perVoiceMinuteUsd.toFixed(
+// Bridges the two units on purpose. We SELL calls and we METER minutes, and the
+// one moment a customer meets the second unit must not be their first invoice.
+export const OVERAGE_ANSWER = `Your allowance is measured in minutes behind the scenes — Starter's ${
+  STARTER_PLAN.includedMinutes
+} minutes is about ${advertisedCalls(
+  STARTER_PLAN.includedMinutes,
+)} calls at typical length, and no single call can run past ${
+  STARTER_PLAN.maxCallMinutes
+} minutes. Beyond your allowance we bill $${OVERAGE.perVoiceMinuteUsd.toFixed(
   2,
-)} each. You can check minutes used against your allowance in the dashboard whenever you like, so you'll know before the invoice arrives.`;
+)} per minute. The dashboard shows what you've used at any time, so you'll know before the invoice arrives.`;

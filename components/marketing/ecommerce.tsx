@@ -34,6 +34,7 @@ import {
   PricingGrid,
   Section,
 } from "@/components/marketing/blocks";
+import { DEMO_LINES } from "@/lib/demo";
 import { STARTER_PLAN } from "@/lib/entitlements";
 
 export const ECOMMERCE_METADATA = {
@@ -42,17 +43,10 @@ export const ECOMMERCE_METADATA = {
     "Lumi answers “where is my order?” by phone and on your site — looking up the real order in Shopify or WooCommerce, reading back tracking, and logging a ticket when it can't finish. Including merchants other vendors turn away.",
 };
 
-/**
- * The demo line for this vertical.
- *
- * DELIBERATELY NULL. Two demo numbers are being purchased, one per vertical
- * (docs/BUILD-PLAN-2026-08.md §C). Until this one exists the page links to the
- * web demo only — it must NEVER fall back to a client's live number, which is
- * the exact bug that has /demo/hvac unlinked and noindexed today: a prospect's
- * test call landing on a paying client's line, burning their minutes and
- * reading out real order data.
- */
-const DEMO_PHONE: string | null = null;
+// Live since 2026-08-12. Comes from lib/demo.ts, which is also what /demo/orders
+// reads, so the two pages cannot advertise different numbers. It must never be
+// swapped for a client's live line — that was the /demo/hvac bug.
+const DEMO_LINE = DEMO_LINES.ecommerce;
 
 const PILLARS = [
   {
@@ -188,10 +182,16 @@ export function EcommerceSolution() {
               </Link>
             </div>
 
-            {DEMO_PHONE ? (
+            {DEMO_LINE.tel ? (
               <p className="mt-4 text-sm text-gray-500">
-                Or call the demo line:{" "}
-                <span className="font-medium text-gray-900">{DEMO_PHONE}</span>
+                Or call it:{" "}
+                <a
+                  href={`tel:${DEMO_LINE.tel}`}
+                  className="font-medium text-gray-900 underline"
+                >
+                  {DEMO_LINE.display}
+                </a>{" "}
+                — a real order lookup on a demo store.
               </p>
             ) : null}
 
@@ -285,7 +285,7 @@ export function EcommerceSolution() {
       {/* ------------------------------------------------------------------ */}
       <CallLengthPolicy closing="An order status call takes well under a minute. The cap exists for the conversation that has gone wrong — a damaged parcel or a refund argument belongs with a person, and Lumi hands it over rather than talking in circles." />
 
-      <PricingGrid blurb="The same plans as everywhere else — no separate ecommerce tier, no connector surcharge for reading your store. Every plan has a fixed minute allowance, and we'd rather give you the number than call it unlimited." />
+      <PricingGrid blurb="The same plans as everywhere else — no separate ecommerce tier, no connector surcharge for reading your store. Every plan comes with a set number of calls, and we'd rather give you the number than call it unlimited." />
 
       <FaqList items={FAQS} heading="What store owners ask" />
 

@@ -12,14 +12,18 @@
 // PHONE VS BROWSER. The browser widget routes by `client_slug`, and only
 // demo-flagged tenants resolve that way, so it can never reach a real client.
 // The phone path routes by DIALLED NUMBER, and resolve_client_by_number returns
-// exactly one client — so a single number cannot serve both demos. Until a
-// second number exists, NEXT_PUBLIC_DEMO_ORDERS_PHONE stays unset and this page
-// runs browser-only rather than advertising a number that reaches the wrong
-// agent. That is the bug /demo has today.
+// exactly one client — so a single number cannot serve both demos. That is why
+// this page ran browser-only until 2026-08-12: rather than advertise a number
+// that reaches the wrong agent, it advertised none.
+//
+// RESOLVED. Each vertical now has its own line, in lib/demo.ts. This one must be
+// held by `northlake-demo` in clients.phone_number — see
+// scripts/assign-demo-numbers.sql.
 
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LumiWidget } from "@/components/lumi-widget";
+import { DEMO_LINES } from "@/lib/demo";
 
 export const metadata: Metadata = {
   title: "Meet Lumi — the AI agent that answers order questions | LumiLink",
@@ -28,12 +32,9 @@ export const metadata: Metadata = {
 };
 
 const DEMO_AGENT_ID = process.env.NEXT_PUBLIC_ELEVENLABS_ORDERS_AGENT_ID;
-const DEMO_CLIENT_SLUG =
-  process.env.NEXT_PUBLIC_DEMO_ORDERS_SLUG ?? "northlake-demo";
-
-// Unset until a dedicated number exists. See the note at the top.
-const PHONE_TEL = process.env.NEXT_PUBLIC_DEMO_ORDERS_PHONE ?? "";
-const PHONE_DISPLAY = process.env.NEXT_PUBLIC_DEMO_ORDERS_PHONE_DISPLAY ?? "";
+const DEMO_CLIENT_SLUG = DEMO_LINES.ecommerce.slug;
+const PHONE_TEL = DEMO_LINES.ecommerce.tel;
+const PHONE_DISPLAY = DEMO_LINES.ecommerce.display;
 
 // Seeded by demo_orders_client.sql. Each one reaches a different branch, so a
 // visitor picking any of them sees something worth seeing.

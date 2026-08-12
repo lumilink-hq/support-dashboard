@@ -42,7 +42,7 @@ import {
   PricingGrid,
   Section,
 } from "@/components/marketing/blocks";
-import { STARTER_PLAN } from "@/lib/entitlements";
+import { advertisedCalls, STARTER_PLAN } from "@/lib/entitlements";
 
 /** Shared by "/" and "/home" so the two can never say different things. */
 export const LANDING_METADATA = {
@@ -64,7 +64,7 @@ const PILLARS = [
   {
     n: "02",
     title: "Costs less than the calls you're missing",
-    body: `Starter is $${STARTER_PLAN.monthlyUsd} a month with ${STARTER_PLAN.includedMinutes} included minutes. One booked job covers it.`,
+    body: `Starter is $${STARTER_PLAN.monthlyUsd} a month and covers about ${advertisedCalls(STARTER_PLAN.includedMinutes)} calls. One booked job covers it.`,
   },
   {
     n: "03",

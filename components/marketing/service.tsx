@@ -23,7 +23,8 @@ import {
   PricingGrid,
   Section,
 } from "@/components/marketing/blocks";
-import { STARTER_PLAN } from "@/lib/entitlements";
+import { DEMO_LINES } from "@/lib/demo";
+import { advertisedCalls, STARTER_PLAN } from "@/lib/entitlements";
 
 export const SERVICE_METADATA = {
   title: "Lumilink for service businesses | AI booking, 24/7",
@@ -31,12 +32,8 @@ export const SERVICE_METADATA = {
     "Lumi answers every call, quotes from your price list, and books the job on your real calendar — for HVAC, plumbing, electrical and the trades. A missed call is a job that goes to whoever picked up.",
 };
 
-/**
- * The demo line for this vertical. NULL until the number is purchased — see the
- * identical note in ecommerce.tsx. /demo/hvac is currently unlinked precisely
- * because it advertises a real client's number; do not repeat that here.
- */
-const DEMO_PHONE: string | null = null;
+// Live since 2026-08-12. Shared with /demo/hvac via lib/demo.ts.
+const DEMO_LINE = DEMO_LINES.service;
 
 const PILLARS = [
   {
@@ -52,7 +49,7 @@ const PILLARS = [
   {
     n: "03",
     title: `Costs less than the calls you're missing`,
-    body: `Starter is $${STARTER_PLAN.monthlyUsd} a month with ${STARTER_PLAN.includedMinutes} included minutes. One booked job covers it.`,
+    body: `Starter is $${STARTER_PLAN.monthlyUsd} a month and covers about ${advertisedCalls(STARTER_PLAN.includedMinutes)} calls a month. One booked job covers it.`,
   },
 ];
 
@@ -149,10 +146,16 @@ export function ServiceSolution() {
               </a>
             </div>
 
-            {DEMO_PHONE ? (
+            {DEMO_LINE.tel ? (
               <p className="mt-4 text-sm text-gray-500">
-                Or call the demo line:{" "}
-                <span className="font-medium text-gray-900">{DEMO_PHONE}</span>
+                Hear it first:{" "}
+                <a
+                  href={`tel:${DEMO_LINE.tel}`}
+                  className="font-medium text-gray-900 underline"
+                >
+                  {DEMO_LINE.display}
+                </a>{" "}
+                — book a visit with our demo HVAC company.
               </p>
             ) : null}
 

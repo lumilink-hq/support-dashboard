@@ -1,24 +1,27 @@
 import type { Metadata } from "next";
 import { LumiWidget } from "@/components/lumi-widget";
+import { DEMO_LINES } from "@/lib/demo";
 
-// PARKED. The HVAC/scheduling demo, kept but not promoted: /demo now serves the
-// customer-service demo, and nothing links here.
+// The HVAC/scheduling demo. UNPARKED 2026-08-12, when a dedicated demo line was
+// bought for this vertical.
 //
-// Before showing this again, two things must be fixed:
-//   1. PHONE_TEL below is +12135332469, which belongs to TSUNAMI
-//      (slug 'shopify-store') and is assigned to their orders agent. Public
-//      callers reach a paying client's line and spend their 100-minute
-//      allowance. Point it at a demo number or drop the call button.
-//   2. comfort-air-demo holds +14155550123, a reserved 555 number that cannot
-//      be dialled.
+// WHAT WAS WRONG. This page hardcoded +12135332469 — TSUNAMI's number, a paying
+// client. Public demo callers reached their line and spent their allowance. And
+// comfort-air-demo held +14155550123, a reserved 555 number nobody can dial. The
+// first is fixed here (the number now comes from lib/demo.ts and is ours); the
+// second is fixed by scripts/assign-demo-numbers.sql.
 //
-// noindex while parked: an unlinked page that Google still ranks is how people
-// end up on a demo you forgot you had.
+// INDEXING IS TIED TO THE BLOCKER, not to a flag someone remembers to flip: the
+// page stays noindex while no demo number is configured. That is a proxy, not a
+// proof — it cannot tell whether clients.phone_number was actually updated. Make
+// the call yourself once before trusting the page to strangers.
+const LINE = DEMO_LINES.service;
+
 export const metadata: Metadata = {
   title: "Meet Lumi — the AI receptionist that books jobs 24/7 | LumiLink",
   description:
     "Try Lumi, the AI phone receptionist for home-service companies. Book a service visit with our demo HVAC company, by phone or in your browser.",
-  robots: { index: false, follow: false },
+  ...(LINE.tel ? {} : { robots: { index: false, follow: false } }),
 };
 
 // Browser widget: a browser call has no dialed number, so we route the demo
@@ -27,10 +30,9 @@ export const metadata: Metadata = {
 // NEXT_PUBLIC_ELEVENLABS_AGENT_ID to the demo agent to switch the widget on; if
 // it's unset the page falls back to the call-in demo only.
 const DEMO_AGENT_ID = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID;
-const DEMO_CLIENT_SLUG =
-  process.env.NEXT_PUBLIC_DEMO_CLIENT_SLUG ?? "comfort-air-demo";
-const PHONE_DISPLAY = "(213) 533-2469";
-const PHONE_TEL = "+12135332469";
+const DEMO_CLIENT_SLUG = LINE.slug;
+const PHONE_DISPLAY = LINE.display;
+const PHONE_TEL = LINE.tel;
 
 const SERVICES: { name: string; tag: string; emergency?: boolean }[] = [
   { name: "Service Call / Diagnostic", tag: "$89 call-out", emergency: true },
