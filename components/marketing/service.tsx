@@ -1,0 +1,210 @@
+// /solutions/service — the trades / HVAC vertical.
+//
+// The archetype word matches the code: business_type is 'service' | 'ecommerce'
+// (migration 0034), and it decides which onboarding steps a client sees. The
+// site and the product use the same two words on purpose.
+//
+// This page leads with SCHEDULING, which is the MVP (docs/scheduling-mvp-build-plan.md)
+// and the thing the landing page only gestures at. Same plan ladder, same
+// pricing component.
+
+import Link from "next/link";
+import { MarketingShell } from "@/components/marketing/shell";
+import {
+  CallLengthPolicy,
+  CapabilityGrid,
+  Check,
+  ClosingCta,
+  DEMO_CTA,
+  Eyebrow,
+  FaqList,
+  OVERAGE_ANSWER,
+  Pillars,
+  PricingGrid,
+  Section,
+} from "@/components/marketing/blocks";
+import { STARTER_PLAN } from "@/lib/entitlements";
+
+export const SERVICE_METADATA = {
+  title: "Lumilink for service businesses | AI booking, 24/7",
+  description:
+    "Lumi answers every call, quotes from your price list, and books the job on your real calendar — for HVAC, plumbing, electrical and the trades. A missed call is a job that goes to whoever picked up.",
+};
+
+/**
+ * The demo line for this vertical. NULL until the number is purchased — see the
+ * identical note in ecommerce.tsx. /demo/hvac is currently unlinked precisely
+ * because it advertises a real client's number; do not repeat that here.
+ */
+const DEMO_PHONE: string | null = null;
+
+const PILLARS = [
+  {
+    n: "01",
+    title: "Never miss a call",
+    body: "Lumi answers when you can't: after hours, on a job site, or when three people ring at once. A missed call is a job that goes to whoever picked up.",
+  },
+  {
+    n: "02",
+    title: "It books the job, not a message",
+    body: "Lumi checks your live availability, holds the slot and confirms it. You stop ringing people back to arrange something they already asked for.",
+  },
+  {
+    n: "03",
+    title: `Costs less than the calls you're missing`,
+    body: `Starter is $${STARTER_PLAN.monthlyUsd} a month with ${STARTER_PLAN.includedMinutes} included minutes. One booked job covers it.`,
+  },
+];
+
+const CAPABILITIES = [
+  {
+    title: "Books real appointments",
+    body: "Checks live availability, holds the slot, and confirms it — on your actual calendar, not a request form.",
+  },
+  {
+    title: "Reschedules and cancels",
+    body: "Customers move their own appointments by phone, without waiting for you to call them back.",
+  },
+  {
+    title: "Quotes from your price list",
+    body: "Lumi reads the prices you set. When a job needs a site visit before anyone can price it, it says so instead of inventing a number.",
+  },
+  {
+    title: "Knows your service area",
+    body: "Callers outside the area you cover are told so on the call, not after a van has been dispatched.",
+  },
+  {
+    title: "Answers after hours",
+    body: "Evenings, weekends and the overflow while you're under a sink. Every caller reaches a real conversation.",
+  },
+  {
+    title: "Nothing disappears",
+    body: "When Lumi can't finish a call, it logs a callback ticket in your follow-up queue. You decide who rings back.",
+  },
+];
+
+const FAQS = [
+  {
+    q: "Which trades is this for?",
+    a: "HVAC, plumbing, electrical, appliance repair, landscaping — anything where the job gets booked on a calendar and a missed call goes to a competitor.",
+  },
+  {
+    q: "Does it use my real calendar?",
+    a: "Yes. Lumi checks live availability before offering a slot, so it can't double-book you or offer a time you're already out on a job.",
+  },
+  {
+    q: "What if a job can't be priced over the phone?",
+    a: "Lumi says so and books the site visit. It quotes from the price list you set and doesn't guess at anything you haven't priced.",
+  },
+  {
+    q: "What happens if Lumi can't handle a call?",
+    a: "It offers a transfer, or takes the details and logs a callback ticket for you to pick up. When it doesn't know something, it says so.",
+  },
+  {
+    q: "Can I keep my phone number?",
+    a: `Yes. Forward your existing number to Lumi, or we'll provide a local one. Starter includes ${STARTER_PLAN.numbers} number.`,
+  },
+  {
+    q: `Why are calls capped at ${STARTER_PLAN.maxCallMinutes} minutes?`,
+    a: "A caller going in circles with an AI has a worse time than one who gets a callback from a person. Lumi warns before the limit, closes the conversation, and hands anything unresolved to you.",
+  },
+  {
+    q: "What happens if I go over my minutes?",
+    a: OVERAGE_ANSWER,
+  },
+  {
+    q: "What's the setup fee for?",
+    a: "We build your agent: load your services and prices, connect your calendar, test it against real scenarios, and launch it. You pay it once, at the start.",
+  },
+];
+
+export function ServiceSolution() {
+  return (
+    <MarketingShell>
+      <Section className="pb-20 pt-16 md:pb-28 md:pt-24">
+        <div className="grid items-center gap-12 md:grid-cols-2">
+          <div>
+            <Eyebrow>AI phone support for the trades</Eyebrow>
+            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
+              Every call answered. Every job on the calendar.
+            </h1>
+            <p className="mt-5 text-lg leading-relaxed text-gray-600">
+              Lumi picks up while you&rsquo;re on a job, quotes from your price
+              list, and books the appointment on your real calendar. You see
+              every word that was said.
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href={DEMO_CTA}
+                className="rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-800"
+              >
+                Book a discovery call
+              </Link>
+              <a
+                href="/plans"
+                className="rounded-md border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                See pricing
+              </a>
+            </div>
+
+            {DEMO_PHONE ? (
+              <p className="mt-4 text-sm text-gray-500">
+                Or call the demo line:{" "}
+                <span className="font-medium text-gray-900">{DEMO_PHONE}</span>
+              </p>
+            ) : null}
+
+            <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-500">
+              <li className="flex items-center gap-2">
+                <Check /> 24/7 answering
+              </li>
+              <li className="flex items-center gap-2">
+                <Check /> Real-time booking
+              </li>
+              <li className="flex items-center gap-2">
+                <Check /> Quotes from your prices
+              </li>
+            </ul>
+          </div>
+
+          {/* SWAP FOR A REAL SCREENSHOT — the appointments view is the one to use. */}
+          <div
+            aria-hidden
+            className="aspect-[4/3] rounded-xl border border-gray-200 bg-gray-50 shadow-sm"
+          />
+        </div>
+      </Section>
+
+      <Section className="border-t border-gray-200 bg-gray-50 py-20">
+        <Eyebrow>Why Lumilink works</Eyebrow>
+        <Pillars items={PILLARS} />
+      </Section>
+
+      <Section className="py-20">
+        <div className="max-w-2xl">
+          <Eyebrow>What Lumi does</Eyebrow>
+          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+            One agent that finishes the job
+          </h2>
+          <p className="mt-3 text-gray-600">
+            A conversation that ends with an appointment on your calendar.
+          </p>
+        </div>
+        <CapabilityGrid items={CAPABILITIES} />
+      </Section>
+
+      <CallLengthPolicy closing="We publish this because you will hit it. An AI that keeps a frustrated caller on the line for nine minutes costs you more than one that hands them to a person at two." />
+
+      <PricingGrid />
+
+      <FaqList items={FAQS} heading="What contractors ask" />
+
+      <ClosingCta
+        heading="Stop losing jobs to voicemail"
+        body="Tell us about your business in twenty minutes. Lumi is answering your phone about a week later."
+      />
+    </MarketingShell>
+  );
+}

@@ -15,6 +15,11 @@ export const PUBLIC_PREFIXES = [
   "/signup",
   "/auth",
   "/demo",
+  // Vertical marketing pages: /solutions/ecommerce, /solutions/service. A
+  // prefix rather than two exact entries so adding a third vertical is a page
+  // file and nothing else. There is no /solutions index page — a bare
+  // /solutions 404s, which is correct until one is written.
+  "/solutions",
 ] as const;
 
 /**

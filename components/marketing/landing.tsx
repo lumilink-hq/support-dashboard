@@ -11,11 +11,17 @@
 // two indexable URLs serving identical content split the ranking signal and
 // neither wins.
 //
-// EVERY PRICE AND LIMIT HERE IS IMPORTED, NOT TYPED. STARTER_PLAN and OVERAGE
-// come from lib/entitlements.ts, which mirrors the CFO workbook. That is
-// deliberate: the cheapest way to lose money on this page is to quote a number
-// the billing page disagrees with, and hand-copied prices drift the moment the
-// model changes.
+// EVERY PRICE AND LIMIT HERE IS IMPORTED, NOT TYPED. STARTER_PLAN and the
+// pricing block come from lib/entitlements.ts via components/marketing/blocks.tsx,
+// which mirrors the CFO workbook. That is deliberate: the cheapest way to lose
+// money on this page is to quote a number the billing page disagrees with, and
+// hand-copied prices drift the moment the model changes.
+//
+// SHARED BLOCKS. Since the vertical pages landed (/solutions/ecommerce,
+// /solutions/service), the layout primitives and every block that quotes money
+// live in components/marketing/blocks.tsx. Three pages with three pricing
+// tables is three chances to disagree with /billing. Vertical-specific copy
+// stays in each page component; this file keeps the general-audience copy.
 //
 // Positioning follows the existing Wix site ("Your AI receptionist, ready 24/7"
 // and its three "Why LumiLink works" pillars) so the two don't contradict each
@@ -23,7 +29,20 @@
 
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
-import { OVERAGE, PLAN_TIERS, STARTER_PLAN } from "@/lib/entitlements";
+import {
+  CallLengthPolicy,
+  CapabilityGrid,
+  Check,
+  ClosingCta,
+  DEMO_CTA,
+  Eyebrow,
+  FaqList,
+  OVERAGE_ANSWER,
+  Pillars,
+  PricingGrid,
+  Section,
+} from "@/components/marketing/blocks";
+import { STARTER_PLAN } from "@/lib/entitlements";
 
 /** Shared by "/" and "/home" so the two can never say different things. */
 export const LANDING_METADATA = {
@@ -31,46 +50,6 @@ export const LANDING_METADATA = {
   description:
     "Lumilink answers every call, quotes from your price list, and books the job on your real calendar. Built for small local and service businesses.",
 };
-
-// Where both primary CTAs point. Swap to a Cal.com/Calendly URL once booking is
-// set up; kept in one place so that's a one-line change.
-const DEMO_CTA = "/signup";
-
-// ---------------------------------------------------------------------------
-// Presentational helpers
-// ---------------------------------------------------------------------------
-
-function Section({
-  id,
-  className = "",
-  children,
-}: {
-  id?: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section id={id} className={`scroll-mt-16 ${className}`}>
-      <div className="mx-auto max-w-6xl px-6">{children}</div>
-    </section>
-  );
-}
-
-function Eyebrow({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-      {children}
-    </p>
-  );
-}
-
-function Check() {
-  return (
-    <span aria-hidden className="mt-0.5 shrink-0 text-green-600">
-      ✓
-    </span>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Content, kept as data so ordering and edits are obvious
@@ -160,7 +139,7 @@ const FAQS = [
   },
   {
     q: "What happens if I go over my minutes?",
-    a: `We bill additional minutes at $${OVERAGE.perVoiceMinuteUsd.toFixed(2)} each. You can check minutes used against your allowance in the dashboard whenever you like, so you'll know before the invoice arrives.`,
+    a: OVERAGE_ANSWER,
   },
   {
     q: "What's the setup fee for?",
@@ -235,23 +214,50 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
       </Section>
 
       {/* ---------------------------------------------------------------- */}
+      {/* Pick your vertical — the two pages that do the actual selling     */}
+      {/* ---------------------------------------------------------------- */}
+      <Section className="pb-20">
+        <div className="grid gap-6 md:grid-cols-2">
+          <Link
+            href="/solutions/service"
+            className="group rounded-xl border border-gray-200 bg-white p-6 shadow-sm hover:border-gray-900"
+          >
+            <h2 className="text-lg font-semibold text-gray-900">
+              Service businesses
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-gray-600">
+              HVAC, plumbing, electrical and the trades. Lumi quotes from your
+              price list and books the job on your calendar.
+            </p>
+            <p className="mt-4 text-sm font-medium text-gray-900 group-hover:underline">
+              See how it works &rarr;
+            </p>
+          </Link>
+
+          <Link
+            href="/solutions/ecommerce"
+            className="group rounded-xl border border-gray-200 bg-white p-6 shadow-sm hover:border-gray-900"
+          >
+            <h2 className="text-lg font-semibold text-gray-900">
+              Online stores
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-gray-600">
+              Shopify and WooCommerce. Lumi answers &ldquo;where&rsquo;s my
+              order?&rdquo; from the real order, with tracking, day or night.
+            </p>
+            <p className="mt-4 text-sm font-medium text-gray-900 group-hover:underline">
+              See how it works &rarr;
+            </p>
+          </Link>
+        </div>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
       {/* Why it works — mirrors the Wix site's three pillars               */}
       {/* ---------------------------------------------------------------- */}
       <Section className="border-t border-gray-200 bg-gray-50 py-20">
         <Eyebrow>Why Lumilink works</Eyebrow>
-        <div className="mt-10 grid gap-10 md:grid-cols-3">
-          {PILLARS.map((p) => (
-            <div key={p.n}>
-              <p className="text-sm font-semibold text-gray-400">{p.n}</p>
-              <h3 className="mt-2 text-lg font-semibold text-gray-900">
-                {p.title}
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-gray-600">
-                {p.body}
-              </p>
-            </div>
-          ))}
-        </div>
+        <Pillars items={PILLARS} />
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -267,50 +273,14 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
             A conversation that ends with an appointment on your calendar.
           </p>
         </div>
-
-        <div className="mt-12 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
-          {CAPABILITIES.map((c) => (
-            <div key={c.title} className="flex gap-3">
-              <Check />
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900">
-                  {c.title}
-                </h3>
-                <p className="mt-1 text-sm leading-relaxed text-gray-600">
-                  {c.body}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
+        <CapabilityGrid items={CAPABILITIES} />
       </Section>
 
       {/* ---------------------------------------------------------------- */}
       {/* The two-minute policy — stated up front, not buried in terms      */}
       {/* ---------------------------------------------------------------- */}
-      <Section className="pb-20">
-        <div className="rounded-2xl bg-gray-900 px-8 py-12 text-white md:px-12">
-          <div className="max-w-3xl">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-              The {STARTER_PLAN.maxCallMinutes}-minute policy
-            </p>
-            <h2 className="mt-4 text-2xl font-semibold tracking-tight md:text-3xl">
-              Lumi won&rsquo;t trap your customer in a loop
-            </h2>
-            <p className="mt-4 leading-relaxed text-gray-300">
-              We cap every AI call at {STARTER_PLAN.maxCallMinutes} minutes. Near
-              the limit, Lumi stops opening new topics, finishes what it&rsquo;s
-              doing, and offers a transfer or a callback. It says goodbye rather
-              than cutting off mid-sentence.
-            </p>
-            <p className="mt-3 leading-relaxed text-gray-300">
-              We publish this because you will hit it. An AI that keeps a
-              frustrated caller on the line for nine minutes costs you more than
-              one that hands them to a person at two.
-            </p>
-          </div>
-        </div>
-      </Section>
+      <CallLengthPolicy closing="We publish this because you will hit it. An AI that keeps a frustrated caller on the line for nine minutes costs you more than one that hands them to a person at two." />
+
       {/* ---------------------------------------------------------------- */}
       {/* How it works — HIDDEN. Uncomment this block and the STEPS array   */}
       {/* above together; the nav link in components/marketing/shell.tsx    */}
@@ -341,174 +311,14 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
       </Section>
       */}
 
-      {/* ---------------------------------------------------------------- */}
-      {/* Pricing                                                          */}
-      {/* ---------------------------------------------------------------- */}
-      <Section id="pricing" className="py-20">
-        <div className="max-w-2xl">
-          <Eyebrow>Pricing</Eyebrow>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
-            What you pay, and where the limits are
-          </h2>
-          <p className="mt-3 text-gray-600">
-            Every plan has a fixed minute allowance. We&rsquo;d rather give you
-            the number than call it unlimited and add a fair-use clause.
-          </p>
-        </div>
+      <PricingGrid />
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-3">
-          {/*
-            Rendered from PLAN_TIERS so this section and /plans cannot quote
-            different numbers. Cards here are DISPLAY ONLY — every CTA goes to
-            /plans, which is where the session is read and the Stripe link gets
-            its client_reference_id. A checkout button on a page that doesn't
-            know who is clicking it is how a payment ends up unroutable.
-          */}
-          {PLAN_TIERS.map((tier) => (
-            <div
-              key={tier.label}
-              className={`flex flex-col rounded-xl bg-white p-6 shadow-sm ${
-                tier.mostPopular
-                  ? "border-2 border-gray-900"
-                  : "border border-gray-200"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {tier.label}
-                </h3>
-                {tier.mostPopular ? (
-                  <span className="shrink-0 rounded-full bg-gray-900 px-2.5 py-0.5 text-xs font-medium text-white">
-                    Most popular
-                  </span>
-                ) : null}
-              </div>
+      <FaqList items={FAQS} />
 
-              <p className="mt-4">
-                <span className="text-4xl font-semibold tracking-tight text-gray-900">
-                  ${tier.monthlyUsd}
-                </span>
-                <span className="text-sm text-gray-500">/month</span>
-              </p>
-              <p className="mt-1 text-sm text-gray-500">
-                + ${tier.setupFeeUsd} one-time setup
-              </p>
-
-              <ul className="mt-6 space-y-2">
-                {tier.highlights.map((h) => (
-                  <li key={h} className="flex gap-2 text-sm text-gray-700">
-                    <Check />
-                    {h}
-                  </li>
-                ))}
-              </ul>
-
-              <div className="mt-6 flex-1" />
-
-              {/*
-                Every tier now says "Get started" — all three are self-serve
-                since 0031 built the tier layer, so there is no tier left that
-                requires a conversation before you can buy it. Styling follows
-                mostPopular, which is the recommendation, not purchasability.
-              */}
-              <Link
-                href="/plans"
-                className={`block rounded-md px-4 py-2.5 text-center text-sm font-medium ${
-                  tier.mostPopular
-                    ? "bg-gray-900 text-white hover:bg-gray-800"
-                    : "border border-gray-300 text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                Get started
-              </Link>
-            </div>
-          ))}
-        </div>
-
-        {/* ---------------------------------------------------------------- */}
-        {/* What's not included — HIDDEN.                                    */}
-        {/*                                                                  */}
-        {/* Worth knowing what this removes: the landing page no longer       */}
-        {/* states the $0.30/min overage anywhere except the FAQ. /billing    */}
-        {/* still carries the full disclosure, and that is the page a         */}
-        {/* customer sees before checkout, so the pre-purchase disclosure     */}
-        {/* survives. If a Stripe Payment Link ever gets linked straight from */}
-        {/* here, bypassing /billing, put this block back first.              */}
-        {/* ---------------------------------------------------------------- */}
-        {/*
-        <div className="mt-8 rounded-lg border border-gray-200 bg-gray-50 p-5">
-          <h3 className="text-sm font-semibold text-gray-900">
-            What&rsquo;s not included
-          </h3>
-          <ul className="mt-2 grid gap-1.5 text-sm text-gray-600 sm:grid-cols-2">
-            <li>
-              Minutes above your allowance: $
-              {OVERAGE.perVoiceMinuteUsd.toFixed(2)} per minute
-            </li>
-            <li>
-              Platform care beyond your included hours: $
-              {OVERAGE.perCareHourUsd} per hour
-            </li>
-            <li>Additional phone number: $15 per month</li>
-            <li>Additional department or routing tree: $39 per month</li>
-          </ul>
-          <p className="mt-3 text-xs text-gray-500">
-            Minutes used are visible in your dashboard at all times. Setup fees
-            are charged once. Enterprise pricing is quoted per organisation.
-          </p>
-        </div>
-        */}
-      </Section>
-
-      {/* ---------------------------------------------------------------- */}
-      {/* FAQ                                                              */}
-      {/* ---------------------------------------------------------------- */}
-      <Section id="faq" className="border-t border-gray-200 bg-gray-50 py-20">
-        <Eyebrow>Questions</Eyebrow>
-        <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
-          What people ask before signing up
-        </h2>
-
-        <dl className="mt-10 grid gap-x-12 gap-y-8 md:grid-cols-2">
-          {FAQS.map((f) => (
-            <div key={f.q}>
-              <dt className="text-sm font-semibold text-gray-900">{f.q}</dt>
-              <dd className="mt-2 text-sm leading-relaxed text-gray-600">
-                {f.a}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </Section>
-
-      {/* ---------------------------------------------------------------- */}
-      {/* Closing CTA                                                      */}
-      {/* ---------------------------------------------------------------- */}
-      <Section className="py-20">
-        <div className="rounded-2xl border border-gray-200 bg-white px-8 py-14 text-center shadow-sm md:px-12">
-          <h2 className="text-3xl font-semibold tracking-tight text-gray-900">
-            Stop losing jobs to voicemail
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-gray-600">
-            Tell us about your business in twenty minutes. Lumi is answering your
-            phone about a week later.
-          </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link
-              href={DEMO_CTA}
-              className="rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white hover:bg-gray-800"
-            >
-              Book a discovery call
-            </Link>
-            <Link
-              href="/login"
-              className="rounded-md border border-gray-300 px-6 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Sign in
-            </Link>
-          </div>
-        </div>
-      </Section>
+      <ClosingCta
+        heading="Stop losing jobs to voicemail"
+        body="Tell us about your business in twenty minutes. Lumi is answering your phone about a week later."
+      />
     </MarketingShell>
   );
 }
