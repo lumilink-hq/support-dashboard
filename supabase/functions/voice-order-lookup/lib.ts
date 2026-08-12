@@ -112,10 +112,18 @@ export function stripHash(name: unknown): string {
 /**
  * Forms of an order number worth trying, in order of preference.
  *
- * WHY THIS EXISTS: callers say a prefix the store doesn't store. Tsunami's
- * customers read "TSU#1749" off their confirmation, but Shopify names that order
- * "#1749" — proved by orders_cache, which is keyed on the store's own canonical
- * name and contains bare digits (1491, 1699, 1749).
+ * WHY THIS EXISTS: the caller's value and the store's name can disagree in
+ * either direction, and which one is which is a per-client fact.
+ *
+ * CORRECTION (2026-08-12). This used to state that Tsunami's Shopify names
+ * orders "#1749" and that "TSU#" exists only on the confirmation email, citing
+ * bare-digit rows in orders_cache. That is wrong. A direct Admin API query
+ * (`name:1833`) returns `"name":"TSU#1833"` — the store's own name CARRIES the
+ * prefix. The bare-digit orders_cache rows are unexplained and should be
+ * treated as suspect, not as evidence: if the canonical names really are
+ * prefixed, those rows are keyed wrong, and per index.ts §4b a mis-keyed
+ * orders_cache row silently breaks both the dashboard's order panel and the
+ * post-call escalation path.
  *
  * normalizeOrderNumber("TSU#1749") yields "TSU1749" (the "#" is punctuation, the
  * letters are not), which matches nothing. So after the literal form we also try
@@ -141,11 +149,14 @@ export function orderNumberCandidates(orderNumber: string): string[] {
  * WHY THIS EXISTS AND WHY IT IS NOT JUST buildShopifySearchQuery:
  *
  * `order_number_prefix` was built for a store whose orders are NAMED with a
- * prefix ("TSU#1749"). Tsunami turned out not to be one — its orders are named
- * bare digits, and "TSU#" is only what customers read off their confirmation
- * email. With the prefix configured anyway, a caller saying a bare "1756" had
- * the prefix RE-ATTACHED and we asked Shopify for a name that does not exist,
- * so a perfectly valid order came back not-found.
+ * prefix ("TSU#1749"). Tsunami IS one — verified 2026-08-12, see
+ * orderNumberCandidates above; an earlier version of this comment claimed the
+ * opposite and it was wrong.
+ *
+ * Trying both shapes is kept regardless, because the failure it prevents is
+ * symmetric: re-attaching a prefix to a store that doesn't use one asks for a
+ * name that does not exist, and so does omitting one from a store that does.
+ * Neither costs more than a single wasted request on a miss.
  *
  * The old flow could not recover from that: orderNumberCandidates only adds a
  * second candidate when the caller's value contains LETTERS, so a bare-digit
@@ -321,6 +332,42 @@ function matchedPrefixLength(raw: string, prefix: string): number {
 }
 
 /**
+ * The store prefixes its order names and NOBODY TOLD US — pick the one order
+ * that differs from what the caller said by a leading run of letters.
+ *
+ * WHY THIS EXISTS (2026-08-12). `order_number_prefix` was set correctly on the
+ * client row, and the store really does name orders "TSU#1833", and Shopify
+ * really did return that order for `name:1833` — and the caller was still told
+ * it didn't exist. The prefix never reached this function: migration 0029
+ * rewrote get_client_config's jsonb_build_object and dropped the
+ * order_number_prefix key, so `config?.order_number_prefix` came back undefined
+ * on a correctly-configured client. With no prefix to widen by, the exact-match
+ * guard rejected the very order the store had just handed over.
+ *
+ * The lesson is not "restore the key" (that is migration 0035) — it is that a
+ * config gap should degrade into a slower lookup, never into a confidently
+ * wrong "no such order". So the prefix is now an OPTIMIZATION (it targets the
+ * query and matches first) rather than a correctness dependency.
+ *
+ * Three conditions keep this from becoming the stranger's-order bug it is
+ * guarding against:
+ *   1. the caller's value is ALL DIGITS — if they spelled out letters, they can
+ *      match exactly;
+ *   2. the leading remainder is PURELY ALPHABETIC, so "1833" never matches
+ *      "21833" or "11833" — only a real word-prefix like "TSU#";
+ *   3. EXACTLY ONE node qualifies. A store with both "A#1833" and "B#1833" is
+ *      ambiguous, and ambiguous means not-found.
+ *
+ * Suffixes are still never tolerated: orderKey("#1001-A") is "1001a", which
+ * does not END WITH "1001", so the original "1001-A" trap stays shut.
+ */
+function matchesIgnoringStorePrefix(nodeKey: string, want: string): boolean {
+  if (!/^[0-9]+$/.test(want)) return false;
+  if (nodeKey.length <= want.length || !nodeKey.endsWith(want)) return false;
+  return /^[a-z]+$/.test(nodeKey.slice(0, nodeKey.length - want.length));
+}
+
+/**
  * `name:1001` is a token match, not an exact one — it can also return "1001-A".
  * Pick the exact match if there is one; otherwise treat it as not-found rather
  * than reading a stranger's order down the phone.
@@ -351,7 +398,17 @@ export function pickExactOrder<T extends { name?: string }>(
     else wanted.add(p + want);
   }
 
-  return nodes.find((n) => wanted.has(orderKey(n.name))) ?? null;
+  const exact = nodes.find((n) => wanted.has(orderKey(n.name)));
+  if (exact) return exact;
+
+  // Nothing matched on the configured prefix — which includes the case where
+  // there ISN'T one because the config never arrived. See
+  // matchesIgnoringStorePrefix: one unambiguous alphabetic-prefixed candidate
+  // is the order; two are not.
+  const prefixed = nodes.filter((n) =>
+    matchesIgnoringStorePrefix(orderKey(n.name), want)
+  );
+  return prefixed.length === 1 ? prefixed[0] : null;
 }
 
 // -----------------------------------------------------------------------------
@@ -690,6 +747,17 @@ export function pickWooOrder(
     return candidates.some((c) => wanted.has(c));
   });
   if (exact) return exact;
+
+  // Same unconfigured-prefix fallback as the Shopify side. Woo lost its config
+  // key to the same migration (order_number_scheme, dropped by 0029), so this
+  // branch is not hypothetical here either.
+  const prefixed = list.filter((o) =>
+    [o?.number, o?.id]
+      .map(orderKey)
+      .filter(Boolean)
+      .some((c) => matchesIgnoringStorePrefix(c, want))
+  );
+  if (prefixed.length === 1) return prefixed[0];
 
   // A single result from a direct /orders/{id} fetch IS the order — Woo resolved
   // the id for us, so there is nothing to disambiguate.

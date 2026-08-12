@@ -48,6 +48,7 @@ import {
   pickShopifyCreds,
   pickWooOrder,
   shipStationOrderNumber,
+  SHOPIFY_API_VERSION,
   SHOPIFY_ORDER_QUERY,
   shopifyErrorFrom,
   shopifyGraphqlUrl,
@@ -156,6 +157,42 @@ const LOOKUP_ERROR: LookupResponse = {
   flag_reason: "lookup_error",
   message: "Couldn't reach the store. Offer a callback or transfer.",
 };
+
+/**
+ * One structured line per "no order matched".
+ *
+ * WHY THIS EXISTS: a not-found is the one outcome with several unrelated causes
+ * that are INDISTINGUISHABLE from the response — the payload says
+ * `order_not_found: true` whether the store was asked for the wrong name, asked
+ * with a token that can't see the order, or asked on the wrong store entirely
+ * (the Vault->env credential fallback below is silent by design). Reconstructing
+ * which one it was from a call transcript is guesswork, so every fact needed to
+ * tell them apart is written here instead:
+ *
+ *   • `attempts`  — what we ASKED for and what came back. Empty `returned`
+ *     everywhere means the store genuinely has no such name; non-empty
+ *     `returned` with no hit means the exact-match guard rejected near-misses,
+ *     and `names` shows what it rejected.
+ *   • `*_source`  — vault | client_config | env. An `env` here on a live tenant
+ *     is the tell that we queried whatever store the fallback env vars name,
+ *     not the client's.
+ *   • `shop_host` / `api_version` — which store, which API contract.
+ *
+ * Grep with: `supabase functions logs voice-order-lookup | grep order_not_found`
+ * No secrets: tokens are never included, only WHERE they came from.
+ */
+function logNotFound(fields: Record<string, unknown>) {
+  console.log(JSON.stringify({ event: "order_not_found", ...fields }));
+}
+
+/** Host only — never log a base URL that might carry credentials in it. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return String(url ?? "").replace(/^https?:\/\//, "").split("/")[0];
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -400,6 +437,19 @@ Deno.serve(async (req) => {
         shop.base_url ?? storeBaseUrl ?? Deno.env.get("SHOPIFY_STORE_URL") ?? "",
       );
 
+      // WHICH store answered, and on whose credentials. The env fallback above
+      // is deliberate (single-pilot crunch mode) but SILENT: a client whose
+      // Vault blob is missing or mis-keyed doesn't fail loudly, it quietly gets
+      // whatever store SHOPIFY_STORE_URL names — and every one of its orders
+      // then "doesn't exist" while sitting in the real store. Nothing in the
+      // response reveals this, so it goes in the not-found log.
+      const tokenSource = shop.access_token ? "vault" : "env";
+      const baseSource = shop.base_url
+        ? "vault"
+        : storeBaseUrl
+          ? "client_config"
+          : "env";
+
       if (!token || !shopBase) {
         return json({
           found: false,
@@ -429,6 +479,11 @@ Deno.serve(async (req) => {
       ];
 
       let node: Record<string, any> | null = null;
+      // One entry per query actually sent. This is what separates "the store
+      // has no such order" from "the store returned candidates and the
+      // exact-match guard rejected them" — two very different bugs that look
+      // identical from the outside.
+      const attempts: Record<string, unknown>[] = [];
       for (const q of queries) {
         let shopRes: Response;
         try {
@@ -475,6 +530,14 @@ Deno.serve(async (req) => {
         // happened to send — pickExactOrder already accepts the caller's digits
         // with or without the store's prefix, in either direction.
         const hit = pickExactOrder(nodes, orderNumber, orderPrefix);
+        attempts.push({
+          q,
+          returned: nodes.length,
+          // The names the store DID return. If the real order is in here, the
+          // bug is in pickExactOrder/the prefix, not in the store.
+          names: nodes.map((n: any) => n?.name).filter(Boolean),
+          hit: Boolean(hit),
+        });
         if (hit) {
           node = hit;
           break;
@@ -482,11 +545,30 @@ Deno.serve(async (req) => {
       }
 
       if (!node) {
+        logNotFound({
+          platform: "shopify",
+          client_id: clientId,
+          call_sid: callSid,
+          // What the model heard, after normalizeOrderNumber.
+          heard: orderNumber,
+          prefix: orderPrefix,
+          shop_host: hostOf(shopBase),
+          token_source: tokenSource,
+          base_source: baseSource,
+          api_version: SHOPIFY_API_VERSION,
+          attempts,
+        });
         return json(withWrap({
           found: false,
           order_not_found: true,
+          // NB: this string is handed to the LLM and is therefore sayable. The
+          // previous version explained the `read_all_orders` 60-day scope
+          // limit — an internal API detail the agent could read out to a
+          // customer, and a cause it has no way to confirm. That caveat now
+          // lives in the log line above, where it can be checked instead of
+          // guessed.
           message:
-            "No order matched that number. (Only orders from the last 60 days are visible unless read_all_orders is granted.)",
+            "No order matched that number. Ask the caller to re-read it digit by digit; if it's the same number, don't keep asking — take their details for a callback.",
         }));
       }
 
@@ -509,6 +591,9 @@ Deno.serve(async (req) => {
       const wooKey = woo.consumer_key ?? Deno.env.get("WOO_CONSUMER_KEY");
       const wooSecret = woo.consumer_secret ?? Deno.env.get("WOO_CONSUMER_SECRET");
       const wooBase = stripTrailingSlash(woo.base_url ?? storeBaseUrl ?? "");
+      // Same silent-fallback tell as the Shopify branch above.
+      const wooKeySource = woo.consumer_key ? "vault" : "env";
+      const wooBaseSource = woo.base_url ? "vault" : "client_config";
       const shipKey = ship.api_key ?? Deno.env.get("SHIPSTATION_API_KEY");
       const shipSecret = ship.api_secret ?? Deno.env.get("SHIPSTATION_API_SECRET");
 
@@ -524,6 +609,7 @@ Deno.serve(async (req) => {
       // customer reading "TSU#1749" off a confirmation when the store's own
       // number is "1749".
       let o: Record<string, any> | null = null;
+      const attempts: Record<string, unknown>[] = [];
       for (const candidate of orderNumberCandidates(orderNumber)) {
         const { url, returnsList } = wooOrderUrl(wooBase, candidate, orderScheme);
 
@@ -539,7 +625,10 @@ Deno.serve(async (req) => {
 
         // 404 means "no such order" only on the /orders/{id} form. The list
         // forms answer 200 with [].
-        if (wooRes.status === 404) continue;
+        if (wooRes.status === 404) {
+          attempts.push({ candidate, scheme: orderScheme, status: 404, returned: 0 });
+          continue;
+        }
         if (!wooRes.ok) {
           console.error("woo http error", wooRes.status);
           return json(LOOKUP_ERROR);
@@ -550,6 +639,22 @@ Deno.serve(async (req) => {
         // this insists on an exact hit rather than reading out a stranger's
         // order — the same guard as pickExactOrder on the Shopify side.
         const hit = pickWooOrder(payload, candidate, orderPrefix);
+        const rows: Record<string, any>[] = Array.isArray(payload)
+          ? payload
+          : payload && typeof payload === "object"
+            ? [payload]
+            : [];
+        attempts.push({
+          candidate,
+          scheme: orderScheme,
+          status: wooRes.status,
+          returned: rows.length,
+          // Customer-facing number when the store has one, else the post id.
+          numbers: rows
+            .map((r) => String(r?.number ?? r?.id ?? ""))
+            .filter(Boolean),
+          hit: Boolean(hit),
+        });
         if (hit) {
           o = hit;
           break;
@@ -558,10 +663,25 @@ Deno.serve(async (req) => {
       }
 
       if (!o) {
+        logNotFound({
+          platform: "woocommerce",
+          client_id: clientId,
+          call_sid: callSid,
+          heard: orderNumber,
+          prefix: orderPrefix,
+          // The scheme is the usual Woo culprit: `id` looks up the POST ID,
+          // which is not the number the customer reads off their email.
+          scheme: orderScheme,
+          shop_host: hostOf(wooBase),
+          key_source: wooKeySource,
+          base_source: wooBaseSource,
+          attempts,
+        });
         return json(withWrap({
           found: false,
           order_not_found: true,
-          message: "No order matched that number.",
+          message:
+            "No order matched that number. Ask the caller to re-read it digit by digit; if it's the same number, don't keep asking — take their details for a callback.",
         }));
       }
 
