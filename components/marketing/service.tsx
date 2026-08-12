@@ -138,12 +138,20 @@ export function ServiceSolution() {
               >
                 Book a discovery call
               </Link>
-              <a
-                href="/plans"
+              {/*
+                Matches /solutions/ecommerce. This slot used to be "See pricing",
+                which is the weaker ask: pricing is in the nav, in the anchor
+                below, and on /plans, whereas the demo is the only thing on the
+                page that lets someone HEAR the product before talking to us.
+                It was only "See pricing" because /demo/hvac was parked at the
+                time — it isn't any more.
+              */}
+              <Link
+                href="/demo/hvac"
                 className="rounded-md border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
-                See pricing
-              </a>
+                Try the live demo
+              </Link>
             </div>
 
             {DEMO_LINE.tel ? (
