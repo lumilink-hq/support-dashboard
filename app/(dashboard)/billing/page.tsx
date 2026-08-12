@@ -1,12 +1,12 @@
+import Link from "next/link";
 import { formatDateTime } from "@/lib/format";
 import {
   FEATURES,
   OVERAGE,
+  PLAN_TIERS,
   STARTER_PLAN,
-  checkoutUrl,
   entitlementsEnforced,
   featureState,
-  getCurrentClientId,
   getEntitlements,
   getVoiceUsage,
   overageEstimate,
@@ -82,13 +82,9 @@ const PILL_LABEL: Record<FeatureState, string> = {
 };
 
 export default async function BillingPage() {
-  const [ent, usage, clientId] = await Promise.all([
-    getEntitlements(),
-    getVoiceUsage(),
-    // Stamped onto the checkout URL so the billing webhook can route the grant
-    // back to this tenant instead of parking it for a manual fix.
-    getCurrentClientId(),
-  ]);
+  // client_reference_id is stamped on /plans now, where the tier is chosen, so
+  // this page no longer needs the tenant id to build a checkout URL.
+  const [ent, usage] = await Promise.all([getEntitlements(), getVoiceUsage()]);
 
   return (
     <div className="max-w-4xl">
@@ -102,9 +98,25 @@ export default async function BillingPage() {
         {FEATURES.map((f) => {
           const row = ent[f.key];
           const state = featureState(row);
-          // A feature that isn't sold separately never shows a checkout button,
-          // even if a URL happens to be configured for it.
-          const url = f.price === null ? null : checkoutUrl(f.key, clientId);
+          // A feature that isn't sold separately never shows a checkout button.
+          const sellable = f.price !== null;
+
+          // WHY THIS NO LONGER LINKS STRAIGHT TO STRIPE.
+          //
+          // This button used to be checkoutUrl('voice', clientId) — one URL,
+          // pointing at the Starter Payment Link, because Starter was the only
+          // tier anyone could buy. Now that Growth and Scale are self-serve,
+          // there are three links and this card has no way to ask which one the
+          // customer wants. Keeping the direct link would mean a customer who
+          // came here for Scale is charged $179 and provisioned 100 minutes,
+          // with a correct-looking receipt.
+          //
+          // /plans is where the choice is made, and it stamps
+          // client_reference_id on whichever tier they pick — so routing
+          // through it loses nothing. The pre-flight in docs/STRIPE-GO-LIVE.md
+          // §5 ("copy the link address of the Unlock button") now applies to
+          // the buttons on /plans instead.
+          const cheapest = Math.min(...PLAN_TIERS.map((t) => t.monthlyUsd));
 
           return (
             <div
@@ -172,7 +184,7 @@ export default async function BillingPage() {
                     it unlocks automatically, usually within a few minutes.
                   </p>
                 </div>
-              ) : f.price === null ? (
+              ) : !sellable ? (
                 <div className="border-t border-gray-100 pt-3">
                   <p className="text-sm font-medium text-gray-900">
                     Included with your plan
@@ -184,31 +196,21 @@ export default async function BillingPage() {
                 </div>
               ) : (
                 <div className="border-t border-gray-100 pt-3">
-                  <p className="text-sm font-medium text-gray-900">{f.price}</p>
-                  {f.setupFee ? (
-                    <p className="text-xs text-gray-500">{f.setupFee}</p>
-                  ) : null}
-                  {url ? (
-                    <a
-                      href={url}
-                      className="mt-3 block w-full rounded-md bg-gray-900 px-4 py-2 text-center text-sm font-medium text-white hover:bg-gray-800"
-                    >
-                      {state === "canceled" ? "Reactivate" : "Unlock this plan"}
-                    </a>
-                  ) : (
-                    <>
-                      <button
-                        disabled
-                        className="mt-3 w-full cursor-not-allowed rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-500"
-                      >
-                        Checkout not connected yet
-                      </button>
-                      <p className="mt-2 text-xs text-gray-400">
-                        Contact us to enable this plan while checkout is being
-                        set up.
-                      </p>
-                    </>
-                  )}
+                  <p className="text-sm font-medium text-gray-900">
+                    From ${cheapest}/mo
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {PLAN_TIERS.length} plans, from{" "}
+                    {PLAN_TIERS[0].includedMinutes} to{" "}
+                    {PLAN_TIERS[PLAN_TIERS.length - 1].includedMinutes} minutes
+                    a month
+                  </p>
+                  <Link
+                    href="/plans"
+                    className="mt-3 block w-full rounded-md bg-gray-900 px-4 py-2 text-center text-sm font-medium text-white hover:bg-gray-800"
+                  >
+                    {state === "canceled" ? "Reactivate a plan" : "Choose a plan"}
+                  </Link>
                 </div>
               )}
             </div>

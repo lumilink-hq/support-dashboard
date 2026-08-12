@@ -66,6 +66,63 @@ export default async function SignupPage({
             />
           </div>
 
+          {/*
+            THE ARCHETYPE. Asked at signup rather than in the wizard, because it
+            decides which wizard the client sees — an HVAC company must never be
+            shown the store-connection step, and a shop must never be asked for
+            call-out fees.
+
+            Radios, not a select: two options, and the difference between them
+            is worth a sentence each. A dropdown hides that explanation behind a
+            click and gets picked wrong.
+          */}
+          <fieldset>
+            <legend className="block text-sm font-medium text-gray-700">
+              What does your business do?
+            </legend>
+            <div className="mt-2 space-y-2">
+              <label className="flex cursor-pointer gap-3 rounded-md border border-gray-300 p-3 hover:bg-gray-50 has-[:checked]:border-gray-900 has-[:checked]:bg-gray-50">
+                <input
+                  type="radio"
+                  name="business_type"
+                  value="service"
+                  defaultChecked
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-900">
+                    We book appointments
+                  </span>
+                  <span className="block text-xs text-gray-500">
+                    HVAC, plumbing, electrical, salons, clinics. Callers want to
+                    book a job or get a price.
+                  </span>
+                </span>
+              </label>
+
+              <label className="flex cursor-pointer gap-3 rounded-md border border-gray-300 p-3 hover:bg-gray-50 has-[:checked]:border-gray-900 has-[:checked]:bg-gray-50">
+                <input
+                  type="radio"
+                  name="business_type"
+                  value="ecommerce"
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-900">
+                    We sell online
+                  </span>
+                  <span className="block text-xs text-gray-500">
+                    A store with orders to look up. Callers ask where their
+                    order is, or about a product.
+                  </span>
+                </span>
+              </label>
+            </div>
+            <p className="mt-1 text-xs text-gray-400">
+              You can change this later.
+            </p>
+          </fieldset>
+
           <div>
             <label
               htmlFor="full_name"

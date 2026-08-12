@@ -24,16 +24,44 @@ export type FeatureState = "locked" | "setup" | "active" | "past_due" | "cancele
 // (as of 2026-07-29). The workbook is the source of truth: if these constants
 // and the workbook disagree, the workbook wins and this file is the bug.
 //
-// Only Starter is self-serve today. Growth ($279 + $499 / 250 min) and Scale
-// ($449 + $799 / 600 min) are sales-assisted: close manually, grant the
-// entitlement, set the client's voice cap by hand. The tier schema is
-// deliberately deferred — see docs/landing-page-plan.md §5.
+// ALL THREE TIERS ARE SELF-SERVE as of 0031. Growth ($279 + $499 / 250 min) and
+// Scale ($449 + $799 / 600 min) used to be sales-assisted, because the price map
+// was feature-level: every plan granted the same 'voice' entitlement and
+// provisioning applied Starter's 100 minutes whichever tier was bought. Selling
+// Scale self-serve then meant taking $449 for 600 minutes and delivering 100.
+//
+// 0031 built the tier layer — plan_tiers holds the allowance, the price map
+// names the tier, the entitlement records it, provisioning applies it. So the
+// links can be published.
+//
+// THESE NUMBERS ARE MIRRORED IN THE DATABASE (plan_tiers, migration 0031) and
+// they MUST agree. This file is DISPLAY truth — what the pricing page quotes.
+// plan_tiers is ENFORCEMENT truth — what a paying customer is actually given.
+// When they diverge, a customer is quoted one allowance and provisioned another,
+// and nothing errors. 0031 §7b is the query that checks it.
 // -----------------------------------------------------------------------------
+
+/**
+ * SETUP FEE CHANGED 2026-08-11: $299/$499/$799 → a flat **$49.99** on all three
+ * tiers. Workbook updated first; this file follows it.
+ *
+ * The old figures are recorded here on purpose. They appear in earlier docs, in
+ * Stripe's existing setup prices, and in the CFO model's onboarding-economics
+ * cell, so anyone finding a $299 in this repo needs to know it is history
+ * rather than a number to restore.
+ *
+ * NOTHING SYNCS THIS TO STRIPE. Stripe prices are immutable — an amount cannot
+ * be edited — so the change requires NEW setup prices and a swap on each
+ * Payment Link. Changing this constant alone updates what the pricing page
+ * SAYS while the invoice keeps charging the old fee. See
+ * docs/STRIPE-TIERS-RUNBOOK.md §2a.
+ */
+export const SETUP_FEE_USD = 49.99;
 
 export const STARTER_PLAN = {
   label: "Starter",
   monthlyUsd: 179,
-  setupFeeUsd: 299,
+  setupFeeUsd: SETUP_FEE_USD,
   includedMinutes: 100,
   /** Policy, all tiers: soft warning → confirm → transfer/ticket/hang-up. */
   maxCallMinutes: 2,
@@ -48,26 +76,40 @@ export const OVERAGE = {
 } as const;
 
 /**
+ * A tier's stable machine key. Matches plan_tiers.tier in the database and the
+ * `plan_tier` metadata value on the Stripe Payment Link. Changing one of these
+ * strings without changing all three breaks the chain silently.
+ */
+export type PlanTierKey = "starter" | "growth" | "scale";
+
+/**
  * The public plan ladder, shared by the landing page and /plans so the two can
  * never quote different numbers.
  *
- * `selfServe` marks the only tier with a Payment Link. Growth and Scale are
- * sales-assisted until the tier layer exists: billing_price_map is feature-level,
- * so buying Scale today would grant the same 'voice' entitlement as Starter and
- * provisioning would apply Starter's 100-minute allowance. Publishing a link for
- * them before that is fixed sells 600 minutes and delivers 100.
+ * `selfServe` marks a tier that has a Payment Link and can be bought without
+ * talking to anyone. All three are self-serve since 0031 built the tier layer.
+ *
+ * `mostPopular` is PRESENTATION ONLY and is deliberately a separate flag. It
+ * used to be inferred from `selfServe` — the badge and the dark border were
+ * rendered by `tier.selfServe ? ... : ...` — which was fine when exactly one
+ * tier was purchasable and meaningless the moment all three were. Conflating
+ * "you can buy this" with "this is the one we recommend" would have put the
+ * badge on all three cards.
  */
 export type PlanTier = {
+  key: PlanTierKey;
   label: string;
   monthlyUsd: number;
   setupFeeUsd: number;
   includedMinutes: number;
   highlights: string[];
   selfServe: boolean;
+  mostPopular: boolean;
 };
 
 export const PLAN_TIERS: PlanTier[] = [
   {
+    key: "starter",
     label: STARTER_PLAN.label,
     monthlyUsd: STARTER_PLAN.monthlyUsd,
     setupFeeUsd: STARTER_PLAN.setupFeeUsd,
@@ -81,11 +123,13 @@ export const PLAN_TIERS: PlanTier[] = [
       `${STARTER_PLAN.careHoursPerMonth} hours of platform care per month`,
     ],
     selfServe: true,
+    mostPopular: false,
   },
   {
+    key: "growth",
     label: "Growth",
     monthlyUsd: 279,
-    setupFeeUsd: 499,
+    setupFeeUsd: SETUP_FEE_USD,
     includedMinutes: 250,
     highlights: [
       "250 included minutes per month",
@@ -93,12 +137,14 @@ export const PLAN_TIERS: PlanTier[] = [
       "4 hours of platform care per month",
       "Everything in Starter",
     ],
-    selfServe: false,
+    selfServe: true,
+    mostPopular: true,
   },
   {
+    key: "scale",
     label: "Scale",
     monthlyUsd: 449,
-    setupFeeUsd: 799,
+    setupFeeUsd: SETUP_FEE_USD,
     includedMinutes: 600,
     highlights: [
       "600 included minutes per month",
@@ -106,7 +152,8 @@ export const PLAN_TIERS: PlanTier[] = [
       "Advanced routing",
       "8 hours of platform care per month",
     ],
-    selfServe: false,
+    selfServe: true,
+    mostPopular: false,
   },
 ];
 
@@ -226,9 +273,49 @@ export function checkoutUrl(
   clientId?: string | null,
 ): string | null {
   const v = process.env[`CHECKOUT_URL_${feature.toUpperCase()}`];
-  const base = v && v.trim() ? v.trim() : null;
-  if (!base || !clientId) return base;
+  return stampClientRef(v && v.trim() ? v.trim() : null, clientId);
+}
 
+/**
+ * Hosted-checkout URL for a specific PLAN TIER.
+ *
+ *   CHECKOUT_URL_VOICE_STARTER
+ *   CHECKOUT_URL_VOICE_GROWTH
+ *   CHECKOUT_URL_VOICE_SCALE
+ *
+ * One Payment Link per tier, because a Payment Link is bound to its prices: the
+ * $279 Growth price and the $499 Growth setup fee are line items ON the link,
+ * not parameters to it. There is no way to point one link at three plans.
+ *
+ * FALLS BACK to CHECKOUT_URL_VOICE for Starter only. That variable is the one
+ * already set in Railway and .env.local and already carries the live Starter
+ * link; without this fallback, deploying this change would blank the Starter
+ * button on /billing and /plans until someone renamed an env var — turning a
+ * copy change into an outage on the only tier currently selling. Growth and
+ * Scale have no such history, so they get no fallback: an unset variable
+ * renders "Checkout not connected yet" rather than silently sending a Growth
+ * buyer to the Starter link and charging them $179 for 250 minutes.
+ */
+export function tierCheckoutUrl(
+  tier: PlanTierKey,
+  clientId?: string | null,
+): string | null {
+  const specific = process.env[`CHECKOUT_URL_VOICE_${tier.toUpperCase()}`];
+  const legacy = tier === "starter" ? process.env.CHECKOUT_URL_VOICE : undefined;
+  const raw = specific?.trim() || legacy?.trim() || null;
+  return stampClientRef(raw, clientId);
+}
+
+/**
+ * Append Stripe's `client_reference_id` so the webhook can route the grant to
+ * the right tenant. A bare Payment Link carries no identity: without this the
+ * purchase arrives unroutable and parks as 'unmapped' awaiting a manual grant.
+ */
+function stampClientRef(
+  base: string | null,
+  clientId?: string | null,
+): string | null {
+  if (!base || !clientId) return base;
   try {
     const url = new URL(base);
     url.searchParams.set("client_reference_id", clientId);

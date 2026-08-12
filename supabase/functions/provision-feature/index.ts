@@ -64,11 +64,13 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_SECRET, {
 
 const MAX_ATTEMPTS = 5;
 
-// Entry-tier allowance from the CFO workbook v2.0: Starter = 100 min/mo.
-// Provisioning only knows the FEATURE ('voice'), not the tier — tiers above
-// Starter are granted manually at launch — so it applies the entry allowance and
-// set_plan_voice_caps (0025) refuses to overwrite a higher cap an operator
-// already set.
+// Fallback allowance for a grant with NO TIER — see applyPlanCaps. Entry tier
+// from the CFO workbook v2.0: Starter = 100 min/mo.
+//
+// This used to be the ONLY allowance provisioning could apply, because the price
+// map was feature-level and nothing here could tell a Scale purchase from a
+// Starter one. 0031 added the tier layer; this constant now covers only the
+// manual/trial grants that never went through checkout.
 const STARTER_INCLUDED_MINUTES = Number(
   Deno.env.get("STARTER_INCLUDED_MINUTES") ?? 100,
 );
@@ -242,28 +244,80 @@ function readAreaCode(client: Record<string, any>): string {
   return String(fromCfg ?? DEFAULT_AREA_CODE ?? "").replace(/\D/g, "").slice(0, 3);
 }
 
+// Which plan this client actually bought, as recorded on the entitlement by
+// apply_billing_event (0031). Null for manual/trial grants, which never carried
+// a Stripe price and so have no tier to read.
+async function readPlanTier(
+  clientId: string,
+  feature: Feature,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("entitlements")
+    .select("plan_tier")
+    .eq("client_id", clientId)
+    .eq("feature", feature)
+    .maybeSingle();
+
+  // A failed read must NOT silently become "no tier" — that would route a paid
+  // Scale customer down the entry-allowance fallback, which is the exact bug
+  // 0031 exists to end. Retrying is cheap; guessing is not.
+  if (error) throw new TransientError(`could not read plan_tier: ${error.message}`);
+  return (data?.plan_tier as string) ?? null;
+}
+
 // Pin the plan's minute allowance on the client BEFORE the line can take calls.
 // Skipping this leaves the client on the platform default, which is not what
 // they bought — a $179 / 100-minute client would run against whatever the
 // default happens to be, at real ElevenLabs + Twilio cost per minute.
 //
+// TWO PATHS, and the split matters:
+//
+//   tier known (a checkout purchase) -> set_plan_tier_caps. The allowance comes
+//     from plan_tiers, so Growth gets 250 and Scale gets 600. Raise-only, so an
+//     operator's deliberate top-up survives re-provisioning and a payer can
+//     never sit below what they bought. Before 0031 this branch did not exist
+//     and every purchase, at every price, was provisioned with 100 minutes.
+//
+//   tier null (manual / trial grant) -> set_plan_voice_caps at the entry
+//     allowance, exactly as before. Operators grant these by hand and set the
+//     cap themselves; parking them for a missing tier would break a workflow
+//     that is working fine.
+//
 // Runs in mock mode too: it's a local DB write, and mock only suppresses
 // EXTERNAL calls. Getting the cap right is exactly what we want to exercise.
-async function applyPlanCaps(clientId: string): Promise<StepResult> {
-  const { data, error } = await supabase.rpc("set_plan_voice_caps", {
-    p_client_id: clientId,
-    p_monthly_minutes: STARTER_INCLUDED_MINUTES,
-    p_max_call_secs: MAX_CALL_SECS,
-    // Never clobber a manually-granted Growth/Scale allowance.
-    p_overwrite: false,
-  });
+async function applyPlanCaps(
+  clientId: string,
+  planTier: string | null,
+): Promise<StepResult> {
+  const { data, error } = planTier
+    ? await supabase.rpc("set_plan_tier_caps", {
+        p_client_id: clientId,
+        p_plan_tier: planTier,
+        p_max_call_secs: MAX_CALL_SECS,
+        // Raise-only. Never knocks a higher manual grant back down.
+        p_overwrite: false,
+      })
+    : await supabase.rpc("set_plan_voice_caps", {
+        p_client_id: clientId,
+        p_monthly_minutes: STARTER_INCLUDED_MINUTES,
+        p_max_call_secs: MAX_CALL_SECS,
+        p_overwrite: false,
+      });
 
   if (error) {
     // Missing RPC / permission problems won't fix themselves on retry.
-    throw new NeedsHumanError(`set_plan_voice_caps failed: ${error.message}`);
+    const fn = planTier ? "set_plan_tier_caps" : "set_plan_voice_caps";
+    throw new NeedsHumanError(`${fn} failed: ${error.message}`);
   }
   if (data && data.ok === false) {
-    return needsHuman(`could not set voice caps: ${data.error ?? "unknown error"}`);
+    // An unknown tier lands here rather than falling back to 100 minutes. The
+    // customer waits on "setting up…" instead of quietly receiving a fraction
+    // of their allowance — a visible failure beats an invisible one when money
+    // has already changed hands.
+    return needsHuman(
+      `could not set voice caps${planTier ? ` for tier '${planTier}'` : ""}: ` +
+        `${data.error ?? "unknown error"}`,
+    );
   }
   return { ok: true };
 }
@@ -277,7 +331,8 @@ async function provisionVoice(client: Record<string, any>): Promise<StepResult> 
 
   // 0) Cap first. If this fails we stop before a live number exists, rather
   //    than after — an uncapped line that can answer is the expensive failure.
-  const capped = await applyPlanCaps(client.id);
+  const planTier = await readPlanTier(client.id, "voice");
+  const capped = await applyPlanCaps(client.id, planTier);
   if (!capped.ok) return capped;
 
   // 1) Ensure a phone number.

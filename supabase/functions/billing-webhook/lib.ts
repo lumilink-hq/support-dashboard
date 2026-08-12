@@ -36,6 +36,28 @@ export interface CanonicalEvent {
    * to be searched against all of them, not just the first.
    */
   externalPriceIds?: string[];
+  /**
+   * WHICH PLAN, from the Payment Link's `plan_tier` metadata.
+   *
+   * THIS IS LOAD-BEARING, not a convenience, and the reason is the same one
+   * that makes `feature` metadata mandatory (docs/STRIPE-GO-LIVE.md §1).
+   *
+   * Only ONE event can create a grant: `checkout.session.completed`, because it
+   * is the only one carrying `client_reference_id`. And it carries NO PRICE —
+   * so on the single event where the tier has to be known, the price map has
+   * nothing to match against. Resolving the tier from the price map alone means
+   * every self-serve purchase creates its entitlement with a null tier, and
+   * provisioning — which is kicked by that very event — reads null and applies
+   * the entry allowance of 100 minutes.
+   *
+   * A Growth customer would be charged $279 and given Starter's minutes. That
+   * is precisely the bug 0031 set out to fix, arriving one layer further in.
+   *
+   * The price map remains the fallback for renewals and upgrades, where the
+   * invoice does carry prices and is the more trustworthy source (it cannot be
+   * forgotten on a link someone rebuilds later).
+   */
+  planTier?: string | null;
   subscriptionRef?: string | null;
   currentPeriodEnd?: string | null; // ISO
   /**
@@ -280,6 +302,21 @@ function asFeature(v: unknown): Feature | null {
 }
 
 /**
+ * A plan_tier from metadata, normalised. Deliberately NOT validated against a
+ * fixed list here: the tiers live in the `plan_tiers` table so that adding one
+ * is an INSERT, and hardcoding the set in the adapter would put that decision
+ * back in code. apply_billing_event checks the value against plan_tiers before
+ * storing it and drops anything unrecognised, so a typo in Stripe metadata
+ * degrades to "no tier" rather than a foreign-key violation that would abort
+ * the transaction — and take the billing_events audit row down with it.
+ */
+function asPlanTier(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim().toLowerCase();
+  return s === "" ? null : s;
+}
+
+/**
  * Metadata can sit in several places depending on the object. A Payment Link
  * copies its metadata onto the subscription; invoices carry the subscription's
  * copy under `subscription_details`. Merge them, most specific last.
@@ -396,6 +433,7 @@ export function parseStripeEvent(rawBody: string): CanonicalEvent | null {
     livemode,
     clientId: firstString(meta.client_id, obj?.client_reference_id),
     feature: asFeature(meta.feature),
+    planTier: asPlanTier(meta.plan_tier),
     externalPriceId: priceIds[0] ?? null,
     externalPriceIds: priceIds,
     subscriptionRef: extractSubscriptionRef(obj),

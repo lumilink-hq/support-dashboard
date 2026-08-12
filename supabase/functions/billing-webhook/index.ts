@@ -202,11 +202,7 @@ function pickProcessor(url: URL, headers: Headers): string {
 async function resolveFeature(ev: CanonicalEvent, processor: string): Promise<Feature | null> {
   if (ev.feature) return ev.feature;
 
-  const ids = ev.externalPriceIds?.length
-    ? ev.externalPriceIds
-    : ev.externalPriceId
-      ? [ev.externalPriceId]
-      : [];
+  const ids = priceIdsOf(ev);
   if (ids.length === 0) return null;
 
   const { data } = await supabase
@@ -217,6 +213,111 @@ async function resolveFeature(ev: CanonicalEvent, processor: string): Promise<Fe
     .eq("is_active", true)
     .limit(1);
   return (data?.[0]?.feature as Feature) ?? null;
+}
+
+/** Every price id the event offered, first-populated wins. */
+function priceIdsOf(ev: CanonicalEvent): string[] {
+  return ev.externalPriceIds?.length
+    ? ev.externalPriceIds
+    : ev.externalPriceId
+      ? [ev.externalPriceId]
+      : [];
+}
+
+// WHICH PLAN they bought, not just which feature.
+//
+// This is the whole point of 0031. billing_price_map used to answer only
+// "voice", so provision-feature had no way to tell a $449 Scale purchase from a
+// $179 Starter one and applied the entry allowance of 100 minutes to both. A
+// Scale customer got a sixth of the minutes they paid for, silently — no error,
+// no log, HTTP 200 all the way down.
+//
+// TWO FILTERS, both load-bearing:
+//
+//   kind = 'plan'   Add-on prices (extra number, extra department) will live in
+//                   this same table and will also map to feature 'voice'. They
+//                   are billed on the SAME subscription, so their ids arrive on
+//                   the same event as the plan's. Without this filter an add-on
+//                   row could be the one that matches and "which tier?" would be
+//                   answered by a $15 line item.
+//
+//   highest wins    A tie is possible in one real case: a subscription carrying
+//                   two plan prices, which happens mid-upgrade when Stripe
+//                   prorates the old and the new price onto one invoice. Taking
+//                   the HIGHER allowance is the deliberate choice — the customer
+//                   is moving to the tier they just paid for, and 0031's caps
+//                   are raise-only anyway, so resolving to the lower one would
+//                   do nothing and leave them under-provisioned.
+//
+// The max is computed HERE rather than with .order().limit(1). PostgREST's
+// `order` on an embedded resource sorts the EMBEDDED rows, not the parent rows,
+// so ordering by plan_tiers.included_minutes and taking the first row would have
+// returned an arbitrary price-map row while looking entirely correct. The result
+// set is at most a handful of rows; sorting it in memory removes the trap.
+//
+// Returns null when nothing matches. Null is a real answer: manual grants and
+// cancellations legitimately carry no tier, and apply_billing_event's coalesce
+// keeps whatever tier is already on the entitlement rather than erasing it.
+async function resolvePlanTier(
+  ev: CanonicalEvent,
+  processor: string,
+): Promise<string | null> {
+  // METADATA FIRST, and this ordering is the whole reason self-serve Growth
+  // works at all.
+  //
+  // Only `checkout.session.completed` can create a grant — it is the one event
+  // carrying `client_reference_id`. It also carries NO PRICE. So on the single
+  // event where the tier must be known, there is nothing for the price map to
+  // match, and that same event kicks provisioning. Price-map-only resolution
+  // therefore means: entitlement created with a null tier, provisioning reads
+  // null, applies 100 minutes, and a $279 customer silently receives Starter's
+  // allowance. The link's `plan_tier` metadata is the only source available at
+  // that moment.
+  //
+  // The price map still answers for renewals and upgrades, where the invoice
+  // does carry prices — and there it is the better source, because it lives
+  // beside the price rather than on a link someone might rebuild.
+  if (ev.planTier) return ev.planTier;
+
+  const ids = priceIdsOf(ev);
+  if (ids.length === 0) return null;
+
+  const { data, error } = await supabase
+    .from("billing_price_map")
+    .select("plan_tier, plan_tiers!inner(included_minutes)")
+    .eq("processor", processor)
+    .eq("kind", "plan")
+    .in("external_price_id", ids)
+    .eq("is_active", true);
+
+  if (error || !data?.length) return null;
+
+  type Row = { plan_tier: string | null; plan_tiers?: { included_minutes?: number } | null };
+  let best: Row | null = null;
+  for (const row of data as unknown as Row[]) {
+    if (!row.plan_tier) continue;
+    const mins = row.plan_tiers?.included_minutes ?? -1;
+    const bestMins = best?.plan_tiers?.included_minutes ?? -1;
+    if (!best || mins > bestMins) best = row;
+  }
+  return best?.plan_tier ?? null;
+}
+
+// The tier for a subscription we already track. Needed for the same reason
+// resolveBySubscription exists: a renewal or a recovery may arrive with prices
+// we can map, but a cancellation carries none at all. Reading the tier back off
+// the entitlement keeps it stable across those events instead of letting it
+// flicker to null and back.
+async function tierBySubscription(
+  subscriptionRef: string | null | undefined,
+): Promise<string | null> {
+  if (!subscriptionRef) return null;
+  const { data } = await supabase
+    .from("entitlements")
+    .select("plan_tier")
+    .eq("external_subscription_ref", subscriptionRef)
+    .maybeSingle();
+  return (data?.plan_tier as string) ?? null;
 }
 
 // Fall back to the subscription we ALREADY track when an event doesn't name a
@@ -351,11 +452,19 @@ Deno.serve(async (req) => {
   //    explicit client_id on the payload must always beat an inferred one.
   let clientId = ev.clientId ?? null;
   let feature = await resolveFeature(ev, processor);
+  let planTier = await resolvePlanTier(ev, processor);
 
   if (!clientId || !feature) {
     const known = await resolveBySubscription(ev.subscriptionRef);
     clientId = clientId ?? known.clientId;
     feature = feature ?? known.feature;
+  }
+
+  // Same precedence rule as above: what the event itself carries beats what we
+  // infer. Only reach for the stored tier when this event names no plan price —
+  // a cancel, or the checkout.session.completed that opens a purchase.
+  if (!planTier) {
+    planTier = await tierBySubscription(ev.subscriptionRef);
   }
 
   // Minimal diagnostics, so an 'unmapped' row says WHY it was unmapped.
@@ -389,6 +498,22 @@ Deno.serve(async (req) => {
       : feature
         ? "price_map_or_subscription"
         : "none",
+    // WHICH PLAN, recorded on every event. A null here on a paid activation is
+    // the signature of the under-delivery bug 0031 fixed: the grant lands, the
+    // customer is charged for Growth, and provisioning has nothing to tell it
+    // apart from Starter. Worth being able to query for after the fact.
+    plan_tier: planTier,
+    // Where it came from, because the two sources fail differently and the
+    // distinction is invisible afterwards. 'metadata' on a
+    // checkout.session.completed is the healthy case. 'price_map' there is
+    // impossible (that event carries no price), so 'none' on an activation
+    // means the link is missing its plan_tier metadata — findable with one
+    // query across billing_events instead of one customer at a time.
+    plan_tier_source: ev.planTier
+      ? "metadata"
+      : planTier
+        ? "price_map_or_subscription"
+        : "none",
   };
 
   const { data, error } = await supabase.rpc("apply_billing_event", {
@@ -400,6 +525,7 @@ Deno.serve(async (req) => {
     p_subscription_ref: ev.subscriptionRef ?? null,
     p_current_period_end: ev.currentPeriodEnd ?? null,
     p_payload: diagnostics,
+    p_plan_tier: planTier,
   });
 
   // A grant leaves the entitlement 'pending' and a task 'queued'. Nothing

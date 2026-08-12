@@ -368,7 +368,7 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
             <div
               key={tier.label}
               className={`flex flex-col rounded-xl bg-white p-6 shadow-sm ${
-                tier.selfServe
+                tier.mostPopular
                   ? "border-2 border-gray-900"
                   : "border border-gray-200"
               }`}
@@ -377,7 +377,7 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
                 <h3 className="text-lg font-semibold text-gray-900">
                   {tier.label}
                 </h3>
-                {tier.selfServe ? (
+                {tier.mostPopular ? (
                   <span className="shrink-0 rounded-full bg-gray-900 px-2.5 py-0.5 text-xs font-medium text-white">
                     Most popular
                   </span>
@@ -405,15 +405,21 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
 
               <div className="mt-6 flex-1" />
 
+              {/*
+                Every tier now says "Get started" — all three are self-serve
+                since 0031 built the tier layer, so there is no tier left that
+                requires a conversation before you can buy it. Styling follows
+                mostPopular, which is the recommendation, not purchasability.
+              */}
               <Link
                 href="/plans"
                 className={`block rounded-md px-4 py-2.5 text-center text-sm font-medium ${
-                  tier.selfServe
+                  tier.mostPopular
                     ? "bg-gray-900 text-white hover:bg-gray-800"
                     : "border border-gray-300 text-gray-700 hover:bg-gray-50"
                 }`}
               >
-                {tier.selfServe ? "Get started" : "Talk to us"}
+                Get started
               </Link>
             </div>
           ))}

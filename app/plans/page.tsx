@@ -22,11 +22,11 @@ import { MarketingShell } from "@/components/marketing/shell";
 import {
   OVERAGE,
   PLAN_TIERS,
-  checkoutUrl,
   featureState,
   getCurrentClientId,
   getEntitlements,
   isUsable,
+  tierCheckoutUrl,
 } from "@/lib/entitlements";
 
 export const metadata: Metadata = {
@@ -59,7 +59,6 @@ export default async function PlansPage() {
   }
 
   const signedIn = Boolean(clientId);
-  const starterCheckout = checkoutUrl("voice", clientId);
 
   return (
     <MarketingShell>
@@ -79,7 +78,18 @@ export default async function PlansPage() {
 
         <div className="mt-12 grid gap-6 lg:grid-cols-3">
           {PLAN_TIERS.map((tier) => {
-            const featured = tier.selfServe;
+            // Featured styling follows the RECOMMENDATION, not purchasability.
+            // These were the same flag while Starter was the only tier with a
+            // Payment Link; now that all three are self-serve, reusing
+            // `selfServe` here would badge every card "Most popular".
+            const featured = tier.mostPopular;
+
+            // Each tier has its OWN Payment Link — the plan price and its setup
+            // fee are line items on the link, so one link cannot serve three
+            // plans. Resolved per card rather than once above, and an unset
+            // variable disables that card's button instead of falling through
+            // to another tier's link.
+            const checkout = tierCheckoutUrl(tier.key, clientId);
 
             return (
               <div
@@ -127,7 +137,15 @@ export default async function PlansPage() {
                     already paying   -> send them to manage it, not buy again
                     self-serve + in  -> real checkout link carrying the tenant
                     self-serve + out -> sign in first, then come back here
-                    everything else  -> sales-assisted, no link exists
+                    everything else  -> link not configured, button disabled
+
+                  The last branch used to read "Talk to us" and point at
+                  /signup, because Growth and Scale genuinely had no link. They
+                  do now. What remains is the CONFIGURATION case: a tier whose
+                  CHECKOUT_URL_VOICE_* is unset. It must stay visibly dead
+                  rather than silently borrowing another tier's link — that
+                  would charge a Scale buyer $179 and provision them 100
+                  minutes.
                 */}
                 {alreadySubscribed ? (
                   <Link
@@ -136,32 +154,33 @@ export default async function PlansPage() {
                   >
                     Manage your plan
                   </Link>
-                ) : tier.selfServe && signedIn && starterCheckout ? (
+                ) : tier.selfServe && signedIn && checkout ? (
                   <a
-                    href={starterCheckout}
-                    className="block rounded-md bg-gray-900 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-gray-800"
+                    href={checkout}
+                    className={`block rounded-md px-4 py-2.5 text-center text-sm font-medium ${
+                      featured
+                        ? "bg-gray-900 text-white hover:bg-gray-800"
+                        : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
                   >
                     Continue to checkout
                   </a>
                 ) : tier.selfServe && !signedIn ? (
                   <Link
                     href="/login?next=%2Fplans"
-                    className="block rounded-md bg-gray-900 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-gray-800"
+                    className={`block rounded-md px-4 py-2.5 text-center text-sm font-medium ${
+                      featured
+                        ? "bg-gray-900 text-white hover:bg-gray-800"
+                        : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
                   >
                     Get started
                   </Link>
-                ) : tier.selfServe ? (
-                  // Signed in, but CHECKOUT_URL_VOICE isn't configured.
+                ) : (
+                  // Signed in, but this tier's CHECKOUT_URL_VOICE_* is unset.
                   <span className="block rounded-md bg-gray-200 px-4 py-2.5 text-center text-sm font-medium text-gray-500">
                     Checkout not connected yet
                   </span>
-                ) : (
-                  <Link
-                    href="/signup"
-                    className="block rounded-md border border-gray-300 px-4 py-2.5 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    Talk to us
-                  </Link>
                 )}
 
                 {tier.selfServe && !signedIn ? (
@@ -202,9 +221,8 @@ export default async function PlansPage() {
         </div>
 
         <p className="mt-8 text-sm text-gray-500">
-          Growth and Scale are set up with you rather than bought online, so we
-          can match the minute allowance and routing to how your calls actually
-          arrive.
+          Every plan can be started online. You can move up a tier at any time
+          and we&rsquo;ll adjust your minute allowance from the next invoice.
         </p>
       </section>
     </MarketingShell>

@@ -17,6 +17,17 @@ export async function signup(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
+  // The onboarding archetype. Asked here rather than in the wizard because it
+  // decides WHICH wizard they see — an HVAC company should never be shown the
+  // store-connection step, and a shop should never be asked for call-out fees.
+  //
+  // Validated here and again in handle_new_user (0034). This value travels
+  // through auth metadata, which is client-supplied, so the trigger treats
+  // anything unrecognised as null rather than trusting it.
+  const rawType = String(formData.get("business_type") ?? "").trim().toLowerCase();
+  const businessType =
+    rawType === "service" || rawType === "ecommerce" ? rawType : null;
+
   const fail = (message: string) =>
     redirect(`/signup?error=${encodeURIComponent(message)}`);
 
@@ -57,7 +68,13 @@ export async function signup(formData: FormData) {
     email,
     password,
     options: {
-      data: { business_name: businessName, full_name: fullName },
+      data: {
+        business_name: businessName,
+        full_name: fullName,
+        // Read by handle_new_user (0034), which writes clients.business_type;
+        // the 0032 trigger then derives the agent mode from it.
+        ...(businessType ? { business_type: businessType } : {}),
+      },
       emailRedirectTo: confirmUrl,
     },
   });
