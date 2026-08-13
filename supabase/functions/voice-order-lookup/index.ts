@@ -47,6 +47,8 @@ import {
   pickShipment,
   pickShopifyCreds,
   pickWooOrder,
+  cachedRowToNormalized,
+  pickCachedOrder,
   shipStationOrderNumber,
   SHOPIFY_API_VERSION,
   SHOPIFY_ORDER_QUERY,
@@ -283,6 +285,21 @@ Deno.serve(async (req) => {
     clientId = row.id as string;
   }
 
+  // ---------------------------------------------------------------------------
+  // Is this a DEMO tenant? Decides two things below: whether a missing store
+  // falls back to orders_cache, and whether the web verification gate applies.
+  //
+  // The web branch already selected settings; the phone branch has not, so fetch
+  // it there. One small read, and only on the phone path.
+  // ---------------------------------------------------------------------------
+  const { data: tenantRow } = await supabase
+    .from("clients")
+    .select("settings")
+    .eq("id", clientId)
+    .maybeSingle();
+  const isDemoTenant =
+    ((tenantRow?.settings ?? {}) as Record<string, unknown>).is_demo === true;
+
   // Ensure the conversation row exists early so even a failed lookup is logged
   // against a real call. (No-op safe if call_sid is missing.)
   if (callSid) {
@@ -393,7 +410,71 @@ Deno.serve(async (req) => {
   // The raw order, Shopify-shaped, used only by the verification gate.
   let verifySubject: Record<string, any> | null = null;
 
-  if (MOCK_STORE) {
+  // ---------------------------------------------------------------------------
+  // 3a-0) DEMO TENANTS WITH NO STORE — answer from orders_cache.
+  //
+  // A demo tenant (settings.is_demo) has no store to query: northlake-demo seeds
+  // orders 1001-1004 straight into orders_cache and leaves store_platform null
+  // on purpose, because there is no real shop and pointing a public demo at a
+  // paying client's catalog would be worse than having no demo.
+  //
+  // Until now that seeding achieved nothing. This function only ever WROTE
+  // orders_cache — step 5's upsert — and never read it. So the platform default
+  // sent the demo down the WooCommerce branch, which found no credentials, and
+  // the caller was told a seeded order did not exist. The demo could not work on
+  // a correctly seeded database.
+  //
+  // WHY THE GUARD IS SAFE. It fires only when the tenant is demo-flagged AND has
+  // no store_platform. A paying client always has one — provisionVoice refuses to
+  // provision a client with a platform and no credentials — and is not demo
+  // flagged, so a real store outage still produces the honest lookup_error rather
+  // than a stale cached answer read out as if it were live. That distinction is
+  // the whole reason this is not simply "read the cache when the store fails".
+  // ---------------------------------------------------------------------------
+  const useCachedOrders = isDemoTenant && !config?.store_platform;
+
+  if (useCachedOrders) {
+    const { data: cachedRows, error: cacheErr } = await supabase
+      .from("orders_cache")
+      .select("*")
+      .eq("client_id", clientId)
+      .limit(200);
+
+    if (cacheErr) {
+      console.error("demo orders_cache read failed", cacheErr.message);
+      return json(LOOKUP_ERROR);
+    }
+
+    const hit = pickCachedOrder(cachedRows ?? [], orderNumber, orderPrefix);
+
+    if (!hit) {
+      logNotFound({
+        platform: "demo_cache",
+        client_id: clientId,
+        call_sid: callSid,
+        heard: orderNumber,
+        prefix: orderPrefix,
+        // Everything the tenant HAS, so a mistyped demo prompt is obvious at a
+        // glance rather than needing a database session.
+        seeded: (cachedRows ?? []).map((r: any) => r.order_number),
+      });
+      return json(withWrap({
+        found: false,
+        order_not_found: true,
+        message:
+          "No order matched that number. Ask the caller to re-read it digit by digit; if it's the same number, don't keep asking — take their details for a callback.",
+      }));
+    }
+
+    canonicalOrderNumber = String(hit.order_number ?? orderNumber);
+    normalized = cachedRowToNormalized(hit as Record<string, any>);
+    // Shopify-shaped view for the verification gate, in case a demo tenant is
+    // ever switched to require it.
+    verifySubject = {
+      email: normalized.customer_email,
+      shippingAddress: { zip: null },
+    };
+  } else if (MOCK_STORE) {
     normalized = {
       store_status: orderNumber === "0" ? "on-hold" : "processing",
       customer_name: "Test Caller",
@@ -732,7 +813,13 @@ Deno.serve(async (req) => {
   // leaking names and contents — and the caller experience of a generic error
   // on a mistyped ZIP would be bad.
   // ---------------------------------------------------------------------------
-  if (isWeb) {
+  // A DEMO TENANT IS EXEMPT. The gate exists because a public slug otherwise
+  // makes order lookup an unauthenticated API over a REAL order book. A demo
+  // tenant's orders are fictional and seeded by us — there is nothing to
+  // protect, and demanding "the email on the order" from a prospect who was
+  // handed the order number by our own marketing copy breaks the demo on the
+  // very first turn. Real clients on the web path are unaffected.
+  if (isWeb && !isDemoTenant) {
     const verification = verifyCaller(verifySubject, {
       email: body.verify_email,
       zip: body.verify_zip,

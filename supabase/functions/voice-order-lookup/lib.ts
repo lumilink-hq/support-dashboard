@@ -1070,3 +1070,74 @@ export function formatPlacedOn(
     day: "numeric",
   }).format(d);
 }
+
+// -----------------------------------------------------------------------------
+// Demo tenants: answering from orders_cache
+// -----------------------------------------------------------------------------
+
+/**
+ * Pick a seeded order out of orders_cache rows.
+ *
+ * WHY THIS EXISTS (2026-08-12). The northlake-demo tenant seeds four orders
+ * (1001-1004) straight into orders_cache and has no store behind it — its seed
+ * says so explicitly. But this function only ever WROTE that table; step 5
+ * upserts into it and nothing ever read it back. So the demo could not find
+ * order 1001 on a correctly seeded database: `store_platform` is null, the
+ * platform default sends it down the WooCommerce branch, there are no Woo
+ * credentials, and the caller is told the order does not exist.
+ *
+ * The demo's data was sitting in a table the lookup never looked at.
+ *
+ * Matching is deliberately the SAME orderKey comparison the live paths use, so
+ * a demo behaves like production: "1001", "#1001" and "order 1001" all match,
+ * and "1001-A" still does not.
+ */
+export function pickCachedOrder<T extends { order_number?: string | null }>(
+  rows: T[],
+  orderNumber: string,
+  prefix?: string | null,
+): T | null {
+  if (!rows?.length) return null;
+  const want = orderKey(orderNumber);
+  const p = orderKey(prefix ?? "");
+
+  const wanted = new Set([want]);
+  if (p) {
+    if (want.startsWith(p)) wanted.add(want.slice(p.length));
+    else wanted.add(p + want);
+  }
+
+  const exact = rows.find((r) => wanted.has(orderKey(r.order_number)));
+  if (exact) return exact;
+
+  // Same unconfigured-prefix tolerance as pickExactOrder.
+  const prefixed = rows.filter((r) =>
+    matchesIgnoringStorePrefix(orderKey(r.order_number), want)
+  );
+  return prefixed.length === 1 ? prefixed[0] : null;
+}
+
+/**
+ * An orders_cache row IS a NormalizedOrder plus bookkeeping columns — the table
+ * was designed as the normalized shape. Strip the bookkeeping and hand back the
+ * rest, so a cached answer travels the identical path as a live one: the flag
+ * rule, the speakable payload and the dashboard cannot tell them apart.
+ */
+export function cachedRowToNormalized(row: Record<string, any>): NormalizedOrder {
+  return {
+    store_status: row.store_status ?? null,
+    customer_name: row.customer_name ?? null,
+    customer_email: row.customer_email ?? null,
+    currency: row.currency ?? null,
+    order_total: row.order_total ?? null,
+    order_placed_at: row.order_placed_at ?? null,
+    line_items: (row.line_items ?? []) as LineItemLite[],
+    tracking_number: row.tracking_number ?? null,
+    carrier: row.carrier ?? null,
+    shipping_status: row.shipping_status ?? null,
+    shipped_at: row.shipped_at ?? null,
+    estimated_delivery: row.estimated_delivery ?? null,
+    raw_store: row.raw_store ?? { source: "orders_cache" },
+    raw_shipping: row.raw_shipping ?? null,
+  };
+}

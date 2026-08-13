@@ -29,7 +29,27 @@ export const metadata: Metadata = {
 // way, so the public widget can never reach a real client's calendar. Set
 // NEXT_PUBLIC_ELEVENLABS_AGENT_ID to the demo agent to switch the widget on; if
 // it's unset the page falls back to the call-in demo only.
-const DEMO_AGENT_ID = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID;
+// -----------------------------------------------------------------------------
+// BROWSER WIDGET: OFF ON THIS PAGE (2026-08-12), by request.
+//
+// Not gated on the env var any more. NEXT_PUBLIC_ELEVENLABS_AGENT_ID is set in
+// the deployed environment, so leaving the old `DEMO_AGENT_ID ? ... : null`
+// check in place meant the bubble appeared here the moment anyone deployed —
+// "off" has to be a decision in the code, not the absence of a variable
+// somebody might set for another reason.
+//
+// The phone demo is unaffected: this page's call button and number still work,
+// and /demo/orders keeps its own widget (different env var, different agent).
+//
+// TO RE-ENABLE: flip this to true. Everything below it is intact, and the
+// backend already routes browser sessions by slug — see
+// docs/BUILD-PLAN-2026-08.md §H for what still needs doing first.
+// -----------------------------------------------------------------------------
+const WIDGET_ENABLED = false;
+
+const DEMO_AGENT_ID = WIDGET_ENABLED
+  ? process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID
+  : undefined;
 const DEMO_CLIENT_SLUG = LINE.slug;
 const PHONE_DISPLAY = LINE.display;
 const PHONE_TEL = LINE.tel;
