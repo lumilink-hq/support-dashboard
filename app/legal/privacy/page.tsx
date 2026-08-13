@@ -9,6 +9,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   Clause,
+  CONTACT_FALLBACK,
   LEGAL_EMAIL,
   LEGAL_ENTITY,
   LegalPage,
@@ -173,14 +174,21 @@ export default function PrivacyPage() {
         <p>
           Depending on where you live you may have the right to access, correct,
           export or delete your personal information, and to object to some
-          processing. Email{" "}
-          <a
-            href={`mailto:${LEGAL_EMAIL}`}
-            className="underline hover:text-gray-900"
-          >
-            {LEGAL_EMAIL}
-          </a>{" "}
-          and we will help.
+          processing.{" "}
+          {LEGAL_EMAIL ? (
+            <>
+              Email{" "}
+              <a
+                href={`mailto:${LEGAL_EMAIL}`}
+                className="underline hover:text-gray-900"
+              >
+                {LEGAL_EMAIL}
+              </a>{" "}
+              and we will help.
+            </>
+          ) : (
+            <>{CONTACT_FALLBACK} We will help.</>
+          )}
         </p>
         <p>
           If your request is about a call you made to a business that uses

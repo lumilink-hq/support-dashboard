@@ -196,29 +196,38 @@ export default async function PlansPage() {
         </div>
 
         {/*
-          Overage terms sit inside the decision, not in a terms page nobody
-          opens. A metered plan whose meter is a surprise generates chargebacks,
-          and one dispute costs more than the overage it was hiding collected.
+          The money facts sit inside the decision, not in a terms page nobody
+          opens. Rewritten 2026-08-13: this block used to disclose $0.30/min
+          overage and a one-time setup fee, and both are now false. The point of
+          the block is unchanged — no charge should ever be a surprise — but the
+          surprising thing is now the OPPOSITE: people expect a usage bill and
+          there isn't one.
         */}
         <div className="mt-8 rounded-lg border border-gray-200 bg-gray-50 p-5">
           <h2 className="text-sm font-semibold text-gray-900">
-            What&rsquo;s not included
+            What You Will And Won&rsquo;t Be Charged
           </h2>
           <ul className="mt-2 grid gap-1.5 text-sm text-gray-600 sm:grid-cols-2">
             <li>
-              Minutes above your allowance: $
-              {OVERAGE.perVoiceMinuteUsd.toFixed(2)} per minute
+              <strong>No setup fee.</strong> We build and launch your agent at no
+              charge.
             </li>
             <li>
-              Platform care beyond your included hours: $
-              {OVERAGE.perCareHourUsd} per hour
+              <strong>No per-minute charges.</strong> Your allowance is a cap, not
+              a meter.
             </li>
-            <li>Additional phone number: $15 per month</li>
-            <li>Additional department or routing tree: $39 per month</li>
+            <li>
+              Reach your allowance and the agent stops answering until your next
+              period, or until you move up a plan.
+            </li>
+            <li>
+              Add-ons are optional and billed monthly on the same subscription.
+            </li>
           </ul>
           <p className="mt-3 text-xs text-gray-500">
-            You can see minutes used in your dashboard at any time. Setup fees
-            are charged once. Enterprise pricing is quoted per organisation.
+            You can see calls and minutes used in your dashboard at any time.
+            Cancel anytime; we don&rsquo;t pro-rate the current month. Enterprise
+            pricing is quoted per organisation.
           </p>
         </div>
 

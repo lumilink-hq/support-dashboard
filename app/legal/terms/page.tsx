@@ -8,6 +8,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   Clause,
+  CONTACT_FALLBACK,
   GOVERNING_LAW,
   LEGAL_EMAIL,
   LEGAL_ENTITY,
@@ -109,15 +110,22 @@ export default function TermsPage() {
 
       <Clause heading="5. Cancel Anytime">
         <p>
-          <strong>You can cancel at any time</strong> from your dashboard or by
-          emailing{" "}
-          <a
-            href={`mailto:${LEGAL_EMAIL}`}
-            className="underline hover:text-gray-900"
-          >
-            {LEGAL_EMAIL}
-          </a>
-          . Your service continues to the end of the period you have paid for and
+          <strong>You can cancel at any time</strong> from your dashboard.{" "}
+          {LEGAL_EMAIL ? (
+            <>
+              You can also email{" "}
+              <a
+                href={`mailto:${LEGAL_EMAIL}`}
+                className="underline hover:text-gray-900"
+              >
+                {LEGAL_EMAIL}
+              </a>
+              .
+            </>
+          ) : (
+            CONTACT_FALLBACK
+          )}{" "}
+          Your service continues to the end of the period you have paid for and
           is not renewed.
         </p>
         <p>

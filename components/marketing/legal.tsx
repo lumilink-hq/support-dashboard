@@ -25,7 +25,22 @@ import { MarketingShell } from "@/components/marketing/shell";
 
 export const LEGAL_ENTITY = "LumiLink";
 export const LEGAL_ADDRESS = "Los Angeles, California, United States";
-export const LEGAL_EMAIL = "support@lumilinkhub.com";
+/**
+ * PARKED 2026-08-13 until the mailbox actually exists.
+ *
+ * A legal page that prints an address nobody reads is worse than one that
+ * doesn't: a privacy request sent there is a request you are legally on the
+ * hook for and never saw. Set this to the real address the day Resend is
+ * verified and support@ is being monitored — both pages pick it up
+ * automatically, and the fallback copy below disappears.
+ *
+ *   export const LEGAL_EMAIL: string | null = "support@lumilinkhub.com";
+ */
+export const LEGAL_EMAIL: string | null = null;
+
+/** Where to send someone while there is no inbox. */
+export const CONTACT_FALLBACK =
+  "Message us from your dashboard and we'll pick it up there.";
 export const GOVERNING_LAW = "the State of California, United States";
 
 /** One date for both documents, so they can't drift apart. */
@@ -55,14 +70,21 @@ export function LegalPage({
 
         <div className="mt-16 border-t border-gray-200 pt-8 text-sm text-gray-500">
           <p>
-            Questions about this page? Email{" "}
-            <a
-              href={`mailto:${LEGAL_EMAIL}`}
-              className="underline hover:text-gray-900"
-            >
-              {LEGAL_EMAIL}
-            </a>
-            .
+            Questions about this page?{" "}
+            {LEGAL_EMAIL ? (
+              <>
+                Email{" "}
+                <a
+                  href={`mailto:${LEGAL_EMAIL}`}
+                  className="underline hover:text-gray-900"
+                >
+                  {LEGAL_EMAIL}
+                </a>
+                .
+              </>
+            ) : (
+              CONTACT_FALLBACK
+            )}
           </p>
         </div>
       </div>

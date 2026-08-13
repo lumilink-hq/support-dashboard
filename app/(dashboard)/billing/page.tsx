@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { availableAddons } from "@/lib/addons";
 import { formatDateTime } from "@/lib/format";
 import {
   FEATURES,
@@ -14,16 +15,17 @@ import {
   type VoiceUsage,
 } from "@/lib/entitlements";
 
-// Minutes used vs the plan allowance, with what the overage would cost. A client
-// on a metered plan should see this BEFORE the $0.30/min kicks in, not on the
-// invoice afterwards.
+// Minutes used vs the plan allowance. Since the allowance became a HARD CAP
+// (no metered overage), the job of this meter changed: it is no longer a
+// warning about a coming charge, it is a warning that the line will STOP
+// ANSWERING. That is the more urgent fact, so it warns from 80%.
 function UsageMeter({ usage }: { usage: VoiceUsage }) {
   const cap = usage.minutes_cap;
   const unlimited = cap === null || cap < 0;
   const pct = unlimited
     ? 0
     : Math.min(Math.round((usage.minutes_used / Math.max(cap, 1)) * 100), 100);
-  const { overMinutes, estimatedUsd } = overageEstimate(usage);
+  const { overMinutes } = overageEstimate(usage);
   const bar = pct >= 100 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-green-600";
 
   return (
@@ -55,10 +57,24 @@ function UsageMeter({ usage }: { usage: VoiceUsage }) {
           : null}
       </p>
 
+      {/*
+        HARD CAP, NOT OVERAGE (2026-08-13). This used to show an estimated
+        overage charge at $0.30/min. We no longer bill for going over, so the
+        useful message is the opposite one: your line has stopped answering, and
+        here is how to start it again. Quoting a charge we don't levy would
+        contradict /legal/terms and frighten a customer about their own phone.
+      */}
       {overMinutes > 0 ? (
+        <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+          You&rsquo;ve used your full allowance for this month, so new calls
+          aren&rsquo;t being answered. You won&rsquo;t be charged for the
+          overage &mdash; move up a plan to start answering again.
+        </p>
+      ) : pct >= 80 && !unlimited ? (
         <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          {overMinutes} min over your allowance &mdash; about $
-          {estimatedUsd.toFixed(2)} in overage at ${OVERAGE.perVoiceMinuteUsd.toFixed(2)}/min.
+          You&rsquo;re at {pct}% of this month&rsquo;s allowance. At 100% the
+          agent stops answering until your next period &mdash; there&rsquo;s no
+          overage charge, so upgrading is the only thing that changes it.
         </p>
       ) : null}
     </div>
@@ -218,29 +234,92 @@ export default async function BillingPage() {
         })}
       </div>
 
+      {/* ------------------------------------------------------------------ */}
+      {/* Add-ons — the same catalogue the post-purchase screen shows, from   */}
+      {/* lib/addons.ts, so /welcome and /billing can never offer different   */}
+      {/* things at different prices. Each links to its own Payment Link, so  */}
+      {/* "add" needs no new billing code: the webhook and billing_price_map  */}
+      {/* already handle an item riding the existing subscription.           */}
+      {/*                                                                    */}
+      {/* availableAddons() filters out anything not safe to sell yet —       */}
+      {/* Website Chat is excluded because nothing meters a chat session.     */}
+      {/* ------------------------------------------------------------------ */}
+      {availableAddons().length > 0 ? (
+        <div className="mt-10">
+          <h2 className="text-base font-semibold text-gray-900">
+            Build Out Your Plan
+          </h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Optional extras, billed on the same subscription. We set each one up
+            for you.
+          </p>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {availableAddons().map((a) => (
+              <div
+                key={a.key}
+                className="flex flex-col rounded-lg border border-gray-200 bg-white p-4"
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    {a.name}
+                  </h3>
+                  <p className="shrink-0 text-sm font-medium text-gray-900">
+                    ${a.monthlyUsd}
+                    <span className="text-gray-500">/mo</span>
+                  </p>
+                </div>
+                <p className="mt-1 flex-1 text-xs leading-relaxed text-gray-600">
+                  {a.blurb}
+                </p>
+                <a
+                  href={a.url}
+                  className="mt-4 block rounded-md border border-gray-300 px-3 py-2 text-center text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Add To Plan
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {/*
-        Overage terms must be visible BEFORE checkout, not only in the invoice.
-        Undisclosed usage billing on a $179 plan is how chargebacks happen.
+        HOW USAGE WORKS. Rewritten 2026-08-13 when overage billing was dropped
+        for a hard cap. The previous version quoted $0.30/min and a one-time
+        setup fee — both now false, and this is the page a customer reads to
+        understand what they will be charged. A billing page that contradicts
+        /legal/terms is worse than one that says nothing.
       */}
-      <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <h2 className="text-sm font-medium text-gray-900">
-          How usage is billed
-        </h2>
+      <div className="mt-10 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <h2 className="text-sm font-medium text-gray-900">How Usage Works</h2>
         <ul className="mt-2 space-y-1 text-xs text-gray-600">
           <li>
-            Voice minutes above your plan allowance are billed at $
-            {OVERAGE.perVoiceMinuteUsd.toFixed(2)} per minute.
+            <strong>Your allowance is a cap, not a meter.</strong> We don&rsquo;t
+            bill you for going over it. Reach it and the agent stops answering
+            until your next billing period, or until you move up a plan.
           </li>
           <li>
-            Platform care beyond the included pool is billed at $
-            {OVERAGE.perCareHourUsd}/hour.
+            <strong>Setup is free</strong> &mdash; there is no one-time charge on
+            any plan.
           </li>
           <li>
             AI calls are capped at {STARTER_PLAN.maxCallMinutes} minutes. Past
             that, Lumi offers a transfer or logs a callback ticket &mdash; it
             never leaves a caller in a loop.
           </li>
-          <li>Setup fees are one-time and charged when you start.</li>
+          <li>
+            Platform care beyond your included hours is quoted before any work
+            starts, never billed automatically.
+          </li>
+          <li>
+            Cancel anytime. We don&rsquo;t pro-rate the month you&rsquo;re
+            already in. See{" "}
+            <Link href="/legal/terms" className="underline hover:text-gray-900">
+              Terms Of Service
+            </Link>
+            .
+          </li>
         </ul>
       </div>
 
