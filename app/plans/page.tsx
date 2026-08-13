@@ -118,7 +118,9 @@ export default async function PlansPage() {
                   <span className="text-sm text-gray-500">/month</span>
                 </p>
                 <p className="mt-1 text-sm text-gray-500">
-                  + ${tier.setupFeeUsd} one-time setup
+                  {tier.setupFeeUsd > 0
+                    ? `+ $${tier.setupFeeUsd} one-time setup`
+                    : "Setup Is On Us — $0"}
                 </p>
 
                 <ul className="mt-6 space-y-2">

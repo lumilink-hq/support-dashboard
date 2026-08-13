@@ -56,7 +56,18 @@ export type FeatureState = "locked" | "setup" | "active" | "past_due" | "cancele
  * SAYS while the invoice keeps charging the old fee. See
  * docs/STRIPE-TIERS-RUNBOOK.md §2a.
  */
-export const SETUP_FEE_USD = 49.99;
+// SETUP FEE REMOVED 2026-08-13. Setup is free and advertised as the
+// differentiator: we do the work, the customer doesn't lift a finger.
+//
+// The constant survives at 0 rather than being deleted. Every card, plan row and
+// FAQ already reads from it, so reinstating a fee is a one-line change instead of
+// an archaeology exercise — and `setupFeeUsd > 0` is the condition the UI now
+// branches on, so nothing renders "+ $0 one-time setup".
+//
+// HISTORY: $299/$499/$799 -> a flat $49.99 (2026-08-11) -> $0 (2026-08-13).
+// Nothing in Stripe needs removing: the one-time price objects were never
+// created, so no Payment Link is carrying a setup line to strip.
+export const SETUP_FEE_USD = 0;
 
 export const STARTER_PLAN = {
   label: "Starter",
@@ -70,9 +81,29 @@ export const STARTER_PLAN = {
 } as const;
 
 /** Automatic overages — not optional features. Must be disclosed before checkout. */
+/**
+ * OVERAGE POLICY CHANGED 2026-08-13: the allowance is now a HARD CAP.
+ *
+ * We do not bill per-minute overage. When a client reaches their allowance they
+ * upgrade; they are never surprised by a usage charge they did not choose.
+ *
+ * WHY THIS IS BARELY A CODE CHANGE: the hard stop already exists. Layer 1 in
+ * voice-personalization refuses a call that begins over the cap — that is the
+ * cheapest place to stop one — and layer 3 in voice-order-lookup wraps up a call
+ * that crosses mid-conversation. What changes is that nothing is invoiced
+ * afterwards, and the site stops quoting a per-minute rate that made customers
+ * nervous about their own phone ringing.
+ *
+ * The rates are KEPT, not deleted: /billing still needs them to explain what a
+ * plan is worth, and if metered overage ever returns this is where it lives.
+ * Nothing on a marketing page may quote perVoiceMinuteUsd.
+ */
 export const OVERAGE = {
+  /** Not billed. Retained for internal costing and any future metered plan. */
   perVoiceMinuteUsd: 0.3,
   perCareHourUsd: 85,
+  /** The policy the customer actually experiences. */
+  policy: "hard_cap" as const,
 } as const;
 
 /**

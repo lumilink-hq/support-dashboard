@@ -27,6 +27,7 @@
 // and its three "Why LumiLink works" pillars) so the two don't contradict each
 // other while both are reachable.
 
+import Image from "next/image";
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
 import {
@@ -46,9 +47,9 @@ import { advertisedCalls, STARTER_PLAN } from "@/lib/entitlements";
 
 /** Shared by "/" and "/home" so the two can never say different things. */
 export const LANDING_METADATA = {
-  title: "Lumilink | Your AI receptionist, ready 24/7",
+  title: "LumiLink | Automate The Repetitive. Escalate What Matters.",
   description:
-    "Lumilink answers every call, quotes from your price list, and books the job on your real calendar. Built for small local and service businesses.",
+    "LumiLink answers every call, quotes from your price list, and books the job on your real calendar. We build the whole thing for you — free setup, no per-minute charges.",
 };
 
 // ---------------------------------------------------------------------------
@@ -58,18 +59,18 @@ export const LANDING_METADATA = {
 const PILLARS = [
   {
     n: "01",
-    title: "Never miss a call",
+    title: "Never Miss A Call",
     body: "Lumi answers when you can't: after hours, on a job site, or when three people ring at once. A missed call is a job that goes to whoever picked up.",
   },
   {
     n: "02",
-    title: "Costs less than the calls you're missing",
-    body: `Starter is $${STARTER_PLAN.monthlyUsd} a month and covers about ${advertisedCalls(STARTER_PLAN.includedMinutes)} calls. One booked job covers it.`,
+    title: "We Build It. You Don't Lift A Finger.",
+    body: "We set up your agent, write what it knows, provision your number and test it before a customer ever hears it. Setup costs nothing, and you never manage the AI — that's our job, not yours.",
   },
   {
     n: "03",
-    title: "You can see everything",
-    body: "Every call, transcript, booking and callback ticket lands in your dashboard. You can read what Lumi told your customer, word for word.",
+    title: "A Fraction Of What The Phone Already Costs You",
+    body: "Every call you take is a job you're not doing, and every one you miss is a job someone else did. Lumi handles the repetitive ones so your day belongs to the work you're actually paid for.",
   },
 ];
 
@@ -122,28 +123,32 @@ const CAPABILITIES = [
 
 const FAQS = [
   {
-    q: "What happens if Lumi can't handle a call?",
+    q: "What Happens If Lumi Can't Handle A Call?",
     a: "It offers a transfer, or takes the details and logs a callback ticket for you to pick up. When it doesn't know something, it says so.",
   },
   {
-    q: `Why are calls capped at ${STARTER_PLAN.maxCallMinutes} minutes?`,
-    a: "A caller going in circles with an AI has a worse time than one who gets a callback from a person. Lumi warns before the limit, closes the conversation, and hands anything unresolved to you.",
+    q: `Why Are Calls Capped At ${STARTER_PLAN.maxCallMinutes} Minutes?`,
+    a: "Because that's about how long your customer wants to be on the phone. Lumi settles the routine questions fast, and anything needing judgement goes to a person instead of looping. Nobody wins when an AI keeps someone talking for nine minutes.",
   },
   {
-    q: "Does it sound robotic?",
+    q: "Does It Sound Robotic?",
     a: "It's a natural voice with real conversational turn-taking. Judge it yourself on the discovery call rather than taking our word for it.",
   },
   {
-    q: "Do I need a phone number?",
+    q: "Do I Need A Phone Number?",
     a: `No — we provide one. We buy and configure a local number for you as part of setup, and it's live before your first call. Starter includes ${STARTER_PLAN.numbers}. Porting an existing number isn't supported yet.`,
   },
   {
-    q: "What happens if I go over my minutes?",
+    q: "What If I Run Out Of Calls?",
     a: OVERAGE_ANSWER,
   },
   {
-    q: "What's the setup fee for?",
-    a: "We build your agent: provision your phone number, load your services and prices, connect your calendar, test it against real scenarios, and launch it. You pay it once, at the start.",
+    q: "What Does Setup Cost?",
+    a: "Nothing. We provision your phone number, load your services and prices, connect your calendar, test the agent against real scenarios and launch it — all included. Most people expect a setup fee here. We'd rather you spent that money finding out whether we're any good.",
+  },
+  {
+    q: "Can I Cancel?",
+    a: "Cancel anytime from your dashboard. We don't pro-rate the month you're already in, and we won't put you through a retention call — if it isn't working, we'd rather hear why.",
   },
 ];
 
@@ -160,13 +165,14 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
       <Section className="pb-20 pt-16 md:pb-28 md:pt-24">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
-            <Eyebrow>AI phone support for local business</Eyebrow>
+            <Eyebrow>AI Phone Support For Local Business</Eyebrow>
             <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
-              Your AI receptionist, ready 24/7
+              Automate The Repetitive. Escalate What Matters.
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-gray-600">
-              Lumi answers every call, quotes from your price list, and books the
-              job on your real calendar. You see every word that was said.
+              Lumi answers every call, quotes from your price list, and books
+              the job on your real calendar. We build the whole thing for you,
+              and you see every word that was said.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -174,41 +180,41 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
                 href={DEMO_CTA}
                 className="rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-800"
               >
-                Book a discovery call
+                Book A Discovery Call
               </Link>
               <a
                 href="/plans"
                 className="rounded-md border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
-                See pricing
+                See Plans
               </a>
             </div>
 
             <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-500">
               <li className="flex items-center gap-2">
-                <Check /> 24/7 answering
+                <Check /> Free Setup
               </li>
               <li className="flex items-center gap-2">
-                <Check /> Real-time booking
+                <Check /> 24/7 Answering
               </li>
               <li className="flex items-center gap-2">
-                <Check /> Website knowledge included
+                <Check /> We Build It For You
               </li>
             </ul>
           </div>
 
           {/*
-            SWAP THIS FOR A REAL SCREENSHOT. Capture /conversations with client
-            names masked and drop it in public/. Both reference sites are around
-            80% product imagery, and it does more for credibility than any
-            styling work.
-
-            Until then this is a quiet empty frame rather than instructions to
-            the reader — a visitor should never be told what is missing.
+            Real product, not a mockup. The appointments view from a live workspace.
+            Bordered rather than bled to the edge so it reads as a screenshot of
+            something that exists, which is the entire point of putting it here.
           */}
-          <div
-            aria-hidden
-            className="aspect-[4/3] rounded-xl border border-gray-200 bg-gray-50 shadow-sm"
+          <Image
+            src="/proof-appointments.png"
+            alt="The Lumilink dashboard: jobs booked by the agent, the revenue they represent, and the week ahead"
+            width={1919}
+            height={814}
+            priority
+            className="rounded-xl border border-gray-200 shadow-sm"
           />
         </div>
       </Section>
@@ -223,14 +229,14 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
             className="group rounded-xl border border-gray-200 bg-white p-6 shadow-sm hover:border-gray-900"
           >
             <h2 className="text-lg font-semibold text-gray-900">
-              Service businesses
+              Service Businesses
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
               HVAC, plumbing, electrical and the trades. Lumi quotes from your
               price list and books the job on your calendar.
             </p>
             <p className="mt-4 text-sm font-medium text-gray-900 group-hover:underline">
-              See how it works &rarr;
+              See How It Works &rarr;
             </p>
           </Link>
 
@@ -239,14 +245,14 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
             className="group rounded-xl border border-gray-200 bg-white p-6 shadow-sm hover:border-gray-900"
           >
             <h2 className="text-lg font-semibold text-gray-900">
-              Online stores
+              Online Stores
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
               Shopify and WooCommerce. Lumi answers &ldquo;where&rsquo;s my
               order?&rdquo; from the real order, with tracking, day or night.
             </p>
             <p className="mt-4 text-sm font-medium text-gray-900 group-hover:underline">
-              See how it works &rarr;
+              See How It Works &rarr;
             </p>
           </Link>
         </div>
@@ -256,7 +262,7 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
       {/* Why it works — mirrors the Wix site's three pillars               */}
       {/* ---------------------------------------------------------------- */}
       <Section className="border-t border-gray-200 bg-gray-50 py-20">
-        <Eyebrow>Why Lumilink works</Eyebrow>
+        <Eyebrow>Why LumiLink Works</Eyebrow>
         <Pillars items={PILLARS} />
       </Section>
 
@@ -265,9 +271,9 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
       {/* ---------------------------------------------------------------- */}
       <Section className="py-20">
         <div className="max-w-2xl">
-          <Eyebrow>What Lumi does</Eyebrow>
+          <Eyebrow>What Lumi Does</Eyebrow>
           <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
-            One agent that finishes the job
+            One Agent That Finishes The Job
           </h2>
           <p className="mt-3 text-gray-600">
             A conversation that ends with an appointment on your calendar.
@@ -316,8 +322,8 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
       <FaqList items={FAQS} />
 
       <ClosingCta
-        heading="Stop losing jobs to voicemail"
-        body="Tell us about your business in twenty minutes. Lumi is answering your phone about a week later."
+        heading="Stop Losing Jobs To Voicemail"
+        body="Tell us about your business in twenty minutes. We build it, and Lumi is answering your phone about a week later. Setup costs nothing, and we ship something new most weeks."
       />
     </MarketingShell>
   );

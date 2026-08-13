@@ -19,6 +19,7 @@
 // sending code in the repo, and its Zapier economics are unresolved
 // (docs/BUILD-PLAN-2026-08.md §E). Do not add it here until that is settled.
 
+import Image from "next/image";
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
 import {
@@ -138,7 +139,7 @@ const FAQS = [
     a: "A customer going in circles with an AI has a worse time than one who gets a callback from a person. Lumi warns before the limit, closes the conversation, and hands anything unresolved to you.",
   },
   {
-    q: "What happens if I go over my minutes?",
+    q: "What If I Run Out Of Calls?",
     a: OVERAGE_ANSWER,
   },
   {
@@ -209,14 +210,17 @@ export function EcommerceSolution() {
           </div>
 
           {/*
-            SWAP FOR A REAL SCREENSHOT — a transcript with the order panel beside
-            it is the single most persuasive image this page could carry. Mask
-            the customer name. Quiet empty frame until then: a visitor should
-            never be told what is missing.
+            Real product, not a mockup. A live client's own support page, running our agent.
+            Bordered rather than bled to the edge so it reads as a screenshot of
+            something that exists, which is the entire point of putting it here.
           */}
-          <div
-            aria-hidden
-            className="aspect-[4/3] rounded-xl border border-gray-200 bg-gray-50 shadow-sm"
+          <Image
+            src="/proof-tsunami.png"
+            alt="A live Shopify store's support page: Powered by LumiLink, with the order-support line customers call"
+            width={1906}
+            height={915}
+            priority
+            className="rounded-xl border border-gray-200 shadow-sm"
           />
         </div>
       </Section>

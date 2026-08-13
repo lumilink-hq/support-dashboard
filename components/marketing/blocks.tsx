@@ -112,8 +112,8 @@ export function CapabilityGrid({
  * unroutable — see STRIPE-GO-LIVE.md §1.
  */
 export function PricingGrid({
-  heading = "What you pay, and where the limits are",
-  blurb = "Every plan comes with a set number of calls. We'd rather give you the number than call it unlimited and add a fair-use clause.",
+  heading = "What You Pay, And Where The Limits Are",
+  blurb = "Every plan comes with a set number of calls and no setup fee. When you outgrow one, you move up a plan — we never bill you for going over.",
 }: {
   heading?: string;
   blurb?: string;
@@ -144,7 +144,7 @@ export function PricingGrid({
               </h3>
               {tier.mostPopular ? (
                 <span className="shrink-0 rounded-full bg-gray-900 px-2.5 py-0.5 text-xs font-medium text-white">
-                  Most popular
+                  Most Popular
                 </span>
               ) : null}
             </div>
@@ -155,8 +155,10 @@ export function PricingGrid({
               </span>
               <span className="text-sm text-gray-500">/month</span>
             </p>
-            <p className="mt-1 text-sm text-gray-500">
-              + ${tier.setupFeeUsd} one-time setup
+            <p className="mt-1 text-sm font-medium text-green-700">
+              {tier.setupFeeUsd > 0
+                ? `+ $${tier.setupFeeUsd} one-time setup`
+                : "Setup Is On Us — $0"}
             </p>
 
             <ul className="mt-6 space-y-2">
@@ -178,7 +180,7 @@ export function PricingGrid({
                   : "border border-gray-300 text-gray-700 hover:bg-gray-50"
               }`}
             >
-              Get started
+              Get Started
             </Link>
           </div>
         ))}
@@ -232,16 +234,16 @@ export function CallLengthPolicy({ closing }: { closing: string }) {
       <div className="rounded-2xl bg-gray-900 px-8 py-12 text-white md:px-12">
         <div className="max-w-3xl">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-            The {STARTER_PLAN.maxCallMinutes}-minute policy
+            Automate The Repetitive. Escalate What Matters.
           </p>
           <h2 className="mt-4 text-2xl font-semibold tracking-tight md:text-3xl">
-            Lumi won&rsquo;t trap your customer in a loop
+            Fast Answers. Real People When It Counts.
           </h2>
           <p className="mt-4 leading-relaxed text-gray-300">
-            We cap every AI call at {STARTER_PLAN.maxCallMinutes} minutes. Near
-            the limit, Lumi stops opening new topics, finishes what it&rsquo;s
-            doing, and offers a transfer or a callback. It says goodbye rather
-            than cutting off mid-sentence.
+            Most calls are the same handful of questions, and Lumi settles them
+            in under {STARTER_PLAN.maxCallMinutes} minutes — which is exactly
+            how long your customer wants to spend on the phone. Anything that
+            needs judgement goes to a person instead of going in circles.
           </p>
           <p className="mt-3 leading-relaxed text-gray-300">{closing}</p>
         </div>
@@ -257,7 +259,7 @@ export function CallLengthPolicy({ closing }: { closing: string }) {
  */
 export function FaqList({
   items,
-  heading = "What people ask before signing up",
+  heading = "What People Ask Before Signing Up",
 }: {
   items: { q: string; a: string }[];
   heading?: string;
@@ -284,7 +286,7 @@ export function FaqList({
 export function ClosingCta({
   heading,
   body,
-  cta = "Book a discovery call",
+  cta = "Book A Discovery Call",
 }: {
   heading: string;
   body: string;
@@ -317,14 +319,15 @@ export function ClosingCta({
 }
 
 /** The overage line, shared so no page can quote a different rate. */
-// Bridges the two units on purpose. We SELL calls and we METER minutes, and the
-// one moment a customer meets the second unit must not be their first invoice.
-export const OVERAGE_ANSWER = `Your allowance is measured in minutes behind the scenes — Starter's ${
-  STARTER_PLAN.includedMinutes
-} minutes is about ${advertisedCalls(
+// HARD CAP, NOT METERED OVERAGE (2026-08-13). Deliberately says what does NOT
+// happen: an unexpected usage charge is the fear that stops a small business
+// putting a phone number in front of an AI, and the answer to it is "we can't
+// bill you for that, because we don't bill for it at all".
+//
+// Still bridges the two units. We SELL calls and we METER minutes, and the one
+// moment a customer meets the second unit must not be a surprise.
+export const OVERAGE_ANSWER = `We don't. There's no per-minute charge and no surprise bill — your plan is a cap, not a meter. Starter covers about ${advertisedCalls(
   STARTER_PLAN.includedMinutes,
-)} calls at typical length, and no single call can run past ${
-  STARTER_PLAN.maxCallMinutes
-} minutes. Beyond your allowance we bill $${OVERAGE.perVoiceMinuteUsd.toFixed(
-  2,
-)} per minute. The dashboard shows what you've used at any time, so you'll know before the invoice arrives.`;
+)} calls a month (${
+  STARTER_PLAN.includedMinutes
+} minutes of talk time), and you can see what you've used in your dashboard at any point. If you're regularly reaching it, that's a good problem — move up a plan and we'll handle the switch.`;

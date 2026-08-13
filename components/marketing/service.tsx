@@ -8,6 +8,7 @@
 // and the thing the landing page only gestures at. Same plan ladder, same
 // pricing component.
 
+import Image from "next/image";
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
 import {
@@ -106,12 +107,16 @@ const FAQS = [
     a: "A caller going in circles with an AI has a worse time than one who gets a callback from a person. Lumi warns before the limit, closes the conversation, and hands anything unresolved to you.",
   },
   {
-    q: "What happens if I go over my minutes?",
+    q: "What If I Run Out Of Calls?",
     a: OVERAGE_ANSWER,
   },
   {
-    q: "What's the setup fee for?",
-    a: "We build your agent: provision your phone number, load your services and prices, connect your calendar, test it against real scenarios, and launch it. You pay it once, at the start.",
+    q: "What Does Setup Cost?",
+    a: "Nothing. We provision your phone number, load your services and prices, connect your calendar, test the agent against real scenarios and launch it — all included. You don't lift a finger and you don't pay a setup fee.",
+  },
+  {
+    q: "Can I Cancel?",
+    a: "Cancel anytime from your dashboard. We don't pro-rate the month you're already in, and there's no retention call.",
   },
 ];
 
@@ -180,10 +185,18 @@ export function ServiceSolution() {
             </ul>
           </div>
 
-          {/* SWAP FOR A REAL SCREENSHOT — the appointments view is the one to use. */}
-          <div
-            aria-hidden
-            className="aspect-[4/3] rounded-xl border border-gray-200 bg-gray-50 shadow-sm"
+          {/*
+            Real product, not a mockup. The appointments view a contractor actually sees.
+            Bordered rather than bled to the edge so it reads as a screenshot of
+            something that exists, which is the entire point of putting it here.
+          */}
+          <Image
+            src="/proof-appointments.png"
+            alt="Booked revenue, average job value and the week ahead, from jobs the agent booked"
+            width={1919}
+            height={814}
+            priority
+            className="rounded-xl border border-gray-200 shadow-sm"
           />
         </div>
       </Section>
