@@ -159,18 +159,21 @@ export async function MarketingShell({
           </div>
 
           {/*
-            The Terms and Privacy links pointed at the Wix site, whose pages are
-            still the stock template (fictional address, 2035 copyright, a
-            shipping policy for a product with nothing to ship). Removed rather
-            than left pointing at text nobody wrote.
-
-            THEY HAVE TO COME BACK before selling to anyone outside the company.
-            You take payments, hold your clients' customer data, and store call
-            transcripts. Add /legal/terms and /legal/privacy here, and register
-            them in lib/route-access.ts PUBLIC_PREFIXES as "/legal".
+            RESTORED 2026-08-13, now pointing at pages we actually wrote. They
+            previously pointed at the Wix site's stock template — fictional
+            address, 2035 copyright, a shipping policy for a product with
+            nothing to ship — and were removed rather than left lying.
           */}
-          <div className="mt-8 border-t border-gray-200 pt-6 text-xs text-gray-400">
-            <p>&copy; {new Date().getFullYear()} Lumilink. All rights reserved.</p>
+          <div className="mt-8 flex flex-col gap-3 border-t border-gray-200 pt-6 text-xs text-gray-400 sm:flex-row sm:items-center sm:justify-between">
+            <p>&copy; {new Date().getFullYear()} LumiLink. All rights reserved.</p>
+            <nav className="flex gap-4">
+              <Link href="/legal/terms" className="hover:text-gray-900">
+                Terms Of Service
+              </Link>
+              <Link href="/legal/privacy" className="hover:text-gray-900">
+                Privacy Policy
+              </Link>
+            </nav>
           </div>
         </div>
       </footer>

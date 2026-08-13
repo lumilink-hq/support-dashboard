@@ -15,6 +15,9 @@ export const PUBLIC_PREFIXES = [
   "/signup",
   "/auth",
   "/demo",
+  // Terms and privacy. MUST stay public: a policy behind a login is not a
+  // policy, and Stripe expects them reachable from checkout.
+  "/legal",
   // Vertical marketing pages: /solutions/ecommerce, /solutions/service. A
   // prefix rather than two exact entries so adding a third vertical is a page
   // file and nothing else. There is no /solutions index page — a bare
