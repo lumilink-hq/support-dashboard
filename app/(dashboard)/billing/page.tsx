@@ -295,18 +295,19 @@ export default async function BillingPage() {
         <h2 className="text-sm font-medium text-gray-900">How Usage Works</h2>
         <ul className="mt-2 space-y-1 text-xs text-gray-600">
           <li>
-            <strong>Your allowance is a cap, not a meter.</strong> We don&rsquo;t
-            bill you for going over it. Reach it and the agent stops answering
-            until your next billing period, or until you move up a plan.
+            <strong>Your allowance is a cap, not a meter.</strong>{" "}
+            We don&rsquo;t bill you for going over it. Reach it and the agent
+            stops answering until your next billing period, or until you move up
+            a plan.
           </li>
           <li>
             <strong>Setup is free</strong> &mdash; there is no one-time charge on
             any plan.
           </li>
           <li>
-            AI calls are capped at {STARTER_PLAN.maxCallMinutes} minutes. Past
-            that, Lumi offers a transfer or logs a callback ticket &mdash; it
-            never leaves a caller in a loop.
+            {`AI calls are capped at ${STARTER_PLAN.maxCallMinutes} minutes.`}{" "}
+            Past that, Lumi offers a transfer or logs a callback ticket &mdash;
+            it never leaves a caller in a loop.
           </li>
           <li>
             Platform care beyond your included hours is quoted before any work

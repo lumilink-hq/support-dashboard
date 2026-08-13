@@ -89,10 +89,9 @@ export default function TermsPage() {
           send you a bill you didn&rsquo;t agree to.
         </p>
         <p>
-          Individual AI calls are limited to about{" "}
-          {STARTER_PLAN.maxCallMinutes} minutes. Near that limit the agent closes
-          the conversation and offers a transfer or a callback rather than being
-          cut off.
+          {`Individual AI calls are limited to about ${STARTER_PLAN.maxCallMinutes} minutes.`}{" "}
+          Near that limit the agent closes the conversation and offers a
+          transfer or a callback rather than being cut off.
         </p>
       </Clause>
 
