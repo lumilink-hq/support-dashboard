@@ -240,10 +240,10 @@ export function CallLengthPolicy({ closing }: { closing: string }) {
             Fast Answers. Real People When It Counts.
           </h2>
           <p className="mt-4 leading-relaxed text-gray-300">
-            Most calls are the same handful of questions, and Lumi settles them
-            in under {STARTER_PLAN.maxCallMinutes} minutes — which is exactly
-            how long your customer wants to spend on the phone. Anything that
-            needs judgement goes to a person instead of going in circles.
+            {`Most calls are the same handful of questions, and Lumi settles them in under ${STARTER_PLAN.maxCallMinutes} minutes`}{" "}
+            — which is exactly how long your customer wants to spend on the
+            phone. Anything that needs judgement goes to a person instead of
+            going in circles.
           </p>
           <p className="mt-3 leading-relaxed text-gray-300">{closing}</p>
         </div>
