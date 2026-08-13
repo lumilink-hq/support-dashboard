@@ -78,7 +78,11 @@ export default async function WelcomePage() {
   const addons = availableAddons();
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-16">
+    // Sets its own surface rather than trusting the body. This page sits
+    // outside both the marketing shell and the dashboard layout, so nothing
+    // else guarantees a background behind it.
+    <div className="min-h-full flex-1 bg-white text-gray-900">
+      <div className="mx-auto max-w-5xl px-6 py-16">
       {/* ------------------------------------------------------------------ */}
       {/* Confirmation                                                       */}
       {/* ------------------------------------------------------------------ */}
@@ -186,8 +190,9 @@ export default async function WelcomePage() {
             </Link>{" "}
             whenever you like, and we&rsquo;ll set it up for you.
           </p>
-        </section>
-      ) : null}
+          </section>
+        ) : null}
+      </div>
     </div>
   );
 }

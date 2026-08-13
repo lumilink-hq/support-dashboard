@@ -12,12 +12,26 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/*
+  REMOVED 2026-08-13: the create-next-app dark-mode block.
+
+    @media (prefers-color-scheme: dark) {
+      :root { --background: #0a0a0a; --foreground: #ededed; }
+    }
+
+  THERE IS NO DARK THEME. Every component in this app hardcodes light colours —
+  text-gray-900, bg-white, border-gray-200. So this rule could never produce a
+  dark UI; it could only flip the BODY behind a light interface.
+
+  On most pages that was invisible, because something opaque covers the body:
+  MarketingShell renders bg-white, the dashboard layout renders bg-gray-50.
+  /welcome had neither, so a customer on a device set to dark mode landed on
+  near-black with light body text and dark component text on top of it —
+  immediately after paying, which is the worst possible moment for the site to
+  look broken.
+
+  Restore this only alongside a real dark theme, not before.
+*/
 
 body {
   background: var(--background);
