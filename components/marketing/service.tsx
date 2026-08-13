@@ -186,15 +186,23 @@ export function ServiceSolution() {
           </div>
 
           {/*
+            CROPPED, not scaled. The original was a full-page capture — sidebar,
+            empty "Upcoming" panel and all — and shrinking that into a
+            half-width column rendered every label at sub-pixel size, which
+            reads as a low-quality screenshot rather than a dense product.
+            Cropping to the metric row and the week strip means less content
+            competing for the same width, so the numbers stay readable.
+
             Real product, not a mockup. The appointments view a contractor actually sees.
             Bordered rather than bled to the edge so it reads as a screenshot of
             something that exists, which is the entire point of putting it here.
           */}
           <Image
-            src="/proof-appointments.png"
+            src="/proof-appointments-crop.png"
             alt="Booked revenue, average job value and the week ahead, from jobs the agent booked"
-            width={1919}
-            height={814}
+            width={1590}
+            height={475}
+            sizes="(min-width: 768px) 50vw, 100vw"
             priority
             className="rounded-xl border border-gray-200 shadow-sm"
           />

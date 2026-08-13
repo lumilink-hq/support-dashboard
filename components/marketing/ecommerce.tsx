@@ -210,15 +210,21 @@ export function EcommerceSolution() {
           </div>
 
           {/*
+            CROPPED to the part that sells: enough of the blue header to prove
+            this is a real storefront, then "Powered by LumiLink" and the live
+            support number. The full-page capture was unreadable at column
+            width.
+
             Real product, not a mockup. A live client's own support page, running our agent.
             Bordered rather than bled to the edge so it reads as a screenshot of
             something that exists, which is the entire point of putting it here.
           */}
           <Image
-            src="/proof-tsunami.png"
+            src="/proof-tsunami-crop.png"
             alt="A live Shopify store's support page: Powered by LumiLink, with the order-support line customers call"
-            width={1906}
-            height={915}
+            width={1150}
+            height={760}
+            sizes="(min-width: 768px) 50vw, 100vw"
             priority
             className="rounded-xl border border-gray-200 shadow-sm"
           />
