@@ -97,7 +97,9 @@ export const STEPS: StepDef[] = [
   {
     key: "number",
     title: "Your phone number",
-    blurb: "The number your customers will call.",
+    // We provision it — the step reports status rather than asking for one.
+    // Wording matched to the site's promise ("we provide one") on 2026-08-13.
+    blurb: "The number we set up for you, and what your customers will call.",
     appliesTo: ["service", "ecommerce"],
     blocking: true,
     // Numbers are bought by hand on Twilio today, so this step reports status

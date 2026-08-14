@@ -552,14 +552,28 @@ export default async function OnboardingPage({
                   <p className="text-sm font-medium text-gray-900">
                     We&rsquo;re assigning your number
                   </p>
+                  {/*
+                    TWO PROMISES REMOVED (2026-08-13).
+
+                    "We'll email you the moment it's ready" — there is no
+                    email-sending code in this repo, and auth mail is still
+                    waiting on SMTP. Promising a notification we cannot send is
+                    the kind of small lie a customer remembers.
+
+                    "Already have a number? We'll use that instead" — porting
+                    is not supported, and the site's FAQ now says so plainly.
+                    Two parts of the product answering the same question
+                    differently is worse than either answer.
+                  */}
                   <p className="mt-1 text-sm text-gray-600">
                     We pick a number in your area code and set it up on our
-                    system. It usually takes a few hours, and we&rsquo;ll email
-                    you the moment it&rsquo;s ready.
+                    system &mdash; nothing needed from you. It usually takes a
+                    few hours, and it appears in Settings once it&rsquo;s live.
                   </p>
                   <p className="mt-2 text-xs text-gray-500">
-                    Already have a number you want to use? Reply to your welcome
-                    email and we&rsquo;ll use that instead.
+                    We can&rsquo;t move an existing number across yet, so your
+                    agent answers on the new one. Forwarding your old line to it
+                    works if you&rsquo;d rather keep the number you advertise.
                   </p>
                 </div>
               )}

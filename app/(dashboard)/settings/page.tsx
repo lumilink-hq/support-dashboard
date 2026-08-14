@@ -136,31 +136,46 @@ export default async function SettingsPage({
           </div>
         </Section>
 
+        {/*
+          WE PROVISION THE NUMBER (2026-08-13). This section used to present an
+          empty input and tell the client "Setup is waiting on this. Add the
+          number you want Lumi to answer" — which was true when clients brought
+          their own line, and is now the opposite of the promise on the site
+          ("we provide one", "you don't lift a finger"). A customer who has just
+          been told setup is on us, then finds a form blaming them for the
+          delay, has been told two different things by the same product.
+
+          The field stays editable for an ADMIN, because someone has to be able
+          to correct a mis-provisioned number without a database session. But
+          nothing here asks the client to supply one.
+        */}
         <Section
           title="Phone"
-          description="The number Lumi answers on."
+          description="The number we provisioned for you."
         >
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Your business phone number
+              Your LumiLink number
             </label>
             <input
               name="phone_number"
               type="tel"
               defaultValue={client.phone_number ?? ""}
-              placeholder="+1 213 463 6649"
+              placeholder="Being provisioned…"
               disabled={!canEdit}
               className={inputCls}
             />
             {client.phone_number ? (
               <p className="mt-1 text-xs text-gray-500">
-                Calls to this number reach your agent. Changing it re-runs setup
-                against the new number.
+                Calls to this number reach your agent. We set it up as part of
+                your onboarding &mdash; if you need it changed, tell us and
+                we&rsquo;ll move it.
               </p>
             ) : (
-              <p className="mt-1 text-xs text-amber-700">
-                Setup is waiting on this. Add the number you want Lumi to answer
-                and we&rsquo;ll finish connecting it.
+              <p className="mt-1 text-xs text-blue-700">
+                We&rsquo;re buying and configuring your number as part of setup
+                &mdash; nothing needed from you. It appears here once it&rsquo;s
+                live, before your first call.
               </p>
             )}
           </div>
