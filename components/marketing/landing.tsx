@@ -35,13 +35,13 @@ import {
   CapabilityGrid,
   Check,
   ClosingCta,
-  DEMO_CTA,
   Eyebrow,
   FaqList,
   OVERAGE_ANSWER,
   Pillars,
   PricingGrid,
   Section,
+  SIGNUP_CTA,
 } from "@/components/marketing/blocks";
 import { advertisedCalls, STARTER_PLAN } from "@/lib/entitlements";
 
@@ -106,8 +106,8 @@ const CAPABILITIES = [
 // const STEPS = [
 //   {
 //     n: "1",
-//     title: "A 20-minute discovery call",
-//     body: "We go through your services, prices, and hours: what Lumi needs to answer a customer correctly.",
+//     title: "Create your account",
+//     body: "You tell us your services, prices, and hours during onboarding: what Lumi needs to answer a customer correctly.",
 //   },
 //   {
 //     n: "2",
@@ -132,7 +132,11 @@ const FAQS = [
   },
   {
     q: "Does It Sound Robotic?",
-    a: "It's a natural voice with real conversational turn-taking. Judge it yourself on the discovery call rather than taking our word for it.",
+    // Was "judge it yourself on the discovery call" — there is no discovery
+    // call. Replaced with what the voice actually does rather than a promise to
+    // demo it: an in-app test call is a known gap (FEATURE-GAPS.md §5), so
+    // pointing at one here would swap a fake step for a missing feature.
+    a: "It's a natural voice with real conversational turn-taking — it pauses, handles being interrupted, and doesn't read from a script. Every call is transcribed in your dashboard, so you can read exactly how it sounded.",
   },
   {
     q: "Do I Need A Phone Number?",
@@ -177,10 +181,10 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
 
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
-                href={DEMO_CTA}
+                href={SIGNUP_CTA}
                 className="rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-800"
               >
-                Book A Discovery Call
+                Create Your Account
               </Link>
               <a
                 href="/plans"

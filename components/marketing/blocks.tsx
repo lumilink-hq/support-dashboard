@@ -18,10 +18,34 @@ import {
   PLAN_TIERS,
   STARTER_PLAN,
 } from "@/lib/entitlements";
+import { isSignedIn } from "@/components/marketing/shell";
 
-// Where every primary CTA points. Swap to a Cal.com/Calendly URL once booking
-// is set up; one place so that stays a one-line change.
-export const DEMO_CTA = "/signup";
+/**
+ * Where every primary CTA points: straight at account creation.
+ *
+ * The old comment here said "swap to a Cal.com/Calendly URL once booking is set
+ * up". That is not the plan — we don't run discovery calls, and the buttons
+ * that said "Book a discovery call" were pointing here the whole time, so the
+ * label was describing a step that never existed. Renamed from DEMO_CTA to
+ * SIGNUP_CTA so nothing re-adopts the booking idea from the name alone.
+ */
+export const SIGNUP_CTA = "/signup";
+
+/**
+ * Where a plan card should send THIS visitor.
+ *
+ * Signed out, the answer is signup — that's the change requested on 2026-08-13,
+ * and it removes a hop for the only people who see these cards and can't check
+ * out yet. `next=/plans` brings them back to the tier they were looking at.
+ *
+ * Signed IN, it stays /plans. A pricing card cannot become a checkout button:
+ * the Stripe link has to carry client_reference_id, and only /plans reads the
+ * session to supply it. Sending an existing customer to a signup form instead
+ * of checkout would be a worse hop than the one we just removed.
+ */
+export async function planCtaHref(): Promise<string> {
+  return (await isSignedIn()) ? "/plans" : "/signup?next=%2Fplans";
+}
 
 // ---------------------------------------------------------------------------
 // Layout primitives
@@ -106,18 +130,26 @@ export function CapabilityGrid({
 /**
  * The plan ladder.
  *
- * DISPLAY ONLY. Every CTA goes to /plans, which is where the session is read
- * and the Stripe link gets its `client_reference_id`. A checkout button on a
- * page that doesn't know who is clicking it is how a payment ends up
- * unroutable — see STRIPE-GO-LIVE.md §1.
+ * STILL DISPLAY ONLY. No card here is ever a checkout link: the Stripe URL has
+ * to carry `client_reference_id`, and only /plans reads the session to supply
+ * it. A checkout button on a page that doesn't know who is clicking it is how a
+ * payment ends up unroutable — see STRIPE-GO-LIVE.md §1.
+ *
+ * What changed 2026-08-13: the button no longer hardcodes /plans. It asks
+ * planCtaHref, which sends a signed-out visitor to signup first. That makes
+ * this an async server component — fine everywhere it's used (all three
+ * marketing pages are server components), but it does mean this block can't be
+ * dropped into a "use client" tree without being refactored back to a prop.
  */
-export function PricingGrid({
+export async function PricingGrid({
   heading = "What You Pay, And Where The Limits Are",
   blurb = "Every plan comes with a set number of calls and no setup fee. When you outgrow one, you move up a plan — we never bill you for going over.",
 }: {
   heading?: string;
   blurb?: string;
 }) {
+  const ctaHref = await planCtaHref();
+
   return (
     <Section id="pricing" className="py-20">
       <div className="max-w-2xl">
@@ -173,7 +205,7 @@ export function PricingGrid({
             <div className="mt-6 flex-1" />
 
             <Link
-              href="/plans"
+              href={ctaHref}
               className={`block rounded-md px-4 py-2.5 text-center text-sm font-medium ${
                 tier.mostPopular
                   ? "bg-gray-900 text-white hover:bg-gray-800"
@@ -286,7 +318,9 @@ export function FaqList({
 export function ClosingCta({
   heading,
   body,
-  cta = "Book A Discovery Call",
+  // Was "Book A Discovery Call". We don't run discovery calls, and this link
+  // has always gone to /signup — the label was inventing a step.
+  cta = "Create Your Account",
 }: {
   heading: string;
   body: string;
@@ -301,7 +335,7 @@ export function ClosingCta({
         <p className="mx-auto mt-4 max-w-xl text-gray-600">{body}</p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link
-            href={DEMO_CTA}
+            href={SIGNUP_CTA}
             className="rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white hover:bg-gray-800"
           >
             {cta}

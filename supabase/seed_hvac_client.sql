@@ -47,7 +47,36 @@ begin
         'service_area', 'Within 25 miles of San Francisco, CA',
         'persona', 'Lumi'
       ),
-      'transfer_number', null                       -- optional human on-call line
+      -- Legacy single line. Still read as a fallback when transfer_destinations
+      -- is absent, so pre-0036 seeds keep working; prefer the array below.
+      'transfer_number', null,
+
+      -- ADVANCED TRANSFERS (0036). Ordered, priority-first; index 0 is the
+      -- primary and is what the over-cap deflect path falls back to. Empty here
+      -- because the demo line has no humans behind it — uncomment to exercise
+      -- routing. How many entries this client may actually use comes from
+      -- transfer_destination_limit(): Starter 1, Growth/Scale 4.
+      --
+      -- transfer_type: 'blind' (default, releases the leg) | 'conference'
+      --   (announced, but keeps billing while the humans talk — opt-in).
+      -- hours:         'always' (default) | 'business' | 'after'.
+      'transfer_destinations', jsonb_build_array()
+      -- jsonb_build_array(
+      --   jsonb_build_object(
+      --     'label',         'Service dispatch',
+      --     'number',        '+14155550111',
+      --     'when',          'the caller has an existing job, a warranty question, or needs a technician today',
+      --     'transfer_type', 'blind',
+      --     'hours',         'business'
+      --   ),
+      --   jsonb_build_object(
+      --     'label',         'On-call tech',
+      --     'number',        '+14155550222',
+      --     'when',          'no heat, no cooling, a gas smell or a water leak and they need someone right now',
+      --     'transfer_type', 'conference',
+      --     'hours',         'after'
+      --   )
+      -- )
     )
   )
   on conflict (slug) do update set

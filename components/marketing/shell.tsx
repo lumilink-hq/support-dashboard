@@ -25,7 +25,12 @@ const NAV_LINKS = [
   { href: "#faq", label: "FAQ" },
 ];
 
-async function isSignedIn(): Promise<boolean> {
+/**
+ * Exported for blocks.tsx's planCtaHref — the pricing cards need the same
+ * answer the nav CTA does. shell.tsx does not import blocks.tsx, so this
+ * direction creates no cycle.
+ */
+export async function isSignedIn(): Promise<boolean> {
   // getUser() verifies the token with Supabase rather than trusting the cookie.
   // That costs a round trip and makes this page dynamic, which is the right
   // trade at current traffic. If the landing page ever needs to render

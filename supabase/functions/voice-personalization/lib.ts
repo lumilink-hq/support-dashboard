@@ -34,6 +34,136 @@ export type ServiceRow = {
  */
 export type AgentMode = "scheduling" | "orders";
 
+/**
+ * How the call leaves us.
+ *
+ * 'blind'      — hand off and release. The ElevenLabs leg ends, so the human
+ *                conversation costs no further minutes.
+ * 'conference' — Lumi announces the caller and stays bridged. Better handoff,
+ *                but the leg keeps billing for as long as the humans talk, and
+ *                since 2026-08-13 the allowance is a HARD CAP. Opt-in only.
+ */
+export type TransferType = "blind" | "conference";
+
+/** When a destination is dialable. Evaluated against the client's own hours. */
+export type TransferWindow = "always" | "business" | "after";
+
+/**
+ * One routed human destination — the unit of "advanced transfers".
+ *
+ * Stored in clients.settings.transfer_destinations (see migration 0036 for the
+ * JSON contract and why it isn't constraint-validated). Array order is
+ * priority: index 0 is the primary and is what every legacy single-number
+ * reader falls back to.
+ */
+export type TransferDestination = {
+  label: string;
+  number: string;
+  /** Natural-language routing condition, shown to the model. May be empty. */
+  when: string;
+  transferType: TransferType;
+  hours: TransferWindow;
+};
+
+/**
+ * How many destinations the shared ElevenLabs agent can physically dial.
+ *
+ * Hard-limited by the fixed transfer rule slots on the agent
+ * (transfer_1_number … transfer_4_number — docs/voice-agent-elevenlabs-config.md
+ * §5b). Mirrors the CHECK on plan_tiers.transfer_destinations. Raising it here
+ * without adding rules there produces a destination the prompt offers and the
+ * agent cannot reach, which presents to the caller as the agent going silent.
+ */
+export const MAX_TRANSFER_DESTINATIONS = 4;
+
+/** E.164: leading +, no leading zero, 7-15 digits total. */
+const E164 = /^\+[1-9][0-9]{6,14}$/;
+
+/**
+ * Normalise clients.settings.transfer_destinations into a usable, capped list.
+ *
+ * Tolerates three input states because all three exist in the wild:
+ *   - the array (0036 onward)
+ *   - no array but a legacy `transfer_number` scalar (pre-0036, and still
+ *     written by seed_hvac_client.sql) — promoted to a single destination
+ *   - neither — returns []
+ *
+ * DROPS an entry only when its number isn't E.164. That's the one defect that
+ * cannot be recovered from: a malformed number is a transfer that fails on a
+ * live call. A missing label is cosmetic and gets a positional fallback, and a
+ * missing `when` is legitimate — a single-destination client has nothing to
+ * route between.
+ *
+ * `limit` is the tier cap from transfer_destination_limit(). It DEFAULTS TO THE
+ * MAXIMUM, not to 1, and the direction of that default is deliberate: if the
+ * caller couldn't resolve a limit (RPC error, timeout, an operator grant with
+ * no plan_tier), the failure mode we choose is a client briefly getting routing
+ * they may not have paid for, not a live caller's escalation path silently
+ * collapsing to one number. Same reasoning as shouldDeflect's fail-open, and
+ * the same reasoning as 0036 §2's null-tier case. Over-delivering transfers
+ * costs nothing; under-delivering strands a caller mid-emergency.
+ */
+export function readTransferDestinations(
+  settings: Record<string, unknown> | null | undefined,
+  limit: number = MAX_TRANSFER_DESTINATIONS,
+): TransferDestination[] {
+  const s = (settings ?? {}) as Record<string, unknown>;
+  const raw = Array.isArray(s.transfer_destinations)
+    ? (s.transfer_destinations as unknown[])
+    : legacyScalarAsList(s.transfer_number);
+
+  const cap = Math.max(
+    0,
+    Math.min(Number.isFinite(limit) ? Math.floor(limit) : MAX_TRANSFER_DESTINATIONS,
+      MAX_TRANSFER_DESTINATIONS),
+  );
+
+  const out: TransferDestination[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const d = entry as Record<string, unknown>;
+    const number = typeof d.number === "string" ? d.number.trim() : "";
+    if (!E164.test(number)) continue;
+
+    // Positional fallback counts the SURVIVORS, not the raw array. Numbering by
+    // raw index would label the second usable destination "Line 4" while the
+    // prompt and the agent's rule slots both call it destination 2.
+    const label = typeof d.label === "string" && d.label.trim()
+      ? d.label.trim()
+      : out.length === 0
+        ? "Main line"
+        : `Line ${out.length + 1}`;
+
+    out.push({
+      label,
+      number,
+      when: typeof d.when === "string" ? d.when.trim() : "",
+      // Anything other than an explicit 'conference' stays blind, so a typo can
+      // never silently opt a client into billing a bridged leg.
+      transferType: d.transfer_type === "conference" ? "conference" : "blind",
+      hours:
+        d.hours === "business" ? "business" : d.hours === "after" ? "after" : "always",
+    });
+  }
+
+  return out.slice(0, cap);
+}
+
+/** Pre-0036 clients stored one bare number. Treat it as destination #1. */
+function legacyScalarAsList(scalar: unknown): unknown[] {
+  const n = typeof scalar === "string" ? scalar.trim() : "";
+  if (!n) return [];
+  return [
+    {
+      label: "Main line",
+      number: n,
+      when: "the caller asks for a person, or an emergency needs someone right now",
+      transfer_type: "blind",
+      hours: "always",
+    },
+  ];
+}
+
 export type ClientConfig = {
   name: string;
   slug: string; // tenant routing key on the web (analog of the dialed number)
@@ -42,7 +172,18 @@ export type ClientConfig = {
   timezone: string;
   serviceArea: string | null;
   hoursHuman: string | null; // human-readable business hours
+  /**
+   * The PRIMARY human line — destination #1, or null when none is configured.
+   *
+   * Derived, not stored: it's transferDestinations[0].number. Kept as its own
+   * field because the over-cap deflect path and the {{transfer_number}} dynamic
+   * variable both want "the one number to fall back to" and neither should have
+   * to know about routing. Falls back to the legacy settings.transfer_number
+   * scalar via readTransferDestinations.
+   */
   transferNumber: string | null;
+  /** Ordered, priority-first, already capped to the client's tier. May be []. */
+  transferDestinations: TransferDestination[];
   extraInstructions: string; // phone-only free-form guidance from the dashboard
   isDemo: boolean;
   agentMode: AgentMode;
@@ -91,14 +232,23 @@ export type PersonalizationResponse = {
 
 // ---- Config extraction ------------------------------------------------------
 
-/** Pull the non-secret client config out of a `clients` row's columns/jsonb. */
-export function readClientConfig(row: {
-  name?: string | null;
-  slug?: string | null;
-  brand_tone_config?: Record<string, unknown> | null;
-  business_hours?: Record<string, unknown> | null;
-  settings?: Record<string, unknown> | null;
-}): ClientConfig {
+/**
+ * Pull the non-secret client config out of a `clients` row's columns/jsonb.
+ *
+ * `opts.transferLimit` is the client's tier cap, from the
+ * transfer_destination_limit() RPC. Omit it and the maximum is assumed — see
+ * readTransferDestinations for why that default points the way it does.
+ */
+export function readClientConfig(
+  row: {
+    name?: string | null;
+    slug?: string | null;
+    brand_tone_config?: Record<string, unknown> | null;
+    business_hours?: Record<string, unknown> | null;
+    settings?: Record<string, unknown> | null;
+  },
+  opts: { transferLimit?: number } = {},
+): ClientConfig {
   const brand = (row.brand_tone_config ?? {}) as Record<string, unknown>;
   const settings = (row.settings ?? {}) as Record<string, unknown>;
   const scheduling = (settings.scheduling ?? {}) as Record<string, unknown>;
@@ -106,6 +256,11 @@ export function readClientConfig(row: {
 
   const persona =
     (scheduling.persona as string) || (brand.persona as string) || "Lumi";
+
+  const transferDestinations = readTransferDestinations(
+    settings,
+    opts.transferLimit ?? MAX_TRANSFER_DESTINATIONS,
+  );
 
   // Prefer the structured weekly hours (the same source the booking engine uses),
   // rendered in the readable §3 style; fall back to a free-form business_hours
@@ -128,7 +283,13 @@ export function readClientConfig(row: {
       "America/Los_Angeles",
     serviceArea: (scheduling.service_area as string) ?? null,
     hoursHuman: hoursHuman || null,
-    transferNumber: (settings.transfer_number as string) ?? null,
+    // Destination #1 wins. Deliberately NOT `settings.transfer_number` any
+    // more: once a client has a routed list, the scalar is stale history, and
+    // reading it would send the over-cap deflect to a number the client may
+    // have already demoted. readTransferDestinations still falls back to the
+    // scalar when there's no list, so pre-0036 clients are unaffected.
+    transferNumber: transferDestinations[0]?.number ?? null,
+    transferDestinations,
     // Phone-only free-form guidance. `voice_instructions` is the phone analog of
     // `custom_instructions` (which stays email-only); tolerate either being unset.
     extraInstructions:
@@ -252,6 +413,71 @@ export function formatServices(services: ServiceRow[]): string {
 // ---- Prompt + greeting builders --------------------------------------------
 
 /**
+ * The `# Transfer routing` prompt section — the half of "advanced transfers"
+ * that the model actually reads.
+ *
+ * WHY THE ROUTING LIVES IN THE PROMPT AND NOT IN THE AGENT'S RULES. ElevenLabs
+ * lets each transfer rule carry a natural-language condition, which sounds like
+ * exactly the right place for "send billing questions to the office". It isn't,
+ * for this system: rules are configured ON THE AGENT, and one shared agent
+ * serves every tenant. Per-tenant conditions there would leak across tenants
+ * the same way the native knowledge base does (see 0032). Only the DESTINATION
+ * can be a dynamic variable.
+ *
+ * So the agent gets fixed, tenant-agnostic slots and the tenant-specific
+ * routing is assembled here, per call, from their own destinations. The rule
+ * conditions do nothing but point back at this section.
+ *
+ * The numbering is load-bearing: "destination N" here must be the same N as
+ * {{transfer_N_number}} in the agent's rules, or the agent dials the wrong
+ * human. The "direct"/"announced" wording is load-bearing too — it's what the
+ * two rule families (blind vs conference) discriminate on.
+ *
+ * Returns "" when the client has no destinations, so the caller can fall back
+ * to lead capture without an empty heading in the prompt.
+ */
+export function buildTransferRouting(cfg: ClientConfig): string {
+  // `?? []` even though the field is required: this runs inside the initiation
+  // webhook, where a thrown TypeError isn't a failed test, it's a caller
+  // hearing dead air. A hand-built ClientConfig that predates this field should
+  // degrade to "no transfers", not drop the call.
+  const dests = cfg.transferDestinations ?? [];
+  if (dests.length === 0) return "";
+
+  const lines = dests.map((d, i) => {
+    const when = d.when
+      ? d.when
+      : "the caller asks for a person, or an emergency needs someone right now";
+    const window =
+      d.hours === "business"
+        ? `only during business hours (${cfg.hoursHuman || "see the team"})`
+        : d.hours === "after"
+          ? `only OUTSIDE business hours (${cfg.hoursHuman || "see the team"})`
+          : "any time";
+    const handoff =
+      d.transferType === "conference"
+        ? "announced (say who's calling and why before handing over)"
+        : "direct (put them straight through)";
+    return `Destination ${i + 1} — ${d.label}. Use when: ${when}. Available: ${window}. Handoff: ${handoff}.`;
+  });
+
+  // The closed-window fallback names destination 1 rather than saying "take a
+  // message", because destination 1 is the client's own stated default and an
+  // after-hours-only line existing at all implies someone wants calls routed,
+  // not parked. Only when destination 1 is itself closed do we fall to a lead.
+  const rules = [
+    `Pick the FIRST destination above whose "use when" fits what the caller needs. Work out the current local time in ${cfg.timezone} from the anchor above before you use a destination that is hours-limited — if it isn't available right now, do not mention it and do not dial it.`,
+    dests.length > 1
+      ? `If nothing fits and they still want a person, use destination 1.`
+      : ``,
+    `Never read a phone number out loud, never invent a destination, and never transfer anywhere that isn't listed above.`,
+    `If the transfer fails, or no destination is available right now, apologize in one short sentence, capture the caller's name and number so the team can call back, then end the call. Do not keep retrying.`,
+  ].filter(Boolean);
+
+  return `\n\n# Transfer routing\nYou can put a caller through to a real person. These are the only destinations you may use:\n${lines.join("\n")}\n\n${rules.join(" ")}`;
+}
+
+/**
  * Build the full per-tenant system prompt for the scheduling agent. Everything
  * client-specific (name, persona, tone, hours, service area, service menu) is
  * baked in here so the shared agent speaks as this one business.
@@ -271,10 +497,14 @@ export function buildSystemPrompt(
     ? `Service area: ${cfg.name} covers ${cfg.serviceArea}. If the address is outside that, don't book — offer a callback and capture the lead.`
     : `If the caller is outside the service area, don't book — offer a callback and capture the lead.`;
 
-  // Emergency handling can transfer to a human line when one is configured.
-  const transferLine = cfg.transferNumber
-    ? "Offer to warm-transfer to a person when asked, or for an emergency that needs immediate help."
+  // Escalation. The inline sentence stays short and points at the routing
+  // section rather than restating it — two descriptions of the same behaviour
+  // in one prompt is how an agent ends up choosing the wrong one.
+  const hasTransfer = (cfg.transferDestinations ?? []).length > 0;
+  const transferLine = hasTransfer
+    ? "If they want a person, or an emergency needs immediate help, use the Transfer routing section below."
     : "There's no live transfer line, so if they need a person, capture the caller's details as a lead and tell them the team will follow up.";
+  const transferRouting = buildTransferRouting(cfg);
 
   // Phone-only guidance the business typed in the dashboard. It refines what the
   // agent says but must not override the flow/guardrails, so it goes near the end,
@@ -317,7 +547,7 @@ If a caller wants to move or cancel an existing appointment:
 2. If one appointment comes back, read it back and confirm it's the right one ("I see an AC Tune-Up on Monday, July 27 at 2 PM — is that the one?"). If several come back, read them out and let the caller choose. Never change or cancel an appointment you haven't found with find_appointment and confirmed with the caller.
 3. To cancel: once they confirm, call cancel with that appointment_id, then tell them it's cancelled.
 4. To reschedule: confirm the service, call check_availability for it, offer 2–3 real new times, then call reschedule with that appointment_id and the chosen slot's ISO start. If it comes back slot_unavailable, apologize and offer another time. Confirm the new time once it's done.
-5. If find_appointment turns up nothing — or the caller is describing a visit that has already happened — you have no upcoming appointment on file to change. Say so plainly ("I don't see an upcoming appointment under that number"), then offer to book a new visit, or take their name and number so the team can follow up. Never try to move or cancel a visit that's already passed; book a fresh one instead.
+5. If find_appointment turns up nothing — or the caller is describing a visit that has already happened — you have no upcoming appointment on file to change. Say so plainly ("I don't see an upcoming appointment under that number"), then offer to book a new visit, or take their name and number so the team can follow up. Never try to move or cancel a visit that's already passed; book a fresh one instead.${transferRouting}
 
 # Guardrails
 - Do not collect payment or card information.
@@ -392,6 +622,39 @@ export function withContactRule(cfg: ClientConfig): string {
   return cfg.policies ? `${rule}\n\n${cfg.policies}` : rule;
 }
 
+/**
+ * The transfer slot variables the agent's fixed rules resolve their
+ * destinations from: transfer_1_number … transfer_4_number, plus a label for
+ * each so the rule condition reads sensibly in the ElevenLabs UI.
+ *
+ * ALWAYS EMITS ALL FOUR PAIRS. The agent references every one of them, and an
+ * undefined variable renders as an empty string rather than failing — so a
+ * missing key looks identical to a deliberately-unset one, right up until a
+ * rule fires with no number.
+ *
+ * UNUSED SLOTS POINT AT THE PRIMARY, not at "". If the model picks a slot the
+ * client hasn't configured — the prompt tells it not to, but prompts are
+ * advice — the choice is between reaching the wrong human and reaching nobody.
+ * Reaching the client's main line is recoverable by a person; dialling an empty
+ * string is dead air on a live call.
+ *
+ * With no destinations at all every slot is "", and that's correct: the prompt
+ * then contains no Transfer routing section, so no rule has anything to match.
+ */
+export function buildTransferSlotVariables(
+  cfg: ClientConfig,
+): Record<string, string> {
+  const dests = cfg.transferDestinations ?? []; // see buildTransferRouting
+  const primary = dests[0]?.number ?? "";
+  const out: Record<string, string> = {};
+  for (let i = 0; i < MAX_TRANSFER_DESTINATIONS; i++) {
+    const d = dests[i];
+    out[`transfer_${i + 1}_number`] = d?.number ?? primary;
+    out[`transfer_${i + 1}_label`] = d?.label ?? "";
+  }
+  return out;
+}
+
 export function buildDynamicVariables(
   cfg: ClientConfig,
   services: ServiceRow[],
@@ -408,7 +671,16 @@ export function buildDynamicVariables(
     business_hours: cfg.hoursHuman ?? "",
     service_area: cfg.serviceArea ?? "",
     services_summary: services.map((s) => s.name).join(", "),
+    // Legacy single-destination variable. Still emitted because the ORDERS
+    // agent's prompt lives in ElevenLabs and references it directly; it now
+    // resolves to destination #1 rather than to settings.transfer_number.
     transfer_number: cfg.transferNumber ?? "",
+    ...buildTransferSlotVariables(cfg),
+    // The routing table as text, for the orders agent — its prompt is in the
+    // agent config, so it can't be assembled per tenant the way the scheduling
+    // prompt is. Referencing {{transfer_routing}} there is how an orders client
+    // gets the same routed behaviour. Blank when nothing is configured.
+    transfer_routing: buildTransferRouting(cfg).trim(),
     is_demo: String(cfg.isDemo),
     // The orders agent's prompt references {{store_policies}}. ElevenLabs
     // renders an undefined variable as an empty string rather than failing, so
@@ -511,7 +783,19 @@ export function buildFallbackResponse(): PersonalizationResponse {
       business_hours: "",
       service_area: "",
       services_summary: "",
+      // An unresolved number belongs to no tenant, so there is no human line to
+      // offer. Every transfer slot is blank and the generic prompt below never
+      // mentions transferring, so nothing can fire.
       transfer_number: "",
+      transfer_1_number: "",
+      transfer_1_label: "",
+      transfer_2_number: "",
+      transfer_2_label: "",
+      transfer_3_number: "",
+      transfer_3_label: "",
+      transfer_4_number: "",
+      transfer_4_label: "",
+      transfer_routing: "",
       is_demo: "false",
       store_policies: "",
       shipping_restrictions: "",
@@ -661,6 +945,13 @@ export type Allowance = {
  * If the client has a human line configured we hand the caller to it: a person
  * is strictly better than "email us", and a transferred call costs no further
  * AI minutes. Only when there's no line do we fall back to deflection.
+ *
+ * ALWAYS DESTINATION 1, ALWAYS DIRECT — no routing here, on purpose. This path
+ * runs because the client is out of minutes, so the one thing it must not do is
+ * spend more of them: it cannot ask what the caller needs (that's a
+ * conversation), and it must not use a conference transfer even if destination
+ * 1 is configured for one, because a bridged leg keeps billing against an
+ * allowance that is already exhausted. Straight to the primary, release, done.
  */
 export function buildDeflectResponse(
   cfg: ClientConfig,
@@ -679,7 +970,7 @@ export function buildDeflectResponse(
   const prompt = canTransfer
     ? [
         `You are answering the phone for ${cfg.name}. This line has reached its usage limit for now, so you must NOT attempt to help with anything.`,
-        `Say exactly one short sentence letting the caller know you're connecting them to someone, then immediately use transfer_to_number to reach ${cfg.transferNumber}.`,
+        `Say exactly one short sentence letting the caller know you're connecting them to someone, then immediately use transfer_to_number to reach destination 1 (${cfg.transferDestinations?.[0]?.label ?? "the main line"}) at ${cfg.transferNumber}. Transfer directly — do not announce the caller, and do not use any other destination.`,
         `Do not look anything up. Do not ask questions. Do not offer to take a message unless the transfer fails — if it does, apologize briefly and use end_call.`,
       ].join(" ")
     : [

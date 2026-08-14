@@ -184,7 +184,28 @@ Deno.serve(async (req) => {
     .eq("active", true)
     .order("name");
 
-  const cfg = readClientConfig(clientData);
+  // How many routed transfer destinations this client's tier allows (0036).
+  // Undefined on failure, NOT 1: readTransferDestinations then assumes the
+  // maximum. An RPC hiccup must not quietly collapse a Growth client's
+  // escalation routing to a single number mid-call — over-delivering transfers
+  // costs nothing, under-delivering strands a caller. Same fail-open posture as
+  // check_voice_allowance below.
+  let transferLimit: number | undefined;
+  {
+    const { data, error } = await supabase.rpc("transfer_destination_limit", {
+      p_client_id: clientId,
+    });
+    if (error) {
+      console.error(
+        "transfer_destination_limit failed (assuming max):",
+        error.message,
+      );
+    } else if (typeof data === "number") {
+      transferLimit = data;
+    }
+  }
+
+  const cfg = readClientConfig(clientData, { transferLimit });
   const services = (serviceRows ?? []) as ServiceRow[];
 
   // 3) Usage limiter, layer 1 — the pre-call gate.

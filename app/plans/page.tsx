@@ -138,7 +138,7 @@ export default async function PlansPage() {
                   Four states, in the order they're checked:
                     already paying   -> send them to manage it, not buy again
                     self-serve + in  -> real checkout link carrying the tenant
-                    self-serve + out -> sign in first, then come back here
+                    self-serve + out -> create an account, then come back here
                     everything else  -> link not configured, button disabled
 
                   The last branch used to read "Talk to us" and point at
@@ -168,8 +168,14 @@ export default async function PlansPage() {
                     Continue to checkout
                   </a>
                 ) : tier.selfServe && !signedIn ? (
+                  // SIGNUP, not login (changed 2026-08-13). This button is the
+                  // acquisition path: someone reading the pricing page and
+                  // clicking a tier almost certainly has no account yet, and
+                  // landing them on a sign-in form made them hunt for the
+                  // "create one" link. /login still carries a signup link the
+                  // other way for the minority who do have one.
                   <Link
-                    href="/login?next=%2Fplans"
+                    href="/signup?next=%2Fplans"
                     className={`block rounded-md px-4 py-2.5 text-center text-sm font-medium ${
                       featured
                         ? "bg-gray-900 text-white hover:bg-gray-800"
@@ -187,7 +193,7 @@ export default async function PlansPage() {
 
                 {tier.selfServe && !signedIn ? (
                   <p className="mt-2 text-center text-xs text-gray-400">
-                    You&rsquo;ll sign in first, then go to payment.
+                    You&rsquo;ll create an account first, then go to payment.
                   </p>
                 ) : null}
               </div>

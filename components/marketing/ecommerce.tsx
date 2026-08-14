@@ -27,13 +27,13 @@ import {
   CapabilityGrid,
   Check,
   ClosingCta,
-  DEMO_CTA,
   Eyebrow,
   FaqList,
   OVERAGE_ANSWER,
   Pillars,
   PricingGrid,
   Section,
+  SIGNUP_CTA,
 } from "@/components/marketing/blocks";
 import { DEMO_LINES } from "@/lib/demo";
 import { STARTER_PLAN } from "@/lib/entitlements";
@@ -170,10 +170,10 @@ export function EcommerceSolution() {
 
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
-                href={DEMO_CTA}
+                href={SIGNUP_CTA}
                 className="rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-800"
               >
-                Book a discovery call
+                Create your account
               </Link>
               <Link
                 href="/demo/orders"
