@@ -37,7 +37,7 @@ const STEPS = [
   {
     n: "1",
     title: "Tell Us About Your Business",
-    body: "Your hours, your services and prices, and how you want Lumi to sound. Ten minutes, and it's the only part we need you for.",
+    body: "Your hours, your services and prices, and how you want Lumi to sound. It's the only part we need you for.",
   },
   {
     n: "2",
@@ -106,7 +106,7 @@ export default async function WelcomePage() {
         </Link>
         {setupOutstanding ? (
           <p className="mt-3 text-sm text-gray-500">
-            Takes about ten minutes. You can stop and come back to it.
+            You can stop and come back to it whenever suits you.
           </p>
         ) : null}
       </div>

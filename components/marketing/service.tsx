@@ -235,7 +235,7 @@ export function ServiceSolution() {
 
       <ClosingCta
         heading="Stop losing jobs to voicemail"
-        body="Tell us about your business in twenty minutes. Lumi is answering your phone about a week later."
+        body="Tell us about your business, we build it, and Lumi starts answering your phone."
       />
     </MarketingShell>
   );

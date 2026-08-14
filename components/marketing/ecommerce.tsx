@@ -301,7 +301,7 @@ export function EcommerceSolution() {
 
       <ClosingCta
         heading="Stop answering the same question"
-        body="Twenty minutes on your store, your policies and your busiest questions. Lumi is answering them about a week later."
+        body="Tell us about your store, your policies and your busiest questions. We build it, and Lumi starts answering them."
       />
     </MarketingShell>
   );

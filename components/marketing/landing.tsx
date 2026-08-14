@@ -330,8 +330,8 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
       <FaqList items={FAQS} />
 
       <ClosingCta
-        heading="Stop Losing Jobs To Voicemail"
-        body="Tell us about your business in twenty minutes. We build it, and Lumi is answering your phone about a week later. Setup costs nothing, and we ship something new most weeks."
+        heading="Stop Losing Customers To Voicemail"
+        body="Tell us about your business, we build it, and Lumi starts answering your phone. Setup costs nothing, and the product keeps getting better."
       />
     </MarketingShell>
   );

@@ -45,13 +45,15 @@ export default function PrivacyPage() {
     >
       <Clause heading="Two Roles, Two Sets Of Data">
         <p>
-          <strong>Your data.</strong> When you sign up we hold your name,
+          <strong>Your data.</strong>{" "}
+          When you sign up we hold your name,
           business name, email address and billing details, plus everything you
           configure — hours, services, prices, policies and how the agent should
           sound.
         </p>
         <p>
-          <strong>Your customers&rsquo; data.</strong> When someone calls your
+          <strong>Your customers&rsquo; data.</strong>{" "}
+          When someone calls your
           line, we process their information <em>on your behalf</em>. You decide
           what your agent does and what it knows; we operate it for you. In data
           protection terms you are the controller and we are the processor.
@@ -88,7 +90,8 @@ export default function PrivacyPage() {
           plan, and support and improve the service.
         </p>
         <p>
-          <strong>We do not sell personal information.</strong> We do not use one
+          <strong>We do not sell personal information.</strong>{" "}
+          We do not use one
           customer&rsquo;s business content or call data to serve another
           customer.
         </p>

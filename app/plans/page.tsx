@@ -209,11 +209,13 @@ export default async function PlansPage() {
           </h2>
           <ul className="mt-2 grid gap-1.5 text-sm text-gray-600 sm:grid-cols-2">
             <li>
-              <strong>No setup fee.</strong> We build and launch your agent at no
+              <strong>No setup fee.</strong>{" "}
+          We build and launch your agent at no
               charge.
             </li>
             <li>
-              <strong>No per-minute charges.</strong> Your allowance is a cap, not
+              <strong>No per-minute charges.</strong>{" "}
+          Your allowance is a cap, not
               a meter.
             </li>
             <li>

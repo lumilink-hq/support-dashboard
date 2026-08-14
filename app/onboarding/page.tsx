@@ -108,7 +108,7 @@ export default async function OnboardingPage({
             </h1>
             <p className="mt-1 text-sm text-gray-500">
               {client?.name ? `Setting up ${client.name}. ` : ""}
-              This takes about ten minutes, and you can come back to it.
+              You can stop and come back to it whenever suits you.
             </p>
           </div>
           <Link href="/conversations" className="shrink-0 text-sm text-gray-500 underline">
@@ -153,8 +153,8 @@ export default async function OnboardingPage({
           </div>
         ) : (
           <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-            Everything we need is in. We&rsquo;ll finish setting up your number
-            and let you know the moment Lumi is live.
+            Everything we need is in. We&rsquo;re finishing your setup now, and
+            your number appears in Settings as soon as Lumi is live.
           </div>
         )}
 
@@ -567,8 +567,8 @@ export default async function OnboardingPage({
                   */}
                   <p className="mt-1 text-sm text-gray-600">
                     We pick a number in your area code and set it up on our
-                    system &mdash; nothing needed from you. It usually takes a
-                    few hours, and it appears in Settings once it&rsquo;s live.
+                    system &mdash; nothing needed from you. It appears in
+                    Settings as soon as it&rsquo;s live.
                   </p>
                   <p className="mt-2 text-xs text-gray-500">
                     We can&rsquo;t move an existing number across yet, so your

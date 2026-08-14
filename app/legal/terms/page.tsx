@@ -58,7 +58,8 @@ export default function TermsPage() {
           verify it.
         </p>
         <p>
-          <strong>Tell us when something is wrong.</strong> You can read every
+          <strong>Tell us when something is wrong.</strong>{" "}
+          You can read every
           conversation in your dashboard. If the agent is saying something
           incorrect, let us know and we will correct it. We can only fix what we
           know about, and we are not liable for a repeated error you were able to
@@ -82,7 +83,8 @@ export default function TermsPage() {
           .
         </p>
         <p>
-          <strong>Your allowance is a cap, not a meter.</strong> We do not bill
+          <strong>Your allowance is a cap, not a meter.</strong>{" "}
+          We do not bill
           you for going over it. If you reach your allowance, calls beyond it are
           not answered by the agent until your next billing period, or until you
           move to a larger plan. We will always rather tell you to upgrade than
@@ -109,7 +111,8 @@ export default function TermsPage() {
 
       <Clause heading="5. Cancel Anytime">
         <p>
-          <strong>You can cancel at any time</strong> from your dashboard.{" "}
+          <strong>You can cancel at any time</strong>{" "}
+          from your dashboard.{" "}
           {LEGAL_EMAIL ? (
             <>
               You can also email{" "}
