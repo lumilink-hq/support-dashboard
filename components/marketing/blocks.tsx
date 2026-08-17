@@ -14,6 +14,8 @@
 import Link from "next/link";
 import {
   advertisedCalls,
+  ENTERPRISE_TIER,
+  enterpriseContactHref,
   OVERAGE,
   PLAN_TIERS,
   STARTER_PLAN,
@@ -216,6 +218,29 @@ export async function PricingGrid({
             </Link>
           </div>
         ))}
+      </div>
+
+      {/*
+        Enterprise / white label — NOT a PLAN_TIERS card. There's no price
+        and no checkout, just a mailto to Enterprise's inbox, so it gets its
+        own full-width row rather than a fourth card in the 3-column grid.
+      */}
+      <div className="mt-6 flex flex-col items-start justify-between gap-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">
+            {ENTERPRISE_TIER.label} / white label
+          </h3>
+          <p className="mt-1 text-sm text-gray-600">{ENTERPRISE_TIER.blurb}</p>
+          <p className="mt-1 text-xs text-gray-500">
+            {ENTERPRISE_TIER.highlights.join(" · ")}
+          </p>
+        </div>
+        <a
+          href={enterpriseContactHref()}
+          className="shrink-0 rounded-md border border-gray-300 px-4 py-2.5 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Contact us
+        </a>
       </div>
 
       {/* ------------------------------------------------------------------ */}
