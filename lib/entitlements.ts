@@ -193,7 +193,7 @@ export const PLAN_TIERS: PlanTier[] = [
     // a customer who has only ever been told "calls" meets a unit they have
     // never seen at exactly the wrong moment.
     highlights: [
-      `About ${advertisedCalls(STARTER_PLAN.includedMinutes)} calls a month (${STARTER_PLAN.includedMinutes} minutes)`,
+      `About ${advertisedCalls(90)} calls a month (${STARTER_PLAN.includedMinutes} minutes)`,
       `${STARTER_PLAN.numbers} local phone number`,
       "24/7 answering and booking",
       "Website knowledge sync",
@@ -210,7 +210,7 @@ export const PLAN_TIERS: PlanTier[] = [
     setupFeeUsd: SETUP_FEE_USD,
     includedMinutes: 250,
     highlights: [
-      `About ${advertisedCalls(250)} calls a month (250 minutes)`,
+      `About ${advertisedCalls(175)} calls a month (250 minutes)`,
       "Advanced transfers",
       "4 hours of platform care per month",
       "Everything in Starter",
@@ -225,7 +225,7 @@ export const PLAN_TIERS: PlanTier[] = [
     setupFeeUsd: SETUP_FEE_USD,
     includedMinutes: 600,
     highlights: [
-      `About ${advertisedCalls(600)} calls a month (600 minutes)`,
+      `About ${advertisedCalls(300)} calls a month (600 minutes)`,
       "2 local phone numbers",
       "Advanced routing",
       "8 hours of platform care per month",
