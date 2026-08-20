@@ -19,8 +19,8 @@ import { createClient } from "@/lib/supabase/server";
 // "How it works" (#how) was removed when that section was commented out in
 // components/marketing/landing.tsx. Restore both together.
 const NAV_LINKS = [
-  { href: "/solutions/ecommerce", label: "Online stores" },
-  { href: "/solutions/service", label: "Service businesses" },
+  { href: "/solutions/ecommerce", label: "Online Stores" },
+  { href: "/solutions/service", label: "Service Businesses" },
   { href: "/plans", label: "Plans" },
   { href: "#faq", label: "FAQ" },
 ];
