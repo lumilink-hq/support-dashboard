@@ -43,7 +43,7 @@ import {
   Section,
   SIGNUP_CTA,
 } from "@/components/marketing/blocks";
-import { advertisedCalls, STARTER_PLAN } from "@/lib/entitlements";
+import { STARTER_PLAN } from "@/lib/entitlements";
 
 /** Shared by "/" and "/home" so the two can never say different things. */
 export const LANDING_METADATA = {

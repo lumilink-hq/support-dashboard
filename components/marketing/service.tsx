@@ -25,7 +25,7 @@ import {
   SIGNUP_CTA,
 } from "@/components/marketing/blocks";
 import { DEMO_LINES } from "@/lib/demo";
-import { advertisedCalls, STARTER_PLAN } from "@/lib/entitlements";
+import { guaranteedCalls, STARTER_PLAN } from "@/lib/entitlements";
 
 export const SERVICE_METADATA = {
   title: "Lumilink for service businesses | AI booking, 24/7",
@@ -50,7 +50,7 @@ const PILLARS = [
   {
     n: "03",
     title: `Costs less than the calls you're missing`,
-    body: `Starter is $${STARTER_PLAN.monthlyUsd} a month and covers about ${advertisedCalls(STARTER_PLAN.includedMinutes)} calls a month. One booked job covers it.`,
+    body: `Starter is $${STARTER_PLAN.monthlyUsd} a month and covers ${guaranteedCalls(STARTER_PLAN.includedMinutes)} calls a month. One booked job covers it.`,
   },
 ];
 

@@ -13,7 +13,7 @@
 
 import Link from "next/link";
 import {
-  advertisedCalls,
+  guaranteedCalls,
   OVERAGE,
   PLAN_TIERS,
   STARTER_PLAN,
@@ -241,8 +241,10 @@ export async function PricingGrid({
           <li>
             Platform care beyond your included hours: ${OVERAGE.perCareHourUsd} per hour
           </li>
-          <li>Additional phone number: $15 per month</li>
-          <li>Additional department or routing tree: $39 per month</li>
+          <li>Additional AI phone line: $19 per month</li>
+          <li>Additional location: $29 per month</li>
+          <li>Advanced workflow: $49 per month</li>
+          <li>Managed integration: $29 per month</li>
         </ul>
         <p className="mt-3 text-xs text-gray-500">
           Minutes used are visible in your dashboard at all times. Setup fees
@@ -360,7 +362,7 @@ export function ClosingCta({
 //
 // Still bridges the two units. We SELL calls and we METER minutes, and the one
 // moment a customer meets the second unit must not be a surprise.
-export const OVERAGE_ANSWER = `We don't. There's no per-minute charge and no surprise bill — your plan is a cap, not a meter. Starter covers about ${advertisedCalls(
+export const OVERAGE_ANSWER = `We don't. There's no per-minute charge and no surprise bill — your plan is a cap, not a meter. Starter covers ${guaranteedCalls(
   STARTER_PLAN.includedMinutes,
 )} calls a month (${
   STARTER_PLAN.includedMinutes

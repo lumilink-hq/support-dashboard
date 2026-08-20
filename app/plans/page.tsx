@@ -20,8 +20,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
 import {
-  OVERAGE,
+  // OVERAGE is deliberately NOT imported any more: this page stopped quoting a
+  // per-minute rate when the hard cap landed (2026-08-13), and an unused import
+  // of it is an invitation to put the rate back on a page that must not carry it.
   PLAN_TIERS,
+  STARTER_PLAN,
   featureState,
   getCurrentClientId,
   getEntitlements,
@@ -31,8 +34,12 @@ import {
 
 export const metadata: Metadata = {
   title: "Plans and pricing | Lumilink",
-  description:
-    "Lumilink plans start at $179 a month with 100 included minutes. Fixed allowances, published overage rates, no fair-use clause.",
+  // Was "100 included minutes ... published overage rates" — both stale. The
+  // allowance is 180 minutes (CFO workbook 2026-08-16) and there are no overage
+  // rates at all since the hard cap landed on 2026-08-13. Derived from
+  // STARTER_PLAN so the next allowance change can't leave the meta description
+  // quoting a number no page still shows.
+  description: `Lumilink plans start at $${STARTER_PLAN.monthlyUsd} a month with ${STARTER_PLAN.includedMinutes} included minutes. Fixed allowances, no usage charges, no fair-use clause.`,
 };
 
 function Check() {
@@ -146,7 +153,7 @@ export default async function PlansPage() {
                   do now. What remains is the CONFIGURATION case: a tier whose
                   CHECKOUT_URL_VOICE_* is unset. It must stay visibly dead
                   rather than silently borrowing another tier's link — that
-                  would charge a Scale buyer $179 and provision them 100
+                  would charge a Scale buyer $179 and provision them Starter&rsquo;s
                   minutes.
                 */}
                 {alreadySubscribed ? (
