@@ -19,7 +19,6 @@
 // sending code in the repo, and its Zapier economics are unresolved
 // (docs/BUILD-PLAN-2026-08.md §E). Do not add it here until that is settled.
 
-import Image from "next/image";
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
 import {
@@ -32,6 +31,7 @@ import {
   OVERAGE_ANSWER,
   Pillars,
   PricingGrid,
+  ProofShot,
   Section,
   SIGNUP_CTA,
 } from "@/components/marketing/blocks";
@@ -216,17 +216,16 @@ export function EcommerceSolution() {
             width.
 
             Real product, not a mockup. A live client's own support page, running our agent.
-            Bordered rather than bled to the edge so it reads as a screenshot of
-            something that exists, which is the entire point of putting it here.
+            ProofShot (not a plain <Image>) so it doesn't wash out against the
+            page's white background — see the component doc in blocks.tsx.
           */}
-          <Image
+          <ProofShot
             src="/proof-tsunami-crop.png"
             alt="A live Shopify store's support page: Powered by LumiLink, with the order-support line customers call"
+            caption="Live — tsunami.store"
             width={1150}
             height={760}
-            sizes="(min-width: 768px) 50vw, 100vw"
             priority
-            className="rounded-xl border border-gray-200 shadow-sm"
           />
         </div>
       </Section>
@@ -287,6 +286,41 @@ export function EcommerceSolution() {
           <p className="mt-8 text-sm text-gray-500">
             Not listed? Ask. The answer is usually yes.
           </p>
+        </div>
+      </Section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Two live stores — proof the "other vendors turn away" line above    */}
+      {/* isn't just copy. Two real, unrelated storefronts, both running the  */}
+      {/* same order-support line.                                           */}
+      {/* ------------------------------------------------------------------ */}
+      <Section className="pb-20">
+        <div className="max-w-2xl">
+          <Eyebrow>Two Stores Already Using It</Eyebrow>
+          <h2 className="mt-4 text-2xl font-semibold tracking-tight text-gray-900 md:text-3xl">
+            Same feature, two different storefronts
+          </h2>
+          <p className="mt-3 text-gray-600">
+            Tsunami and BudClub are two unrelated stores, both running the
+            same order-support line on their site today.
+          </p>
+        </div>
+
+        <div className="mt-12 grid gap-x-10 gap-y-12 md:grid-cols-2">
+          <ProofShot
+            src="/proof-tsunami-widget.png"
+            alt="Tsunami's order-support page, branded Powered by LumiLink, with the support line customers call"
+            caption="Live — tsunami.store"
+            width={581}
+            height={462}
+          />
+          <ProofShot
+            src="/proof-budclub-crop.jpg"
+            alt="BudClub's contact page running the same support line"
+            caption="Live — a BudClub support page"
+            width={1320}
+            height={1140}
+          />
         </div>
       </Section>
 

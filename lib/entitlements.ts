@@ -235,6 +235,38 @@ export const PLAN_TIERS: PlanTier[] = [
   },
 ];
 
+/**
+ * The white-label / Enterprise card shown alongside PLAN_TIERS on every
+ * pricing surface (the homepage, both /solutions pages, and /plans).
+ *
+ * Deliberately NOT a PlanTier and NOT in PLAN_TIERS. There is no price, no
+ * Payment Link and no plan_tier row — this is quoted and provisioned by hand,
+ * so it can never be self-served. Keeping it out of PLAN_TIERS matters
+ * beyond styling: /billing derives "From $X/mo" via
+ * `Math.min(...PLAN_TIERS.map(t => t.monthlyUsd))` and the advertised minute
+ * range via `PLAN_TIERS[0]` / `PLAN_TIERS[PLAN_TIERS.length - 1]`. An
+ * Enterprise entry with no real monthlyUsd would corrupt both.
+ */
+export const ENTERPRISE_TIER = {
+  label: "Enterprise",
+  blurb:
+    "White-label branding, custom limits, and a dedicated line to us. Priced per organisation.",
+  highlights: [
+    "White-label branding for your customers",
+    "Custom minute allowances and phone numbers",
+    "Dedicated onboarding and support",
+    "Everything in Scale",
+  ],
+  contactEmail: "lumilinkhq@gmail.com",
+} as const;
+
+/** mailto: link for the Enterprise card's "Contact us" button. */
+export function enterpriseContactHref(
+  subject = "Enterprise / white label plan",
+): string {
+  return `mailto:${ENTERPRISE_TIER.contactEmail}?subject=${encodeURIComponent(subject)}`;
+}
+
 export type FeatureMeta = {
   key: Feature;
   label: string;

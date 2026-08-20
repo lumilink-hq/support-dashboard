@@ -27,7 +27,6 @@
 // and its three "Why LumiLink works" pillars) so the two don't contradict each
 // other while both are reachable.
 
-import Image from "next/image";
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
 import {
@@ -40,6 +39,8 @@ import {
   OVERAGE_ANSWER,
   Pillars,
   PricingGrid,
+  ProofGallery,
+  ProofShot,
   Section,
   SIGNUP_CTA,
 } from "@/components/marketing/blocks";
@@ -216,17 +217,16 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
             competing for the same width, so the numbers stay readable.
 
             Real product, not a mockup. The appointments view from a live workspace.
-            Bordered rather than bled to the edge so it reads as a screenshot of
-            something that exists, which is the entire point of putting it here.
+            ProofShot (not a plain <Image>) so it doesn't wash out against the
+            page's white background — see the component doc in blocks.tsx.
           */}
-          <Image
+          <ProofShot
             src="/proof-appointments-crop.png"
             alt="The Lumilink dashboard: jobs booked by the agent, the revenue they represent, and the week ahead"
+            caption="Admin dashboard — Appointments"
             width={1590}
             height={475}
-            sizes="(min-width: 768px) 50vw, 100vw"
             priority
-            className="rounded-xl border border-gray-200 shadow-sm"
           />
         </div>
       </Section>
@@ -293,6 +293,35 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
         </div>
         <CapabilityGrid items={CAPABILITIES} />
       </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Inside the dashboard — the two screens behind "nothing            */}
+      {/* disappears" and "you see every word that was said" up in the      */}
+      {/* hero. Those were claims with no picture next to them; these are   */}
+      {/* the actual screens, from a live workspace.                        */}
+      {/* ---------------------------------------------------------------- */}
+      <ProofGallery
+        eyebrow="Inside The Dashboard"
+        heading="Every Call Logged. Nothing Falls Through."
+        blurb="This is the same dashboard your account gets — not a mockup. Every call becomes a transcript, and anything Lumi couldn't finish lands in a queue instead of vanishing."
+        className="border-t border-gray-200 bg-gray-50 py-20"
+        shots={[
+          {
+            src: "/proof-conversations.png",
+            alt: "The Conversations screen: every call the agent handled, newest first, with the order it was about and whether it's closed",
+            caption: "Admin dashboard — Conversations",
+            width: 1899,
+            height: 942,
+          },
+          {
+            src: "/proof-review-queue.png",
+            alt: "The Review Queue screen: callbacks the agent flagged for a human, with due dates and a one-click way to log the outcome",
+            caption: "Admin dashboard — Review Queue",
+            width: 1887,
+            height: 801,
+          },
+        ]}
+      />
 
       {/* ---------------------------------------------------------------- */}
       {/* The two-minute policy — stated up front, not buried in terms      */}

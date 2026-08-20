@@ -8,7 +8,6 @@
 // and the thing the landing page only gestures at. Same plan ladder, same
 // pricing component.
 
-import Image from "next/image";
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
 import {
@@ -21,6 +20,7 @@ import {
   OVERAGE_ANSWER,
   Pillars,
   PricingGrid,
+  ProofShot,
   Section,
   SIGNUP_CTA,
 } from "@/components/marketing/blocks";
@@ -197,14 +197,13 @@ export function ServiceSolution() {
             Bordered rather than bled to the edge so it reads as a screenshot of
             something that exists, which is the entire point of putting it here.
           */}
-          <Image
+          <ProofShot
             src="/proof-appointments-crop.png"
             alt="Booked revenue, average job value and the week ahead, from jobs the agent booked"
+            caption="Admin dashboard — Appointments"
             width={1590}
             height={475}
-            sizes="(min-width: 768px) 50vw, 100vw"
             priority
-            className="rounded-xl border border-gray-200 shadow-sm"
           />
         </div>
       </Section>
@@ -225,6 +224,20 @@ export function ServiceSolution() {
           </p>
         </div>
         <CapabilityGrid items={CAPABILITIES} />
+
+        {/*
+          "Nothing disappears" above is a claim with no picture. This is the
+          queue it's talking about — the callback tickets Lumi logs when it
+          can't finish a call, from a live workspace.
+        */}
+        <ProofShot
+          src="/proof-review-queue.png"
+          alt="The Review Queue screen: callbacks the agent flagged for a human, with due dates and a one-click way to log the outcome"
+          caption="Admin dashboard — Review Queue"
+          width={1887}
+          height={801}
+          className="mx-auto mt-12 max-w-2xl"
+        />
       </Section>
 
       <CallLengthPolicy closing="We publish this because you will hit it. An AI that keeps a frustrated caller on the line for nine minutes costs you more than one that hands them to a person at two." />
