@@ -16,12 +16,17 @@ import { createClient } from "@/lib/supabase/server";
 // because all three render <FaqList>, which hardcodes id="faq" for this reason.
 // It still does nothing on /plans.
 //
-// "How it works" (#how) was removed when that section was commented out in
-// components/marketing/landing.tsx. Restore both together.
+// "#how" is different: id="how" only exists on the landing page (restored
+// 2026-08-30 alongside the STEPS section in landing.tsx), and no other
+// marketing page has an equivalent section. A bare "#how" would silently do
+// nothing everywhere except "/", so this one is "/#how" instead — a full
+// navigation home, then the browser's native scroll-to-fragment on load.
 const NAV_LINKS = [
   { href: "/solutions/ecommerce", label: "Online Stores" },
   { href: "/solutions/service", label: "Service Businesses" },
+  { href: "/#how", label: "How It Works" },
   { href: "/plans", label: "Plans" },
+  { href: "/story", label: "Our Story" },
   { href: "#faq", label: "FAQ" },
 ];
 
@@ -172,6 +177,9 @@ export async function MarketingShell({
           <div className="mt-8 flex flex-col gap-3 border-t border-gray-200 pt-6 text-xs text-gray-400 sm:flex-row sm:items-center sm:justify-between">
             <p>&copy; {new Date().getFullYear()} LumiLink. All rights reserved.</p>
             <nav className="flex gap-4">
+              <Link href="/contact" className="hover:text-gray-900">
+                Contact
+              </Link>
               <Link href="/legal/terms" className="hover:text-gray-900">
                 Terms Of Service
               </Link>

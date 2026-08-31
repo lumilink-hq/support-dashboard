@@ -23,6 +23,22 @@ export const PUBLIC_PREFIXES = [
   // file and nothing else. There is no /solutions index page — a bare
   // /solutions 404s, which is correct until one is written.
   "/solutions",
+  // Partner/channel landing pages: /partners/merchant-support,
+  // /partners/3pl-customer-support, /partners/agency-white-label,
+  // /partners/ecommerce-community, and whatever gets added next (the
+  // 2026-08-30 repositioning brief calls for more than these four). Referral
+  // links only — noindex, not in the nav — but still reached by a signed-out
+  // visitor clicking a partner's link, so they must be public same as
+  // /solutions. There is no /partners index page.
+  "/partners",
+  // One-off audience landing pages that aren't a full public vertical and
+  // aren't a partner/channel deal either — e.g. /lp/creator-support, pitched
+  // directly to a customer segment rather than a reseller. Noindex, not in
+  // the nav, same reasoning as /partners. A prefix (not one exact entry per
+  // page) because this is meant to be the catch-all for the next one of
+  // these, not a one-off — forgetting to add a new /lp page here is exactly
+  // how /story and /partners silently 404'd into /login on 2026-08-30.
+  "/lp",
 ] as const;
 
 /**
@@ -42,7 +58,15 @@ export const PUBLIC_PREFIXES = [
  * When adding marketing routes later: anything with sub-paths goes in
  * PUBLIC_PREFIXES, bare single pages go here.
  */
-export const PUBLIC_EXACT = ["/", "/home", "/preview", "/plans"] as const;
+export const PUBLIC_EXACT = [
+  "/",
+  "/home",
+  "/preview",
+  "/plans",
+  "/story",
+  "/contact",
+  "/addons",
+] as const;
 
 /**
  * Sanitise a `?next=` value before redirecting to it.

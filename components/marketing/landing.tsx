@@ -44,13 +44,14 @@ import {
   Section,
   SIGNUP_CTA,
 } from "@/components/marketing/blocks";
+import { availableAddons } from "@/lib/addons";
 import { STARTER_PLAN } from "@/lib/entitlements";
 
 /** Shared by "/" and "/home" so the two can never say different things. */
 export const LANDING_METADATA = {
   title: "LumiLink | Automate The Repetitive. Escalate What Matters.",
   description:
-    "LumiLink answers every call, quotes from your price list, and books the job on your real calendar. We build the whole thing for you — free setup, no per-minute charges.",
+    "LumiLink answers every call, quotes from your price list, and books the job on your real calendar. We build the whole thing for you, with free setup and no per-minute charges.",
 };
 
 // ---------------------------------------------------------------------------
@@ -65,8 +66,8 @@ const PILLARS = [
   },
   {
     n: "02",
-    title: "We Build It. You Don't Lift A Finger.",
-    body: "We set up your agent, write what it knows, provision your number and test it before a customer ever hears it. Setup costs nothing, and you never manage the AI — that's our job, not yours.",
+    title: "We Build Your Agent From Your Information",
+    body: "We write what it knows, provision your number, and test it before a customer ever hears it. Setup costs nothing. We'd rather prove the product works than charge you before you've seen it. Change what it says or how it works any time after launch.",
   },
   {
     n: "03",
@@ -102,25 +103,39 @@ const CAPABILITIES = [
   },
 ];
 
-// Unused while the "How it works" section is commented out below. Kept rather
-// than deleted so uncommenting the section is a one-block change.
-// const STEPS = [
-//   {
-//     n: "1",
-//     title: "Create your account",
-//     body: "You tell us your services, prices, and hours during onboarding: what Lumi needs to answer a customer correctly.",
-//   },
-//   {
-//     n: "2",
-//     title: "We build and test your agent",
-//     body: "Your setup fee covers implementation, knowledge setup, testing, and launch. You hear it before your customers do.",
-//   },
-//   {
-//     n: "3",
-//     title: "Your number goes live",
-//     body: "We provision your local number and point it at your agent, then every call lands in the dashboard.",
-//   },
-// ];
+// RESTORED 2026-08-30 as part of the hub repositioning (see the memory note
+// "project-repositioning-2026-08" if this file is being read outside that
+// context). Step 2's body used to say "your setup fee covers..." — that
+// contradicted the FAQ two sections down, which has said setup is free since
+// well before this section was hidden. Fixed rather than carried forward.
+const STEPS = [
+  {
+    n: "1",
+    title: "Create your account",
+    body: "Tell us your services, prices, and hours. That's what Lumi needs to answer a customer correctly.",
+  },
+  {
+    n: "2",
+    title: "We build and test your agent",
+    body: "We write what it knows, connect your calendar, and test it against real scenarios before your number goes live. No setup fee, no cost to you.",
+  },
+  {
+    n: "3",
+    title: "Your number goes live",
+    body: "We provision your local number and point it at your agent. Every call lands in your dashboard from day one.",
+  },
+];
+
+// Real catalogue, from lib/addons.ts — same source /billing and /addons use.
+// The $15/$39 "extra number, routing tree" figures that used to live here
+// came from docs/BUILD-PLAN-2026-08.md, which didn't match any actual Stripe
+// object; this pulls the real, currently-sellable add-ons instead. Just the
+// first two, cheapest-first, so the homepage teases rather than repeats the
+// full list on /addons.
+const ADD_ONS = availableAddons()
+  .slice()
+  .sort((a, b) => a.monthlyUsd - b.monthlyUsd)
+  .slice(0, 2);
 
 const FAQS = [
   {
@@ -170,14 +185,15 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
       <Section className="pb-20 pt-16 md:pb-28 md:pt-24">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
-            <Eyebrow>AI Phone Support For Local Business</Eyebrow>
+            <Eyebrow>AI Customer Service For Growing Businesses</Eyebrow>
             <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
               Automate The Repetitive. Escalate What Matters.
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-gray-600">
               Lumi answers every call, quotes from your price list, and books
-              the job on your real calendar. We build the whole thing for you,
-              and you see every word that was said.
+              the job on your real calendar. Phone is where we start. The same
+              system is built to carry everything else your customers need
+              from you.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -288,10 +304,24 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
             One Agent That Finishes The Job
           </h2>
           <p className="mt-3 text-gray-600">
-            A conversation that ends with an appointment on your calendar.
+            A conversation that ends with an appointment on your calendar,
+            today by phone, with more channels on the way.
           </p>
         </div>
         <CapabilityGrid items={CAPABILITIES} />
+        {/*
+          Honest about what's shipped vs. what's next: every item in
+          CAPABILITIES above ships today, which is what the checkmarks
+          promise. The widget and analytics work aren't there yet — the
+          widget's routing exists (docs/BUILD-PLAN-2026-08.md §H) but has no
+          metering, no per-client embed, and isn't exposed as a sellable
+          feature; Insights has no code at all. Say so plainly rather than
+          checkmarking something a customer can't actually get yet.
+        */}
+        <p className="mt-10 text-sm text-gray-500">
+          Building next: a website widget with the same knowledge behind it,
+          and a dashboard view of what your customers are actually asking for.
+        </p>
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -329,16 +359,21 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
       <CallLengthPolicy closing="We publish this because you will hit it. An AI that keeps a frustrated caller on the line for nine minutes costs you more than one that hands them to a person at two." />
 
       {/* ---------------------------------------------------------------- */}
-      {/* How it works — HIDDEN. Uncomment this block and the STEPS array   */}
-      {/* above together; the nav link in components/marketing/shell.tsx    */}
-      {/* was removed at the same time, so put "#how" back there too.       */}
+      {/* How it works — restored 2026-08-30 with the Suite/add-ons framing */}
+      {/* from the repositioning brief. Phone stays the flagship; this      */}
+      {/* section is where "there's more to add later" gets said out loud. */}
       {/* ---------------------------------------------------------------- */}
-      {/*
       <Section id="how" className="border-t border-gray-200 bg-gray-50 py-20">
-        <Eyebrow>How it works</Eyebrow>
+        <Eyebrow>How LumiLink Works</Eyebrow>
         <h2 className="mt-4 max-w-2xl text-3xl font-semibold tracking-tight text-gray-900">
-          Answering calls within about a week
+          Start With The Phone. Build Your Support From There.
         </h2>
+        <p className="mt-3 max-w-2xl text-gray-600">
+          Every plan starts with the same core agent, answering calls the day
+          it goes live. A customer who reaches Lumi at 2am gets an answer
+          instead of a competitor&rsquo;s voicemail, and a job gets booked
+          instead of lost. From there, add what your specific business needs.
+        </p>
 
         <div className="mt-12 grid gap-10 md:grid-cols-3">
           {STEPS.map((s) => (
@@ -355,8 +390,27 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
             </div>
           ))}
         </div>
+
+        <div className="mt-12 rounded-xl border border-gray-200 bg-white p-6">
+          <h3 className="text-sm font-semibold text-gray-900">
+            Add To Your Plan When You Need It
+          </h3>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {ADD_ONS.map((a) => (
+              <li key={a.key} className="flex gap-2 text-sm text-gray-600">
+                <Check />
+                {a.name} (${a.monthlyUsd}/mo)
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-gray-500">
+            <Link href="/addons" className="font-medium text-gray-900 underline underline-offset-4 hover:text-gray-700">
+              See every add-on
+            </Link>
+            . Website Chat is next on our roadmap.
+          </p>
+        </div>
       </Section>
-      */}
 
       <PricingGrid />
 
