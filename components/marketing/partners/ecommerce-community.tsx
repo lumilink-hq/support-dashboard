@@ -11,8 +11,7 @@
 import type { Metadata } from "next";
 import { MarketingShell } from "@/components/marketing/shell";
 import { Eyebrow, Section } from "@/components/marketing/blocks";
-import { PartnerClosingCta, PartnerHero, ProofBar } from "@/components/marketing/partner-blocks";
-import { enterpriseContactHref } from "@/lib/entitlements";
+import { PartnerClosingCta, PartnerHero, ProofBar, partnerContactHref } from "@/components/marketing/partner-blocks";
 
 export const ECOMMERCE_COMMUNITY_METADATA: Metadata = {
   title: "Partner With LumiLink | Ecommerce Communities",
@@ -20,7 +19,13 @@ export const ECOMMERCE_COMMUNITY_METADATA: Metadata = {
     "A referral or cohort add-on that gives your community's serious operators branded phone and site support from day one.",
 };
 
-const CTA_HREF = enterpriseContactHref("Discuss a Cohort Pilot: Ecommerce Community");
+// "Start My Cohort Pilot", not "Discuss" — boss feedback 2026-08-31: this CTA
+// should read as already in motion, not a tentative first ask, to lower the
+// friction of the real conversation that follows.
+const CTA_HREF = partnerContactHref(
+  "/partners/ecommerce-community",
+  "Cohort Pilot",
+);
 
 const ONBOARDING_STEPS = [
   {
@@ -47,9 +52,9 @@ export function EcommerceCommunityPartner() {
         kicker="Help Members Operate Like Real Businesses"
         headline="Give Your Best Operators a Customer-Service System From Day One"
         subhead="A referral or cohort add-on that gives serious ecommerce operators branded phone and site support, order lookup, tickets, transcripts, and a managed portal, without making them learn another tool."
-        primaryLabel="Discuss a Cohort Pilot"
+        primaryLabel="Start My Cohort Pilot"
         primaryHref={CTA_HREF}
-        secondaryLabel="See the Operator Setup"
+        secondaryLabel="How The Operator Setup Works"
         secondaryHref="#setup"
       />
       <ProofBar
@@ -162,7 +167,7 @@ export function EcommerceCommunityPartner() {
       <PartnerClosingCta
         heading="Ready To Bring This To Your Community?"
         body="Tell us about your community and the operators you'd want in the first cohort. We'll come back with a pilot shape, not a generic deck."
-        ctaLabel="Discuss a Cohort Pilot"
+        ctaLabel="Start My Cohort Pilot"
         ctaHref={CTA_HREF}
       />
     </MarketingShell>

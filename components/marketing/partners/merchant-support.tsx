@@ -6,9 +6,8 @@
 import type { Metadata } from "next";
 import { MarketingShell } from "@/components/marketing/shell";
 import { CapabilityGrid, Eyebrow, FaqList, Section } from "@/components/marketing/blocks";
-import { PartnerClosingCta, PartnerHero, ProofBar } from "@/components/marketing/partner-blocks";
+import { PartnerClosingCta, PartnerHero, ProofBar, partnerContactHref } from "@/components/marketing/partner-blocks";
 import { DemoToggle } from "@/components/marketing/demo-toggle";
-import { enterpriseContactHref } from "@/lib/entitlements";
 
 export const MERCHANT_SUPPORT_METADATA: Metadata = {
   title: "Partner With LumiLink | Merchant Support",
@@ -16,7 +15,10 @@ export const MERCHANT_SUPPORT_METADATA: Metadata = {
     "White-label a managed customer-service operation across phone and site chat for every merchant on your platform.",
 };
 
-const CTA_HREF = enterpriseContactHref("Design My Partner Pilot: Merchant Support");
+const CTA_HREF = partnerContactHref(
+  "/partners/merchant-support",
+  "Merchant Support Partner Pilot",
+);
 
 const WHAT_MERCHANTS_RECEIVE = [
   {
@@ -79,11 +81,11 @@ const FAQS = [
   },
   {
     q: "Is Email Support Included?",
-    a: "Not at production scale yet. Phone and web chat are what we run today. Email automation would be scoped as its own project.",
+    a: "We've built email support before. Phone and web chat consistently outperform it: a merchant's customer gets an answer immediately instead of waiting on a reply they might miss and mistake for being ignored. That's why phone and chat are what we lead with. If email matters for your merchants, let's talk about it.",
   },
   {
     q: "Which Platforms Does Order Lookup Support?",
-    a: "Shopify and WooCommerce today, with parity between the two. A merchant on a different platform would need to be scoped separately.",
+    a: "Shopify and WooCommerce today, with parity between the two. If your merchants run on something else, we build custom integrations too, so tell us what you're working with and we'll figure out the fit.",
   },
 ];
 
@@ -94,9 +96,9 @@ export function MerchantSupportPartner() {
         kicker="A More Complete Business For Every Customer You Launch"
         headline="Give Every Merchant a Customer-Service Team, Under Your Brand"
         subhead="LumiLink white-labels a managed support operation across phone and site chat, with ecommerce order lookup, customer verification, escalation tickets, transcripts, and a partner-ready portal."
-        primaryLabel="Design My Partner Pilot"
+        primaryLabel="Start The Conversation"
         primaryHref={CTA_HREF}
-        secondaryLabel="See the Merchant Experience"
+        secondaryLabel="How The Merchant Experience Works"
         secondaryHref="#demo"
       />
       <ProofBar
@@ -166,9 +168,9 @@ export function MerchantSupportPartner() {
 
       <Section id="demo" className="border-t border-gray-200 bg-gray-50 py-16">
         <div className="max-w-2xl">
-          <Eyebrow>See The Merchant Experience</Eyebrow>
+          <Eyebrow>How The Merchant Experience Works</Eyebrow>
           <h2 className="mt-4 text-2xl font-semibold tracking-tight text-gray-900">
-            Toggle Through What A Customer Actually Sees
+            What A Customer Actually Experiences, Step By Step
           </h2>
         </div>
         <div className="mt-8">
@@ -236,7 +238,7 @@ export function MerchantSupportPartner() {
       <PartnerClosingCta
         heading="Ready To Give Every Merchant A Support Team On Day One?"
         body="Tell us about your platform and how many merchants you'd want to start with. We'll come back with a pilot shape, not a generic deck."
-        ctaLabel="Design My Partner Pilot"
+        ctaLabel="Start The Conversation"
         ctaHref={CTA_HREF}
       />
     </MarketingShell>

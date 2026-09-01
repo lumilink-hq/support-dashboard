@@ -5,9 +5,8 @@
 import type { Metadata } from "next";
 import { MarketingShell } from "@/components/marketing/shell";
 import { CapabilityGrid, Eyebrow, FaqList, Section } from "@/components/marketing/blocks";
-import { PartnerClosingCta, PartnerHero, ProofBar } from "@/components/marketing/partner-blocks";
+import { PartnerClosingCta, PartnerHero, ProofBar, partnerContactHref } from "@/components/marketing/partner-blocks";
 import { DemoToggle } from "@/components/marketing/demo-toggle";
-import { enterpriseContactHref } from "@/lib/entitlements";
 
 export const AGENCY_WHITE_LABEL_METADATA: Metadata = {
   title: "Partner With LumiLink | Agency White Label",
@@ -15,7 +14,10 @@ export const AGENCY_WHITE_LABEL_METADATA: Metadata = {
     "Add managed, white-label customer support to every commerce engagement and turn it into recurring revenue.",
 };
 
-const CTA_HREF = enterpriseContactHref("Select 3 Pilot Clients: Agency White Label");
+const CTA_HREF = partnerContactHref(
+  "/partners/agency-white-label",
+  "Agency White-Label Partner Pilot",
+);
 
 const WHAT_LUMILINK_OPERATES = [
   {
@@ -89,9 +91,9 @@ export function AgencyWhiteLabelPartner() {
         kicker="Recurring Revenue After The Storefront Goes Live"
         headline="Add Managed Customer Support to Every Commerce Engagement"
         subhead="You own the client relationship. LumiLink supplies the white-label phone, site chat, order lookup, ticketing, portal, and ongoing optimization, so your agency can add recurring revenue without building an operations team."
-        primaryLabel="Select 3 Pilot Clients"
+        primaryLabel="Start The Conversation"
         primaryHref={CTA_HREF}
-        secondaryLabel="View the White-Label Portal"
+        secondaryLabel="How The White-Label Portal Works"
         secondaryHref="#demo"
       />
       <ProofBar
@@ -146,9 +148,9 @@ export function AgencyWhiteLabelPartner() {
 
       <Section id="demo" className="border-t border-gray-200 bg-gray-50 py-16">
         <div className="max-w-2xl">
-          <Eyebrow>Client Experience</Eyebrow>
+          <Eyebrow>How The White-Label Portal Works</Eyebrow>
           <h2 className="mt-4 text-2xl font-semibold tracking-tight text-gray-900">
-            What A Client Sees Once It&rsquo;s Live
+            What A Client Experiences Once It&rsquo;s Live
           </h2>
         </div>
         <div className="mt-8">
@@ -174,12 +176,12 @@ export function AgencyWhiteLabelPartner() {
       <Section className="border-t border-gray-200 bg-gray-50 py-16">
         <div className="max-w-2xl">
           <h2 className="text-2xl font-semibold tracking-tight text-gray-900">
-            Three Retained Clients, Thirty Days
+            Start With The Clients You Choose
           </h2>
           <p className="mt-4 leading-relaxed text-gray-600">
-            Pick three clients you already manage. We run a joint discovery
-            call, set the pilot up together, and measure it over 30 days
-            before either of us decides to expand.
+            Pick the clients you want to start with, however many that is. We
+            run a joint discovery call, set the pilot up together, and measure
+            it over 30 days before either of us decides to expand.
           </p>
         </div>
       </Section>
@@ -189,7 +191,7 @@ export function AgencyWhiteLabelPartner() {
       <PartnerClosingCta
         heading="Ready To Add Support To Every Engagement?"
         body="Tell us how many clients you'd want to start with and how you'd want to price it. We'll come back with a pilot shape, not a generic deck."
-        ctaLabel="Select 3 Pilot Clients"
+        ctaLabel="Start The Conversation"
         ctaHref={CTA_HREF}
       />
     </MarketingShell>

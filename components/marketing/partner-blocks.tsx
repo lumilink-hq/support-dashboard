@@ -9,13 +9,26 @@
 //
 // These pages are noindex and unlinked from the nav (2026-08-30 repositioning
 // brief: partner pages are referral destinations, reached by a link the partner
-// shares, not a site section someone browses to). Each one uses
-// enterpriseContactHref() for its CTA — the same mailto lead path Enterprise
-// already uses — rather than a dedicated contact form, since that form doesn't
-// exist yet. Swap to it once built.
+// shares, not a site section someone browses to).
+//
+// CTAs go through /contact (partnerContactHref, below), not a mailto link.
+// They used to point at enterpriseContactHref() — boss feedback 2026-08-31:
+// a mailto CTA makes someone draft their own email from scratch, which is the
+// opposite of "easy to engage with us." /contact existed by then, so this
+// switched to it and pre-fills the topic instead of asking them to write it.
 
 import Link from "next/link";
-import { Check, Eyebrow, Section } from "@/components/marketing/blocks";
+import { Check, Eyebrow, Section, contactHref } from "@/components/marketing/blocks";
+
+/**
+ * Re-exported under the partner-specific name the four /partners/* pages
+ * already import. The implementation moved to blocks.tsx once /plans and
+ * PricingGrid's Enterprise CTA needed the exact same "/contact with a
+ * pre-filled topic" behavior — it was never actually partner-specific, just
+ * built here first. Kept as a re-export rather than updating four files'
+ * imports for a rename with no behavior change.
+ */
+export const partnerContactHref = contactHref;
 
 export function PartnerHero({
   kicker,

@@ -5,6 +5,7 @@
 import type { Metadata } from "next";
 import { MarketingShell } from "@/components/marketing/shell";
 import { Eyebrow, Section } from "@/components/marketing/blocks";
+import { safeNextPath } from "@/lib/route-access";
 import { submitContact } from "./actions";
 
 export const metadata: Metadata = {
@@ -17,10 +18,19 @@ export const metadata: Metadata = {
 export default async function ContactPage({
   searchParams,
 }: {
-  // Next 16: searchParams is async.
-  searchParams: Promise<{ sent?: string; error?: string }>;
+  // Next 16: searchParams is async. `source`/`topic` arrive from a partner
+  // page's CTA via partnerContactHref() — they pre-fill the form instead of
+  // leaving someone to write everything from scratch.
+  searchParams: Promise<{
+    sent?: string;
+    error?: string;
+    source?: string;
+    topic?: string;
+  }>;
 }) {
-  const { sent, error } = await searchParams;
+  const { sent, error, source, topic } = await searchParams;
+  const sourcePath = safeNextPath(source, "/contact");
+  const messagePrefill = topic ? `Interested in: ${topic}\n\n` : "";
 
   return (
     <MarketingShell>
@@ -44,6 +54,8 @@ export default async function ContactPage({
             </p>
           ) : (
             <form action={submitContact} className="mt-8 space-y-5">
+              <input type="hidden" name="source_path" value={sourcePath} />
+
               {/*
                 Honeypot. Hidden from sighted users via `hidden`, from screen
                 readers via aria-hidden, and pulled out of tab order — a bot
@@ -143,6 +155,7 @@ export default async function ContactPage({
                   name="message"
                   rows={5}
                   required
+                  defaultValue={messagePrefill}
                   className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
                 />
               </div>

@@ -5,9 +5,8 @@
 import type { Metadata } from "next";
 import { MarketingShell } from "@/components/marketing/shell";
 import { Eyebrow, FaqList, Section } from "@/components/marketing/blocks";
-import { PartnerClosingCta, PartnerHero, ProofBar } from "@/components/marketing/partner-blocks";
+import { PartnerClosingCta, PartnerHero, ProofBar, partnerContactHref } from "@/components/marketing/partner-blocks";
 import { DemoToggle } from "@/components/marketing/demo-toggle";
-import { enterpriseContactHref } from "@/lib/entitlements";
 
 export const THREEPL_SUPPORT_METADATA: Metadata = {
   title: "Partner With LumiLink | 3PL & Fulfillment Support",
@@ -15,7 +14,10 @@ export const THREEPL_SUPPORT_METADATA: Metadata = {
     "Turn your order and tracking data into automated, branded customer support for the merchants you fulfill for.",
 };
 
-const CTA_HREF = enterpriseContactHref("Choose Pilot Merchants: 3PL Support");
+const CTA_HREF = partnerContactHref(
+  "/partners/3pl-customer-support",
+  "3PL Support Pilot",
+);
 
 const DEMO_TABS = [
   {
@@ -39,7 +41,7 @@ const DEMO_TABS = [
 const FAQS = [
   {
     q: "Does This Connect Directly To Our WMS?",
-    a: "Shopify and WooCommerce order lookup work today. A direct WMS integration would be scoped for your specific system before we commit to it.",
+    a: "Shopify and WooCommerce order lookup work today. A direct WMS integration is something we scope per system, so tell us what you're running and we'll work out the fit.",
   },
   {
     q: "What Data Does Lumi See?",
@@ -62,9 +64,9 @@ export function ThreePlSupportPartner() {
         kicker="Your Fulfillment Data Should Answer Customer Questions"
         headline="Turn Order Visibility Into Automated Customer Support"
         subhead="Give merchants a managed, branded phone and web support layer for tracking, order status, returns triage, and address-change requests, without asking your operations team to become a call center."
-        primaryLabel="Choose Pilot Merchants"
+        primaryLabel="Start The Conversation"
         primaryHref={CTA_HREF}
-        secondaryLabel="Watch a WISMO Call Resolve"
+        secondaryLabel="How A WISMO Call Resolves"
         secondaryHref="#demo"
       />
       <ProofBar
@@ -174,7 +176,7 @@ export function ThreePlSupportPartner() {
       <PartnerClosingCta
         heading="Ready To Stop Absorbing WISMO Calls?"
         body="Tell us how many merchants or locations you'd want to start with. We'll come back with a pilot shape, not a generic deck."
-        ctaLabel="Choose Pilot Merchants"
+        ctaLabel="Start The Conversation"
         ctaHref={CTA_HREF}
       />
     </MarketingShell>

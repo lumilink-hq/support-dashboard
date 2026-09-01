@@ -30,11 +30,55 @@ import {
   OVERAGE_ANSWER,
   Pillars,
   PricingGrid,
-  ProofShot,
   Section,
   SIGNUP_CTA,
 } from "@/components/marketing/blocks";
 import { guaranteedCalls, STARTER_PLAN } from "@/lib/entitlements";
+
+/**
+ * A described dashboard view, not a screenshot. Boss feedback 2026-08-31:
+ * this page's real screenshots showed a real customer's numbers. Rather than
+ * wait on a re-shoot from a seeded demo tenant (a separate asset task), this
+ * describes the same screen in words — same visual chrome as ProofShot
+ * (blocks.tsx) so it doesn't read as a downgrade, just no real data in it.
+ */
+function DescribedShot({
+  heading,
+  points,
+  caption,
+}: {
+  heading: string;
+  points: string[];
+  caption: string;
+}) {
+  return (
+    <div>
+      <div className="relative">
+        <div
+          aria-hidden
+          className="absolute -inset-3 -z-10 rounded-[1.75rem] bg-gradient-to-br from-blue-200 via-indigo-100 to-amber-100 opacity-80 blur-2xl"
+        />
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white p-8 shadow-xl shadow-gray-900/10">
+          <p className="text-sm font-semibold text-gray-900">{heading}</p>
+          <ul className="mt-3 space-y-2">
+            {points.map((p) => (
+              <li key={p} className="flex gap-2 text-sm text-gray-600">
+                <Check /> {p}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <p className="mt-3 flex items-center gap-2 text-xs font-medium text-gray-500">
+        <span
+          aria-hidden
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500"
+        />
+        {caption}
+      </p>
+    </div>
+  );
+}
 
 export const CREATOR_SUPPORT_METADATA = {
   title: "LumiLink for Creators & Course Sellers | AI Phone Support",
@@ -171,13 +215,14 @@ export function CreatorSupportSolution() {
             </ul>
           </div>
 
-          <ProofShot
-            src="/proof-appointments-crop.png"
-            alt="Calls booked, the revenue they represent, and the week ahead, from a live workspace"
+          <DescribedShot
+            heading="What Your Week Looks Like"
+            points={[
+              "Calls booked this week",
+              "The revenue those calls represent",
+              "What's coming up next",
+            ]}
             caption="Admin dashboard — Appointments"
-            width={1590}
-            height={475}
-            priority
           />
         </div>
       </Section>
@@ -200,14 +245,17 @@ export function CreatorSupportSolution() {
         </div>
         <CapabilityGrid items={CAPABILITIES} />
 
-        <ProofShot
-          src="/proof-review-queue.png"
-          alt="The Review Queue screen: callbacks the agent flagged for a human, with due dates and a one-click way to log the outcome"
-          caption="Admin dashboard — Review Queue"
-          width={1887}
-          height={801}
-          className="mx-auto mt-12 max-w-2xl"
-        />
+        <div className="mx-auto mt-12 max-w-2xl">
+          <DescribedShot
+            heading="What Needs Your Attention"
+            points={[
+              "Callbacks the agent flagged for you",
+              "A due date for each one",
+              "One click to log the outcome",
+            ]}
+            caption="Admin dashboard — Review Queue"
+          />
+        </div>
       </Section>
 
       <CallLengthPolicy closing="We publish this because you will hit it. An AI that keeps a prospect on the line for nine minutes costs you more than one that hands them to a person at two." />

@@ -13,9 +13,13 @@
 // React itself avoids that boundary entirely. Callers (server components)
 // wrap this in their own <Section>/<Eyebrow>, which they can do safely.
 //
-// STATIC AND ILLUSTRATIVE ON PURPOSE. Each tab shows representative copy, not
-// real order or call data — the live product demos are /demo/orders and
-// /demo/hvac. Don't repurpose this for anything that needs to look real.
+// A SCRIPTED WALKTHROUGH, NOT A DEMO, AND THE COPY SAYS SO. Each tab is
+// representative text, not a real order or call — the live product demos are
+// /demo/orders and /demo/hvac. Boss feedback 2026-08-31: this component used
+// to say "illustrative" and "we'll show the real thing," and there is
+// nothing visual on the page at all — those words set an expectation the
+// component can't meet. Say what it is (a scripted walkthrough) and where
+// the real thing lives (a pilot call), nothing that implies a picture.
 
 "use client";
 
@@ -54,7 +58,8 @@ export function DemoToggle({
         </div>
       </div>
       <p className="mt-3 text-xs text-gray-400">
-        Illustrative walkthrough. We&rsquo;ll show the real thing on a pilot call.
+        A scripted walkthrough. We&rsquo;ll go through the real product on a
+        pilot call.
       </p>
     </div>
   );

@@ -101,19 +101,46 @@ export function OurStory() {
       </Section>
 
       {/* ---------------------------------------------------------------- */}
-      {/* Where it's going                                                 */}
+      {/* Why not just another phone company                               */}
+      {/*                                                                  */}
+      {/* REPLACED 2026-08-31. The old version here said "we started with  */}
+      {/* the phone because it was the loudest problem" — factually wrong, */}
+      {/* per the founder: the company tried email first. Rather than      */}
+      {/* trade one unverified origin claim for another, this drops the    */}
+      {/* chronology entirely and argues the actual differentiator: built  */}
+      {/* around each customer, not a generic product they configure       */}
+      {/* themselves. See memory note project-repositioning-2026-08 if     */}
+      {/* reading this outside that context.                               */}
       {/* ---------------------------------------------------------------- */}
       <Section className="border-t border-gray-200 bg-gray-50 py-16">
         <div className="max-w-2xl">
           <h2 className="text-2xl font-semibold tracking-tight text-gray-900">
-            Phone Was The Start
+            Built Around Your Business
           </h2>
           <p className="mt-4 leading-relaxed text-gray-600">
-            We started with the phone because it was the loudest problem.
-            We&rsquo;re building toward more: one place where Lumi handles
-            every conversation with your customers, call, chat, or message, so
-            nothing gets lost. Phone is the flagship, and the other pieces are
-            coming next.
+            Most AI phone companies sell everyone the same product, then leave
+            you to configure it yourself. We build your agent from your real
+            services, prices, and policies, and no two customers get the same
+            agent.
+          </p>
+        </div>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* More than one product                                            */}
+      {/* ---------------------------------------------------------------- */}
+      <Section className="border-t border-gray-200 py-16">
+        <div className="max-w-2xl">
+          <h2 className="text-2xl font-semibold tracking-tight text-gray-900">
+            More Than A Phone Number
+          </h2>
+          <p className="mt-4 leading-relaxed text-gray-600">
+            Every account gets a dedicated phone number, a customer portal,
+            and a dashboard showing every conversation, booking, and open
+            question in one place. Add an extra line, another location, or a
+            managed integration as your business grows. Phone is where
+            we&rsquo;re strongest today, and it&rsquo;s one part of a system
+            we&rsquo;re actively building out.
           </p>
         </div>
       </Section>

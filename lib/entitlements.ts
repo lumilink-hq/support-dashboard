@@ -257,15 +257,13 @@ export const ENTERPRISE_TIER = {
     "Dedicated onboarding and support",
     "Everything in Scale",
   ],
-  contactEmail: "lumilinkhq@gmail.com",
 } as const;
 
-/** mailto: link for the Enterprise card's "Contact us" button. */
-export function enterpriseContactHref(
-  subject = "Enterprise / white label plan",
-): string {
-  return `mailto:${ENTERPRISE_TIER.contactEmail}?subject=${encodeURIComponent(subject)}`;
-}
+// enterpriseContactHref() (a mailto: link) lived here until 2026-08-31, when
+// every caller — /plans and PricingGrid's Enterprise card in
+// components/marketing/blocks.tsx — switched to contactHref() in blocks.tsx,
+// which sends someone to /contact instead of asking them to draft their own
+// email. Removed rather than left as dead code once nothing called it.
 
 export type FeatureMeta = {
   key: Feature;

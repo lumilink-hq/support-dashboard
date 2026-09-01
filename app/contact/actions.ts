@@ -24,6 +24,10 @@ export async function submitContact(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const message = String(formData.get("message") ?? "").trim();
+  // Which page's CTA sent them here — set from the hidden field in
+  // page.tsx, already sanitised there via safeNextPath. Falls back to
+  // "/contact" if the field is missing rather than trusting an empty string.
+  const sourcePath = String(formData.get("source_path") ?? "").trim() || "/contact";
 
   if (audience !== "new" && audience !== "existing") {
     fail("Choose which one best describes you.");
@@ -37,7 +41,7 @@ export async function submitContact(formData: FormData) {
     name: name || null,
     email,
     message,
-    source_path: "/contact",
+    source_path: sourcePath,
   });
 
   if (error) {

@@ -16,12 +16,30 @@ import Link from "next/link";
 import {
   guaranteedCalls,
   ENTERPRISE_TIER,
-  enterpriseContactHref,
   OVERAGE,
   PLAN_TIERS,
   STARTER_PLAN,
 } from "@/lib/entitlements";
 import { isSignedIn } from "@/components/marketing/shell";
+import { safeNextPath } from "@/lib/route-access";
+
+/**
+ * Where an Enterprise/partner CTA sends someone: the real /contact form, with
+ * the topic pre-filled and the source page tracked, not a mailto link they'd
+ * have to draft themselves.
+ *
+ * REPLACED enterpriseContactHref() (mailto) here and in /plans on 2026-08-31
+ * — boss feedback: a mailto CTA is the opposite of "easy to engage with us."
+ * Kept as `contactHref` (not `enterpriseContactHref`) since /contact is the
+ * real destination for any "talk to us" CTA now, not just Enterprise.
+ */
+export function contactHref(sourcePath: string, topic: string): string {
+  const params = new URLSearchParams({
+    source: safeNextPath(sourcePath, "/contact"),
+    topic,
+  });
+  return `/contact?${params.toString()}`;
+}
 
 /**
  * Where every primary CTA points: straight at account creation.
@@ -257,9 +275,14 @@ export function ProofGallery({
 export async function PricingGrid({
   heading = "What You Pay, And Where The Limits Are",
   blurb = "Every plan comes with a set number of calls and no setup fee. When you outgrow one, you move up a plan — we never bill you for going over.",
+  // Which page rendered this grid, so an Enterprise lead through /contact
+  // knows where it came from. Defaults to /plans since that's the canonical
+  // pricing page; /addons passes its own path for accurate attribution.
+  contactSource = "/plans",
 }: {
   heading?: string;
   blurb?: string;
+  contactSource?: string;
 }) {
   const ctaHref = await planCtaHref();
 
@@ -333,7 +356,7 @@ export async function PricingGrid({
 
       {/*
         Enterprise / white label — NOT a PLAN_TIERS card. There's no price
-        and no checkout, just a mailto to Enterprise's inbox, so it gets its
+        and no self-serve checkout, just the /contact form, so it gets its
         own full-width row rather than a fourth card in the 3-column grid.
       */}
       <div className="mt-6 flex flex-col items-start justify-between gap-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center">
@@ -347,7 +370,7 @@ export async function PricingGrid({
           </p>
         </div>
         <a
-          href={enterpriseContactHref()}
+          href={contactHref(contactSource, "Enterprise / White Label")}
           className="shrink-0 rounded-md border border-gray-300 px-4 py-2.5 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
           Contact us
