@@ -39,11 +39,14 @@ import {
   OVERAGE_ANSWER,
   Pillars,
   PricingGrid,
-  ProofGallery,
-  ProofShot,
   Section,
   SIGNUP_CTA,
 } from "@/components/marketing/blocks";
+import {
+  AppointmentsMockup,
+  ConversationsMockup,
+  ReviewQueueMockup,
+} from "@/components/marketing/dashboard-mockups";
 import { availableAddons } from "@/lib/addons";
 import { STARTER_PLAN } from "@/lib/entitlements";
 
@@ -225,25 +228,14 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
           </div>
 
           {/*
-            CROPPED, not scaled. The original was a full-page capture — sidebar,
-            empty "Upcoming" panel and all — and shrinking that into a
-            half-width column rendered every label at sub-pixel size, which
-            reads as a low-quality screenshot rather than a dense product.
-            Cropping to the metric row and the week strip means less content
-            competing for the same width, so the numbers stay readable.
-
-            Real product, not a mockup. The appointments view from a live workspace.
-            ProofShot (not a plain <Image>) so it doesn't wash out against the
-            page's white background — see the component doc in blocks.tsx.
+            CSS MOCKUP, NOT A SCREENSHOT (2026-08-31). Used to be a real
+            appointments-view capture, which meant re-shooting it by hand
+            every time the UI or the seed data changed. This is markup that
+            mirrors the real layout (app/(dashboard)/appointments) with
+            invented names and numbers, so it never goes stale and never
+            shows a real customer's information.
           */}
-          <ProofShot
-            src="/proof-appointments-crop.png"
-            alt="The Lumilink dashboard: jobs booked by the agent, the revenue they represent, and the week ahead"
-            caption="Admin dashboard — Appointments"
-            width={1590}
-            height={475}
-            priority
-          />
+          <AppointmentsMockup caption="Admin dashboard — Appointments" />
         </div>
       </Section>
 
@@ -327,31 +319,35 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
       {/* ---------------------------------------------------------------- */}
       {/* Inside the dashboard — the two screens behind "nothing            */}
       {/* disappears" and "you see every word that was said" up in the      */}
-      {/* hero. Those were claims with no picture next to them; these are   */}
-      {/* the actual screens, from a live workspace.                        */}
+      {/* hero. Those were claims with no picture next to them.             */}
+      {/*                                                                   */}
+      {/* CSS MOCKUPS, NOT SCREENSHOTS (2026-08-31) — same reasoning as the  */}
+      {/* Appointments shot above. The "not a mockup" line in the blurb     */}
+      {/* below refers to the DASHBOARD (it's the real product, not a demo  */}
+      {/* environment), not to these particular images — worth rewording if */}
+      {/* that reads as contradicting itself now that the images ARE mocked */}
+      {/* up.                                                               */}
       {/* ---------------------------------------------------------------- */}
-      <ProofGallery
-        eyebrow="Inside The Dashboard"
-        heading="Every Call Logged. Nothing Falls Through."
-        blurb="This is the same dashboard your account gets — not a mockup. Every call becomes a transcript, and anything Lumi couldn't finish lands in a queue instead of vanishing."
+      <Section
+        id="inside-the-dashboard"
         className="border-t border-gray-200 bg-gray-50 py-20"
-        shots={[
-          {
-            src: "/proof-conversations.png",
-            alt: "The Conversations screen: every call the agent handled, newest first, with the order it was about and whether it's closed",
-            caption: "Admin dashboard — Conversations",
-            width: 1899,
-            height: 942,
-          },
-          {
-            src: "/proof-review-queue.png",
-            alt: "The Review Queue screen: callbacks the agent flagged for a human, with due dates and a one-click way to log the outcome",
-            caption: "Admin dashboard — Review Queue",
-            width: 1887,
-            height: 801,
-          },
-        ]}
-      />
+      >
+        <div className="max-w-2xl">
+          <Eyebrow>Inside The Dashboard</Eyebrow>
+          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+            Every Call Logged. Nothing Falls Through.
+          </h2>
+          <p className="mt-3 text-gray-600">
+            This is the same dashboard your account gets. Every call becomes
+            a transcript, and anything Lumi couldn&rsquo;t finish lands in a
+            queue instead of vanishing.
+          </p>
+        </div>
+        <div className="mt-12 grid gap-x-10 gap-y-12 md:grid-cols-2">
+          <ConversationsMockup caption="Admin dashboard — Conversations" />
+          <ReviewQueueMockup caption="Admin dashboard — Review Queue" />
+        </div>
+      </Section>
 
       {/* ---------------------------------------------------------------- */}
       {/* The two-minute policy — stated up front, not buried in terms      */}

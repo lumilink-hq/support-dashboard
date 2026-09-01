@@ -20,10 +20,13 @@ import {
   OVERAGE_ANSWER,
   Pillars,
   PricingGrid,
-  ProofShot,
   Section,
   SIGNUP_CTA,
 } from "@/components/marketing/blocks";
+import {
+  AppointmentsMockup,
+  ReviewQueueMockup,
+} from "@/components/marketing/dashboard-mockups";
 import { DEMO_LINES } from "@/lib/demo";
 import { guaranteedCalls, STARTER_PLAN } from "@/lib/entitlements";
 
@@ -186,25 +189,11 @@ export function ServiceSolution() {
           </div>
 
           {/*
-            CROPPED, not scaled. The original was a full-page capture — sidebar,
-            empty "Upcoming" panel and all — and shrinking that into a
-            half-width column rendered every label at sub-pixel size, which
-            reads as a low-quality screenshot rather than a dense product.
-            Cropping to the metric row and the week strip means less content
-            competing for the same width, so the numbers stay readable.
-
-            Real product, not a mockup. The appointments view a contractor actually sees.
-            Bordered rather than bled to the edge so it reads as a screenshot of
-            something that exists, which is the entire point of putting it here.
+            CSS MOCKUP, NOT A SCREENSHOT (2026-08-31) — invented names and
+            numbers, laid out to match the real /appointments screen. See
+            components/marketing/dashboard-mockups.tsx for why.
           */}
-          <ProofShot
-            src="/proof-appointments-crop.png"
-            alt="Booked revenue, average job value and the week ahead, from jobs the agent booked"
-            caption="Admin dashboard — Appointments"
-            width={1590}
-            height={475}
-            priority
-          />
+          <AppointmentsMockup caption="Admin dashboard — Appointments" />
         </div>
       </Section>
 
@@ -228,14 +217,11 @@ export function ServiceSolution() {
         {/*
           "Nothing disappears" above is a claim with no picture. This is the
           queue it's talking about — the callback tickets Lumi logs when it
-          can't finish a call, from a live workspace.
+          can't finish a call. CSS mockup, not a screenshot — see
+          components/marketing/dashboard-mockups.tsx.
         */}
-        <ProofShot
-          src="/proof-review-queue.png"
-          alt="The Review Queue screen: callbacks the agent flagged for a human, with due dates and a one-click way to log the outcome"
+        <ReviewQueueMockup
           caption="Admin dashboard — Review Queue"
-          width={1887}
-          height={801}
           className="mx-auto mt-12 max-w-2xl"
         />
       </Section>

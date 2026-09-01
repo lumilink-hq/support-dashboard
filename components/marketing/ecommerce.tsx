@@ -31,10 +31,10 @@ import {
   OVERAGE_ANSWER,
   Pillars,
   PricingGrid,
-  ProofShot,
   Section,
   SIGNUP_CTA,
 } from "@/components/marketing/blocks";
+import { StorefrontSupportMockup } from "@/components/marketing/storefront-mockups";
 import { DEMO_LINES } from "@/lib/demo";
 import { STARTER_PLAN } from "@/lib/entitlements";
 
@@ -210,22 +210,19 @@ export function EcommerceSolution() {
           </div>
 
           {/*
-            CROPPED to the part that sells: enough of the blue header to prove
-            this is a real storefront, then "Powered by LumiLink" and the live
-            support number. The full-page capture was unreadable at column
-            width.
-
-            Real product, not a mockup. A live client's own support page, running our agent.
-            ProofShot (not a plain <Image>) so it doesn't wash out against the
-            page's white background — see the component doc in blocks.tsx.
+            CSS MOCKUP, NOT A NAMED CLIENT SCREENSHOT (2026-08-31). This used
+            to be a real client's storefront, shown by name. Founder's call:
+            drop named client screenshots from marketing pages entirely — an
+            invented store shows the same capability (your branding, your
+            domain, our support line underneath it) without exposing anyone's
+            real account. See components/marketing/storefront-mockups.tsx.
           */}
-          <ProofShot
-            src="/proof-tsunami-crop.png"
-            alt="A live Shopify store's support page: Powered by LumiLink, with the order-support line customers call"
-            caption="Live — tsunami.store"
-            width={1150}
-            height={760}
-            priority
+          <StorefrontSupportMockup
+            storeName="Aurora Home Goods"
+            tagline="Order support"
+            phone="(555) 019-2231"
+            accent="slate"
+            caption="What it looks like on your storefront"
           />
         </div>
       </Section>
@@ -290,36 +287,39 @@ export function EcommerceSolution() {
       </Section>
 
       {/* ------------------------------------------------------------------ */}
-      {/* Two live stores — proof the "other vendors turn away" line above    */}
-      {/* isn't just copy. Two real, unrelated storefronts, both running the  */}
-      {/* same order-support line.                                           */}
+      {/* CSS mockups, not named client screenshots (2026-08-31). This       */}
+      {/* section used to name two real, unrelated clients running the same  */}
+      {/* support line. Founder's call: drop named social proof from         */}
+      {/* marketing pages entirely — two invented stores make the same       */}
+      {/* "your branding, any kind of store" point without exposing anyone's */}
+      {/* real account. See components/marketing/storefront-mockups.tsx.     */}
       {/* ------------------------------------------------------------------ */}
       <Section className="pb-20">
         <div className="max-w-2xl">
-          <Eyebrow>Two Stores Already Using It</Eyebrow>
+          <Eyebrow>Your Branding, Wherever You Sell</Eyebrow>
           <h2 className="mt-4 text-2xl font-semibold tracking-tight text-gray-900 md:text-3xl">
-            Same feature, two different storefronts
+            Same feature, any kind of store
           </h2>
           <p className="mt-3 text-gray-600">
-            Tsunami and BudClub are two unrelated stores, both running the
-            same order-support line on their site today.
+            Home goods, wellness, whatever you sell — the support line
+            carries your name and your domain, not ours.
           </p>
         </div>
 
         <div className="mt-12 grid gap-x-10 gap-y-12 md:grid-cols-2">
-          <ProofShot
-            src="/proof-tsunami-widget.png"
-            alt="Tsunami's order-support page, branded Powered by LumiLink, with the support line customers call"
-            caption="Live — tsunami.store"
-            width={581}
-            height={462}
+          <StorefrontSupportMockup
+            storeName="Aurora Home Goods"
+            tagline="Order support"
+            phone="(555) 019-2231"
+            accent="slate"
+            caption="A home-goods storefront"
           />
-          <ProofShot
-            src="/proof-budclub-crop.jpg"
-            alt="BudClub's contact page running the same support line"
-            caption="Live — a BudClub support page"
-            width={1320}
-            height={1140}
+          <StorefrontSupportMockup
+            storeName="Meridian Wellness"
+            tagline="Customer care"
+            phone="(555) 048-7710"
+            accent="green"
+            caption="A wellness storefront"
           />
         </div>
       </Section>

@@ -11,7 +11,6 @@
 // hardcodes a number — PLAN_TIERS, STARTER_PLAN and OVERAGE all come from
 // lib/entitlements.ts, which mirrors the CFO workbook.
 
-import Image from "next/image";
 import Link from "next/link";
 import {
   guaranteedCalls,
@@ -144,115 +143,13 @@ export function CapabilityGrid({
   );
 }
 
-/**
- * A frame for real product screenshots — NOT a plain bordered <Image>.
- *
- * WHY THIS EXISTS (2026-08-18). Every screenshot on the site is itself mostly
- * white — a dashboard or a storefront on a white background — dropped onto
- * this site's white page background with nothing but a 1px gray-200 border
- * between the two. On a bright monitor that reads as a blank rounded
- * rectangle rather than a photo of something real, which defeats the entire
- * point of using a real screenshot instead of an illustration.
- *
- * Two things fix that without touching the screenshot itself: a soft colored
- * glow BEHIND the frame so the card visually separates from the page even
- * when the image inside it is pale, and a one-line caption UNDER it that
- * names what it's a photo of — "Live — tsunami.store", "Admin dashboard —
- * Review Queue". The glow does the visual work; the caption does the
- * credibility work, since "trust me, this is real" only lands if the visitor
- * can tell what they're looking at.
- */
-export function ProofShot({
-  src,
-  alt,
-  caption,
-  width,
-  height,
-  priority = false,
-  className = "",
-}: {
-  src: string;
-  alt: string;
-  caption: string;
-  width: number;
-  height: number;
-  priority?: boolean;
-  className?: string;
-}) {
-  return (
-    <div className={className}>
-      <div className="relative">
-        <div
-          aria-hidden
-          className="absolute -inset-3 -z-10 rounded-[1.75rem] bg-gradient-to-br from-blue-200 via-indigo-100 to-amber-100 opacity-80 blur-2xl"
-        />
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl shadow-gray-900/10">
-          <Image
-            src={src}
-            alt={alt}
-            width={width}
-            height={height}
-            sizes="(min-width: 768px) 50vw, 100vw"
-            priority={priority}
-            className="block w-full"
-          />
-        </div>
-      </div>
-      <p className="mt-3 flex items-center gap-2 text-xs font-medium text-gray-500">
-        <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500" />
-        {caption}
-      </p>
-    </div>
-  );
-}
-
-/**
- * A row of ProofShots under a heading — used where a claim in the copy
- * ("every call is transcribed", "nothing disappears") is better shown than
- * told. Each shot keeps its own caption so the row can mix a customer-facing
- * screen with an admin one without either needing an explanation paragraph.
- */
-export function ProofGallery({
-  eyebrow,
-  heading,
-  blurb,
-  shots,
-  className = "py-20",
-}: {
-  eyebrow: string;
-  heading: string;
-  blurb?: string;
-  shots: {
-    src: string;
-    alt: string;
-    caption: string;
-    width: number;
-    height: number;
-  }[];
-  className?: string;
-}) {
-  return (
-    <Section className={className}>
-      <div className="max-w-2xl">
-        <Eyebrow>{eyebrow}</Eyebrow>
-        <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
-          {heading}
-        </h2>
-        {blurb ? <p className="mt-3 text-gray-600">{blurb}</p> : null}
-      </div>
-
-      <div
-        className={`mt-12 grid gap-x-10 gap-y-12 ${
-          shots.length > 1 ? "md:grid-cols-2" : "max-w-2xl"
-        }`}
-      >
-        {shots.map((s) => (
-          <ProofShot key={s.src} {...s} />
-        ))}
-      </div>
-    </Section>
-  );
-}
+// ProofShot / ProofGallery (real <Image> screenshot frames) lived here until
+// 2026-08-31, when the last real screenshots on the marketing site — the
+// dashboard views and the named-client storefronts — were replaced with CSS
+// mockups (components/marketing/dashboard-mockups.tsx,
+// components/marketing/storefront-mockups.tsx). Removed once nothing called
+// them rather than left as dead code; the glow-frame chrome they used lives
+// on as MockupFrame in dashboard-mockups.tsx.
 
 // ---------------------------------------------------------------------------
 // Blocks that quote money — the reason this file exists
