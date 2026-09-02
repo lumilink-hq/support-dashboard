@@ -12,23 +12,31 @@ import { createClient } from "@/lib/supabase/server";
 
 // Mixed routes and in-page anchors. Anchors must resolve to a section that is
 // actually rendered on the page: a nav link that scrolls nowhere reads as a
-// broken site. "#faq" now resolves on the landing page AND both vertical pages,
-// because all three render <FaqList>, which hardcodes id="faq" for this reason.
-// It still does nothing on /plans.
+// broken site.
 //
-// "#how" is different: id="how" only exists on the landing page (restored
-// 2026-08-30 alongside the STEPS section in landing.tsx), and no other
-// marketing page has an equivalent section. A bare "#how" would silently do
-// nothing everywhere except "/", so this one is "/#how" instead — a full
-// navigation home, then the browser's native scroll-to-fragment on load.
-const NAV_LINKS = [
-  { href: "/solutions/ecommerce", label: "Online Stores" },
-  { href: "/solutions/service", label: "Service Businesses" },
-  { href: "/#how", label: "How It Works" },
-  { href: "/plans", label: "Plans" },
-  { href: "/story", label: "Our Story" },
-  { href: "#faq", label: "FAQ" },
-];
+// BOTH "#how" AND "#faq" ONLY EXIST ON THE LANDING PAGE (landing.tsx renders
+// both ids, and only it does — /solutions/* has its own FAQ but a different
+// id-less heading, and no other marketing page has either section). So both
+// need a full navigation home, not a bare "#anchor" that just tries to
+// scroll wherever you already are and does nothing everywhere else.
+//
+// "Home" ISN'T ALWAYS "/". app/page.tsx redirects a signed-in visitor to
+// /conversations — the hash gets dropped in that redirect, so "/#how" for a
+// signed-in visitor silently lands them in the dashboard instead. "/home" is
+// the same content with no redirect (that's the whole reason it exists — see
+// its own file comment), so these two links use it whenever there's a
+// session, and plain "/" otherwise. navLinks() takes the answer from
+// MarketingShell, which already computes `signedIn` for the CTA button.
+function navLinks(marketingHome: string) {
+  return [
+    { href: "/solutions/ecommerce", label: "Online Stores" },
+    { href: "/solutions/service", label: "Service Businesses" },
+    { href: `${marketingHome}#how`, label: "How It Works" },
+    { href: "/plans", label: "Plans" },
+    { href: "/story", label: "Our Story" },
+    { href: `${marketingHome}#faq`, label: "FAQ" },
+  ];
+}
 
 /**
  * Exported for blocks.tsx's planCtaHref — the pricing cards need the same
@@ -96,6 +104,14 @@ export async function MarketingShell({
   homeHref?: string;
 }) {
   const signedIn = await isSignedIn();
+  // Not the same as `homeHref` — that's about where THIS page's own wordmark
+  // should point (e.g. /home passes its own path so the logo doesn't bounce
+  // a signed-in visitor away from the page they're already reading). This is
+  // about where an "#how"/"#faq" anchor needs to land to find its section at
+  // all, which is always the canonical landing content, never "wherever this
+  // particular page's logo happens to point."
+  const marketingHome = signedIn ? "/home" : "/";
+  const links = navLinks(marketingHome);
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-white text-gray-900">
@@ -104,7 +120,7 @@ export async function MarketingShell({
           <Wordmark href={homeHref} />
 
           <nav className="hidden items-center gap-8 md:flex">
-            {NAV_LINKS.map((l) => (
+            {links.map((l) => (
               <a
                 key={l.href}
                 href={l.href}
@@ -150,7 +166,7 @@ export async function MarketingShell({
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <Wordmark href={homeHref} />
             <nav className="flex flex-wrap gap-x-6 gap-y-2">
-              {NAV_LINKS.map((l) => (
+              {links.map((l) => (
                 <a
                   key={l.href}
                   href={l.href}
