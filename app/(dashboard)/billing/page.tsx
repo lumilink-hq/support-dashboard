@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { availableAddons } from "@/lib/addons";
+import { addonIsUsable, addonState, getClientAddons } from "@/lib/client-addons";
 import { formatDateTime } from "@/lib/format";
 import {
   FEATURES,
@@ -97,10 +98,30 @@ const PILL_LABEL: Record<FeatureState, string> = {
   locked: "Not on your plan",
 };
 
+// Add-ons reuse the same pill styling as features; "none" (never bought) has
+// no pill at all — that state shows the price + Add To Plan button instead.
+const ADDON_PILL: Record<"active" | "past_due" | "setup" | "canceled", string> = {
+  active: PILL.active,
+  past_due: PILL.past_due,
+  setup: PILL.setup,
+  canceled: PILL.canceled,
+};
+
+const ADDON_PILL_LABEL: Record<"active" | "past_due" | "setup" | "canceled", string> = {
+  active: "Active",
+  past_due: "Past due",
+  setup: "Setting up",
+  canceled: "Canceled",
+};
+
 export default async function BillingPage() {
   // client_reference_id is stamped on /plans now, where the tier is chosen, so
   // this page no longer needs the tenant id to build a checkout URL.
-  const [ent, usage] = await Promise.all([getEntitlements(), getVoiceUsage()]);
+  const [ent, usage, addons] = await Promise.all([
+    getEntitlements(),
+    getVoiceUsage(),
+    getClientAddons(),
+  ]);
 
   return (
     <div className="max-w-4xl">
@@ -241,8 +262,12 @@ export default async function BillingPage() {
       {/* "add" needs no new billing code: the webhook and billing_price_map  */}
       {/* already handle an item riding the existing subscription.           */}
       {/*                                                                    */}
-      {/* availableAddons() filters out anything not safe to sell yet —       */}
-      {/* Website Chat is excluded because nothing meters a chat session.     */}
+      {/* availableAddons() filters out anything not safe to sell yet.       */}
+      {/*                                                                    */}
+      {/* OWNERSHIP (0039, client_addons): a client who already holds one     */}
+      {/* gets a status pill instead of a second "Add To Plan" button — every */}
+      {/* row here is written by hand today (see the migration), so this is   */}
+      {/* the operator-visible half of a manual grant, not just billing's.    */}
       {/* ------------------------------------------------------------------ */}
       {availableAddons().length > 0 ? (
         <div className="mt-10">
@@ -255,31 +280,53 @@ export default async function BillingPage() {
           </p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {availableAddons().map((a) => (
-              <div
-                key={a.key}
-                className="flex flex-col rounded-lg border border-gray-200 bg-white p-4"
-              >
-                <div className="flex items-baseline justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-gray-900">
-                    {a.name}
-                  </h3>
-                  <p className="shrink-0 text-sm font-medium text-gray-900">
-                    ${a.monthlyUsd}
-                    <span className="text-gray-500">/mo</span>
-                  </p>
-                </div>
-                <p className="mt-1 flex-1 text-xs leading-relaxed text-gray-600">
-                  {a.blurb}
-                </p>
-                <a
-                  href={a.url}
-                  className="mt-4 block rounded-md border border-gray-300 px-3 py-2 text-center text-xs font-medium text-gray-700 hover:bg-gray-50"
+            {availableAddons().map((a) => {
+              const row = addons[a.key];
+              const state = addonState(row);
+              const usable = addonIsUsable(state);
+
+              return (
+                <div
+                  key={a.key}
+                  className="flex flex-col rounded-lg border border-gray-200 bg-white p-4"
                 >
-                  Add To Plan
-                </a>
-              </div>
-            ))}
+                  <div className="flex items-baseline justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      {a.name}
+                    </h3>
+                    {state === "none" ? (
+                      <p className="shrink-0 text-sm font-medium text-gray-900">
+                        ${a.monthlyUsd}
+                        <span className="text-gray-500">/mo</span>
+                      </p>
+                    ) : (
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${ADDON_PILL[state]}`}
+                      >
+                        {ADDON_PILL_LABEL[state]}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 flex-1 text-xs leading-relaxed text-gray-600">
+                    {a.blurb}
+                  </p>
+                  {usable ? (
+                    <p className="mt-4 text-xs text-gray-500">
+                      {row?.current_period_end
+                        ? `Renews ${formatDateTime(row.current_period_end)}`
+                        : "Active on your workspace."}
+                    </p>
+                  ) : (
+                    <a
+                      href={a.url}
+                      className="mt-4 block rounded-md border border-gray-300 px-3 py-2 text-center text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      {state === "canceled" ? "Add again" : "Add To Plan"}
+                    </a>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}
