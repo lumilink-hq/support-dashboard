@@ -71,7 +71,7 @@ export const SETUP_FEE_USD = 0;
 
 export const STARTER_PLAN = {
   label: "Starter",
-  monthlyUsd: 179,
+  monthlyUsd: 180,
   setupFeeUsd: SETUP_FEE_USD,
   includedMinutes: 100,
   /** Policy, all tiers: soft warning → confirm → transfer/ticket/hang-up. */
@@ -206,7 +206,7 @@ export const PLAN_TIERS: PlanTier[] = [
   {
     key: "growth",
     label: "Growth",
-    monthlyUsd: 279,
+    monthlyUsd: 280,
     setupFeeUsd: SETUP_FEE_USD,
     includedMinutes: 250,
     highlights: [
@@ -221,7 +221,7 @@ export const PLAN_TIERS: PlanTier[] = [
   {
     key: "scale",
     label: "Scale",
-    monthlyUsd: 449,
+    monthlyUsd: 450,
     setupFeeUsd: SETUP_FEE_USD,
     includedMinutes: 600,
     highlights: [

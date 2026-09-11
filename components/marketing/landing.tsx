@@ -304,15 +304,14 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
         {/*
           Honest about what's shipped vs. what's next: every item in
           CAPABILITIES above ships today, which is what the checkmarks
-          promise. The widget and analytics work aren't there yet — the
-          widget's routing exists (docs/BUILD-PLAN-2026-08.md §H) but has no
-          metering, no per-client embed, and isn't exposed as a sellable
-          feature; Insights has no code at all. Say so plainly rather than
-          checkmarking something a customer can't actually get yet.
+          promise. Website Chat is now sold (see /addons) and no longer
+          belongs in this "next" line. Insights has no code at all — say so
+          plainly rather than checkmarking something a customer can't
+          actually get yet.
         */}
         <p className="mt-10 text-sm text-gray-500">
-          Building next: a website widget with the same knowledge behind it,
-          and a dashboard view of what your customers are actually asking for.
+          Building next: a dashboard view of what your customers are actually
+          asking for.
         </p>
       </Section>
 
@@ -403,7 +402,7 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
             <Link href="/addons" className="font-medium text-gray-900 underline underline-offset-4 hover:text-gray-700">
               See every add-on
             </Link>
-            . Website Chat is next on our roadmap.
+            .
           </p>
         </div>
       </Section>

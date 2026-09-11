@@ -99,18 +99,7 @@ export default function AddonsPage() {
           ))}
         </div>
 
-        {/*
-          Website Chat exists in lib/addons.ts with available=false — the
-          backend routing exists (BUILD-PLAN-2026-08.md §H), but nothing
-          meters a browser chat session yet, so it isn't safe to sell. Same
-          "Building next" framing as the homepage's What Lumi Does section.
-        */}
         <p className="mt-10 text-sm text-gray-500">
-          Building next: Website Chat, so the same agent can answer on your
-          site as well as your phone line.
-        </p>
-
-        <p className="mt-2 text-sm text-gray-500">
           Don&rsquo;t see what you need?{" "}
           <Link
             href="/contact"

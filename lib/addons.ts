@@ -50,19 +50,23 @@ export const ADDONS: Addon[] = [
   {
     key: "website_chat",
     name: "Website Chat",
-    monthlyUsd: 39,
+    monthlyUsd: 40,
     blurb:
       "Put the same agent on your website, so visitors get answers without picking up the phone.",
     url:
       process.env.NEXT_PUBLIC_ADDON_URL_WEBSITE_CHAT ??
       "https://buy.stripe.com/cNi5kw0b07HM9Q2bHx0VO07",
-    available: false, // see the note on `available` above
+    // Turned on 2026-09-11 by explicit decision, ahead of the message
+    // allowance / per-session ceiling / per-slug rate limit in
+    // BUILD-PLAN-2026-08.md §H. Nothing metering a browser chat session exists
+    // yet — this accepts that cost-exposure risk rather than closing it.
+    available: true,
     manualFulfilment: true,
   },
   {
     key: "managed_integration",
     name: "Managed Integration",
-    monthlyUsd: 29,
+    monthlyUsd: 30,
     blurb:
       "Connect LumiLink to a business platform you already use, and we keep it running.",
     url:
@@ -74,7 +78,7 @@ export const ADDONS: Addon[] = [
   {
     key: "additional_phone_line",
     name: "Additional AI Phone Line",
-    monthlyUsd: 19,
+    monthlyUsd: 20,
     blurb:
       "A second dedicated line for a department, campaign or brand, on your existing plan.",
     url:
@@ -86,7 +90,7 @@ export const ADDONS: Addon[] = [
   {
     key: "additional_location",
     name: "Additional Location",
-    monthlyUsd: 29,
+    monthlyUsd: 30,
     blurb:
       "Another location with its own number, hours, greeting and routing.",
     url:
@@ -98,7 +102,7 @@ export const ADDONS: Addon[] = [
   {
     key: "advanced_workflow",
     name: "Advanced Workflow",
-    monthlyUsd: 49,
+    monthlyUsd: 50,
     blurb:
       "A managed automation so the agent can carry out one more action off the back of a conversation.",
     url:
@@ -110,7 +114,7 @@ export const ADDONS: Addon[] = [
   {
     key: "enhanced_optimization",
     name: "Enhanced Optimization",
-    monthlyUsd: 79,
+    monthlyUsd: 80,
     blurb:
       "Higher-touch monthly tuning: response quality, business knowledge and configuration, reviewed by us.",
     url:
