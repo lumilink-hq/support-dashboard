@@ -1,7 +1,12 @@
 import Link from "next/link";
+import { AddonToggle } from "@/components/billing/addon-toggle";
+import { ManageBillingButton } from "@/components/billing/manage-billing-button";
 import { availableAddons } from "@/lib/addons";
-import { addonIsUsable, addonState, getClientAddons } from "@/lib/client-addons";
 import { formatDateTime } from "@/lib/format";
+import {
+  activeAddonsForClient,
+  hasStripeCustomerForClient,
+} from "@/lib/services/billing";
 import {
   FEATURES,
   OVERAGE,
@@ -13,7 +18,6 @@ import {
   getEntitlements,
   getVoiceUsage,
   overageEstimate,
-  stampClientRef,
   type FeatureState,
   type VoiceUsage,
 } from "@/lib/entitlements";
@@ -100,35 +104,18 @@ const PILL_LABEL: Record<FeatureState, string> = {
   locked: "Not on your plan",
 };
 
-// Add-ons reuse the same pill styling as features; "none" (never bought) has
-// no pill at all — that state shows the price + Add To Plan button instead.
-const ADDON_PILL: Record<"active" | "past_due" | "setup" | "canceled", string> = {
-  active: PILL.active,
-  past_due: PILL.past_due,
-  setup: PILL.setup,
-  canceled: PILL.canceled,
-};
-
-const ADDON_PILL_LABEL: Record<"active" | "past_due" | "setup" | "canceled", string> = {
-  active: "Active",
-  past_due: "Past due",
-  setup: "Setting up",
-  canceled: "Canceled",
-};
-
 export default async function BillingPage() {
-  // client_reference_id is stamped on /plans for a PLAN checkout, where the
-  // tier is chosen — this page never needed the tenant id for that. It DOES
-  // need it for an add-on's own "Add To Plan" link (below): each add-on has
-  // its own Payment Link, and without client_reference_id on it the resulting
-  // checkout.session.completed has no client to attribute the purchase to at
-  // all — see 0040_addon_billing_events.sql's header.
-  const [ent, usage, addons, clientId] = await Promise.all([
+  // Add-on ownership (below) is a live Stripe read keyed by client_id, unlike
+  // getEntitlements()/getVoiceUsage() which are RLS-scoped with no parameter —
+  // so clientId has to resolve first, not join the same Promise.all.
+  const clientId = await getCurrentClientId();
+  const [ent, usage, activeAddons, hasStripeCustomer] = await Promise.all([
     getEntitlements(),
     getVoiceUsage(),
-    getClientAddons(),
-    getCurrentClientId(),
+    clientId ? activeAddonsForClient(clientId) : Promise.resolve([]),
+    clientId ? hasStripeCustomerForClient(clientId) : Promise.resolve(false),
   ]);
+  const activeAddonKeys = new Set(activeAddons.map((a) => a.key));
 
   return (
     <div className="max-w-4xl">
@@ -265,16 +252,15 @@ export default async function BillingPage() {
       {/* ------------------------------------------------------------------ */}
       {/* Add-ons — the same catalogue the post-purchase screen shows, from   */}
       {/* lib/addons.ts, so /welcome and /billing can never offer different   */}
-      {/* things at different prices. Each links to its own Payment Link, so  */}
-      {/* "add" needs no new billing code: the webhook and billing_price_map  */}
-      {/* already handle an item riding the existing subscription.           */}
+      {/* things at different prices. Each is a line item on the client's OWN */}
+      {/* subscription (lib/services/billing.ts), added/removed directly via  */}
+      {/* Stripe's API — no Payment Link, no separate subscription.           */}
       {/*                                                                    */}
       {/* availableAddons() filters out anything not safe to sell yet.       */}
       {/*                                                                    */}
-      {/* OWNERSHIP (0039, client_addons): a client who already holds one     */}
-      {/* gets a status pill instead of a second "Add To Plan" button — every */}
-      {/* row here is written by hand today (see the migration), so this is   */}
-      {/* the operator-visible half of a manual grant, not just billing's.    */}
+      {/* OWNERSHIP is read LIVE off Stripe (activeAddonsForClient), not from */}
+      {/* a local mirror — there is nothing here that can drift from what     */}
+      {/* Stripe actually has.                                               */}
       {/* ------------------------------------------------------------------ */}
       {availableAddons().length > 0 ? (
         <div className="mt-10">
@@ -288,9 +274,7 @@ export default async function BillingPage() {
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {availableAddons().map((a) => {
-              const row = addons[a.key];
-              const state = addonState(row);
-              const usable = addonIsUsable(state);
+              const active = activeAddonKeys.has(a.key);
 
               return (
                 <div
@@ -301,40 +285,36 @@ export default async function BillingPage() {
                     <h3 className="text-sm font-semibold text-gray-900">
                       {a.name}
                     </h3>
-                    {state === "none" ? (
+                    {active ? (
+                      <span className="shrink-0 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                        Active
+                      </span>
+                    ) : (
                       <p className="shrink-0 text-sm font-medium text-gray-900">
                         ${a.monthlyUsd}
                         <span className="text-gray-500">/mo</span>
                       </p>
-                    ) : (
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${ADDON_PILL[state]}`}
-                      >
-                        {ADDON_PILL_LABEL[state]}
-                      </span>
                     )}
                   </div>
                   <p className="mt-1 flex-1 text-xs leading-relaxed text-gray-600">
                     {a.blurb}
                   </p>
-                  {usable ? (
-                    <p className="mt-4 text-xs text-gray-500">
-                      {row?.current_period_end
-                        ? `Renews ${formatDateTime(row.current_period_end)}`
-                        : "Active on your workspace."}
-                    </p>
-                  ) : (
-                    <a
-                      href={stampClientRef(a.url, clientId) ?? a.url}
-                      className="mt-4 block rounded-md border border-gray-300 px-3 py-2 text-center text-xs font-medium text-gray-700 hover:bg-gray-50"
-                    >
-                      {state === "canceled" ? "Add again" : "Add To Plan"}
-                    </a>
-                  )}
+                  <div className="mt-4">
+                    <AddonToggle addonKey={a.key} active={active} />
+                  </div>
                 </div>
               );
             })}
           </div>
+        </div>
+      ) : null}
+
+      {hasStripeCustomer ? (
+        <div className="mt-10">
+          <ManageBillingButton />
+          <p className="mt-2 text-xs text-gray-500">
+            Update your card, view invoices, or cancel your plan.
+          </p>
         </div>
       ) : null}
 

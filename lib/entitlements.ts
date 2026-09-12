@@ -179,6 +179,13 @@ export type PlanTier = {
   highlights: string[];
   selfServe: boolean;
   mostPopular: boolean;
+  /**
+   * The Stripe Price this tier's Checkout Session is created against — read
+   * from env so rotating a price is "update one var, redeploy," not a new
+   * Payment Link and a billing_price_map insert. `null` means checkout isn't
+   * wired for this tier yet; callers must treat that the same as `!selfServe`.
+   */
+  stripePriceId: string | null;
 };
 
 export const PLAN_TIERS: PlanTier[] = [
@@ -188,6 +195,7 @@ export const PLAN_TIERS: PlanTier[] = [
     monthlyUsd: STARTER_PLAN.monthlyUsd,
     setupFeeUsd: STARTER_PLAN.setupFeeUsd,
     includedMinutes: STARTER_PLAN.includedMinutes,
+    stripePriceId: process.env.STRIPE_PRICE_VOICE_STARTER ?? null,
     // Calls first, minutes in brackets. The bracket is not decoration: the
     // dashboard meter, the overage line and the invoice are all in minutes, so
     // a customer who has only ever been told "calls" meets a unit they have
@@ -209,6 +217,7 @@ export const PLAN_TIERS: PlanTier[] = [
     monthlyUsd: 280,
     setupFeeUsd: SETUP_FEE_USD,
     includedMinutes: 250,
+    stripePriceId: process.env.STRIPE_PRICE_VOICE_GROWTH ?? null,
     highlights: [
       `About 175 calls a month (250 minutes)`,
       "Advanced transfers",
@@ -224,6 +233,7 @@ export const PLAN_TIERS: PlanTier[] = [
     monthlyUsd: 450,
     setupFeeUsd: SETUP_FEE_USD,
     includedMinutes: 600,
+    stripePriceId: process.env.STRIPE_PRICE_VOICE_SCALE ?? null,
     highlights: [
       `About 300 calls a month (600 minutes)`,
       "2 local phone numbers",
@@ -362,87 +372,13 @@ export function entitlementsEnforced(): boolean {
   return process.env.ENFORCE_ENTITLEMENTS === "1";
 }
 
-// Hosted-checkout URL for a feature, if a processor has been wired. Kept in config
-// so choosing a processor later is configuration, not code:
-//   CHECKOUT_URL_VOICE, CHECKOUT_URL_EMAIL
-//
-// When `clientId` is supplied we append Stripe's `client_reference_id`, which
-// Stripe echoes back on checkout.session.completed. That is what lets the
-// webhook route the grant to the right tenant: a bare Payment Link carries no
-// identity, so without it the event arrives unroutable and parks as 'unmapped'
-// awaiting a manual grant. The dashboard already knows who is signed in, so
-// there is no reason to make anyone reconcile that by hand.
-//
-// A landing-page visitor has no account yet and therefore no client id. Those
-// purchases are expected to park — see parseStripeEvent's note on why an
-// unroutable payment must never be guessed onto a tenant.
-export function checkoutUrl(
-  feature: Feature,
-  clientId?: string | null,
-): string | null {
-  const v = process.env[`CHECKOUT_URL_${feature.toUpperCase()}`];
-  return stampClientRef(v && v.trim() ? v.trim() : null, clientId);
-}
+// checkoutUrl / tierCheckoutUrl / stampClientRef (static Payment Link URLs,
+// CHECKOUT_URL_* env vars) are RETIRED as of the move to direct Stripe API
+// calls — see lib/services/billing.ts's createCheckoutSessionForClient and
+// components/billing/checkout-button.tsx. client_reference_id is now set
+// server-side at Checkout Session creation instead of stamped onto a URL.
 
-/**
- * Hosted-checkout URL for a specific PLAN TIER.
- *
- *   CHECKOUT_URL_VOICE_STARTER
- *   CHECKOUT_URL_VOICE_GROWTH
- *   CHECKOUT_URL_VOICE_SCALE
- *
- * One Payment Link per tier, because a Payment Link is bound to its prices: the
- * $279 Growth price and the $499 Growth setup fee are line items ON the link,
- * not parameters to it. There is no way to point one link at three plans.
- *
- * FALLS BACK to CHECKOUT_URL_VOICE for Starter only. That variable is the one
- * already set in Railway and .env.local and already carries the live Starter
- * link; without this fallback, deploying this change would blank the Starter
- * button on /billing and /plans until someone renamed an env var — turning a
- * copy change into an outage on the only tier currently selling. Growth and
- * Scale have no such history, so they get no fallback: an unset variable
- * renders "Checkout not connected yet" rather than silently sending a Growth
- * buyer to the Starter link and charging them $179 for 250 minutes.
- */
-export function tierCheckoutUrl(
-  tier: PlanTierKey,
-  clientId?: string | null,
-): string | null {
-  const specific = process.env[`CHECKOUT_URL_VOICE_${tier.toUpperCase()}`];
-  const legacy = tier === "starter" ? process.env.CHECKOUT_URL_VOICE : undefined;
-  const raw = specific?.trim() || legacy?.trim() || null;
-  return stampClientRef(raw, clientId);
-}
-
-/**
- * Append Stripe's `client_reference_id` so the webhook can route the grant to
- * the right tenant. A bare Payment Link carries no identity: without this the
- * purchase arrives unroutable and parks as 'unmapped' awaiting a manual grant.
- *
- * Exported for lib/client-addons.ts / /billing's add-on links — an add-on's
- * "Add To Plan" button needs the exact same stamping a plan checkout URL gets,
- * for the exact same reason. See apply_addon_billing_event (0040) and
- * resolveAddonKeys in billing-webhook/index.ts: without client_reference_id on
- * THIS link, the checkout.session.completed event for a brand-new add-on has
- * no client to attribute it to at all.
- */
-export function stampClientRef(
-  base: string | null,
-  clientId?: string | null,
-): string | null {
-  if (!base || !clientId) return base;
-  try {
-    const url = new URL(base);
-    url.searchParams.set("client_reference_id", clientId);
-    return url.toString();
-  } catch {
-    // A malformed CHECKOUT_URL_* shouldn't take the billing page down; fall
-    // back to the raw value and let the manual-grant path handle routing.
-    return base;
-  }
-}
-
-// The caller's own client_id, for stamping onto a checkout URL. RLS scopes the
+// The caller's own client_id. RLS scopes the
 // row, so this can only ever return the signed-in user's tenant.
 export async function getCurrentClientId(): Promise<string | null> {
   const supabase = await createClient();
@@ -457,6 +393,23 @@ export async function getCurrentClientId(): Promise<string | null> {
     .eq("id", user.id)
     .maybeSingle();
   return (data?.client_id as string | undefined) ?? null;
+}
+
+// Shared by the three billing Route Handlers so each doesn't repeat the same
+// "signed in, and known to a tenant" check. Not a new abstraction — just a
+// dedupe of what every caller already did inline.
+export async function requireClientId(): Promise<string | null> {
+  return getCurrentClientId();
+}
+
+/** Reverse lookup: which tier (if any) a Stripe Price id belongs to. Used by
+ * the webhook to resolve a renewal event that carries no plan_tier metadata
+ * (only the very first checkout.session.completed sets it). Returns null on
+ * no match rather than throwing — an unrecognised price degrades to "no
+ * tier", same tolerance apply_billing_event already has for a bad plan_tier
+ * string. */
+export function planTierForStripePriceId(priceId: string): PlanTierKey | null {
+  return PLAN_TIERS.find((t) => t.stripePriceId === priceId)?.key ?? null;
 }
 
 // All of the caller's entitlements, keyed by feature (missing = locked).

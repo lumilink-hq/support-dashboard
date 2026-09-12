@@ -1,38 +1,46 @@
 // The add-on catalogue, as data.
 //
-// WHY THIS FILE EXISTS. Add-ons are sold in two places — Stripe's "recommended
-// products" on each plan link, and the post-purchase "Finalise Your Plan"
-// screen — and the two must not disagree about what exists, what it costs, or
-// what it's called. Stripe owns the charge; this file owns what we SAY.
+// WHY THIS FILE EXISTS. Add-ons are sold in two places — /billing's "Build Out
+// Your Plan" and /welcome's post-purchase "Finalise Your Plan" — and the two
+// must not disagree about what exists, what it costs, or what it's called.
+// Stripe owns the charge; this file owns what we SAY.
 //
-// EACH ADD-ON HAS ITS OWN PAYMENT LINK. That is what makes the post-purchase
-// screen buildable today with no new billing code: "add this" is a link, and
-// the existing webhook + billing_price_map handle the rest. The price rows are
-// mapped in scripts/seed-addon-price-map.sql with kind='addon' and an
-// addon_key, which is what stops a $39 line being mistaken for a plan tier.
+// EACH ADD-ON IS A LINE ITEM ON THE CLIENT'S OWN SUBSCRIPTION, not a separate
+// Payment Link / separate subscription. lib/services/billing.ts's
+// addAddonToClient/removeAddonFromClient call Stripe's Subscription Items API
+// directly against clients.stripe_subscription_id, and activeAddonsForClient
+// reads current ownership LIVE off that subscription — there is no local
+// mirror table to keep in sync (client_addons, migrations 0039/0040, is
+// retired; it drifted from Stripe's own state, which is the whole reason this
+// file no longer works the old way).
 //
 // MAPPING IS NOT FULFILMENT. Every item here bills correctly and NONE of them
-// provision themselves — there is no client_addons table and provisionVoice
-// buys exactly one number. Selling one creates manual work. `manualFulfilment`
-// says so per item rather than leaving it to be discovered on the first sale.
+// provision themselves — provisionVoice buys exactly one number, nothing wires
+// a second one automatically. Selling one creates manual work.
+// `manualFulfilment` says so per item rather than leaving it to be discovered
+// on the first sale.
 
 export type Addon = {
-  /** Matches billing_price_map.addon_key. The join between money and meaning. */
+  /** Stable id used everywhere else in the app to refer to this add-on. */
   key: string;
   name: string;
   monthlyUsd: number;
   /** One line, customer-facing. Says what they get, not what it is. */
   blurb: string;
-  /** Stripe Payment Link. Env override so a link can be swapped without a deploy. */
-  url: string;
+  /**
+   * The Stripe Price this add-on's subscription item is created against —
+   * read from env, same reasoning as PlanTier.stripePriceId in
+   * lib/entitlements.ts: rotating a price is "update one var, redeploy," not
+   * a new Payment Link. `null` means it isn't wired for purchase yet.
+   */
+  stripePriceId: string | null;
   /**
    * False = do not show it for sale anywhere.
    *
    * Website Chat is the one that matters: nothing meters a browser chat
    * session. Every cap in the product counts call minutes, a text session
    * generates none, and it lives on a public slug — so it can run up a bill
-   * that cannot be capped. Its price row is mapped `is_active = false` for the
-   * same reason. Flip both together, once the message allowance, per-session
+   * that cannot be capped. Flip this once the message allowance, per-session
    * ceiling and per-slug rate limit exist (BUILD-PLAN-2026-08.md §H).
    */
   available: boolean;
@@ -41,10 +49,10 @@ export type Addon = {
 };
 
 /**
- * Order is deliberate and matches the recommended-product order on the Stripe
- * links: Website Chat, Managed Integration, Additional Phone Line. Keeping the
- * two sequences identical means a customer who saw them at checkout meets them
- * again in the same order, which reads as one product rather than two lists.
+ * Order is deliberate: Website Chat, Managed Integration, Additional Phone
+ * Line, matching the order customers have seen it in since the Payment Link
+ * era. Keeping the sequence stable means a returning customer meets the same
+ * list, not a reshuffled one.
  */
 export const ADDONS: Addon[] = [
   {
@@ -53,9 +61,7 @@ export const ADDONS: Addon[] = [
     monthlyUsd: 40,
     blurb:
       "Put the same agent on your website, so visitors get answers without picking up the phone.",
-    url:
-      process.env.NEXT_PUBLIC_ADDON_URL_WEBSITE_CHAT ??
-      "https://buy.stripe.com/cNi5kw0b07HM9Q2bHx0VO07",
+    stripePriceId: process.env.STRIPE_PRICE_ADDON_WEBSITE_CHAT ?? null,
     // Turned on 2026-09-11 by explicit decision, ahead of the message
     // allowance / per-session ceiling / per-slug rate limit in
     // BUILD-PLAN-2026-08.md §H. Nothing metering a browser chat session exists
@@ -69,9 +75,7 @@ export const ADDONS: Addon[] = [
     monthlyUsd: 30,
     blurb:
       "Connect LumiLink to a business platform you already use, and we keep it running.",
-    url:
-      process.env.NEXT_PUBLIC_ADDON_URL_MANAGED_INTEGRATION ??
-      "https://buy.stripe.com/5kQcMY1f4e6aaU6dPF0VO05",
+    stripePriceId: process.env.STRIPE_PRICE_ADDON_MANAGED_INTEGRATION ?? null,
     available: true,
     manualFulfilment: true,
   },
@@ -81,9 +85,7 @@ export const ADDONS: Addon[] = [
     monthlyUsd: 20,
     blurb:
       "A second dedicated line for a department, campaign or brand, on your existing plan.",
-    url:
-      process.env.NEXT_PUBLIC_ADDON_URL_PHONE_LINE ??
-      "https://buy.stripe.com/14A4gs6zoaTY6DQbHx0VO09",
+    stripePriceId: process.env.STRIPE_PRICE_ADDON_ADDITIONAL_PHONE_LINE ?? null,
     available: true,
     manualFulfilment: true,
   },
@@ -93,9 +95,7 @@ export const ADDONS: Addon[] = [
     monthlyUsd: 30,
     blurb:
       "Another location with its own number, hours, greeting and routing.",
-    url:
-      process.env.NEXT_PUBLIC_ADDON_URL_LOCATION ??
-      "https://buy.stripe.com/14A3cobTIfae6DQh1R0VO08",
+    stripePriceId: process.env.STRIPE_PRICE_ADDON_ADDITIONAL_LOCATION ?? null,
     available: true,
     manualFulfilment: true,
   },
@@ -105,9 +105,7 @@ export const ADDONS: Addon[] = [
     monthlyUsd: 50,
     blurb:
       "A managed automation so the agent can carry out one more action off the back of a conversation.",
-    url:
-      process.env.NEXT_PUBLIC_ADDON_URL_ADVANCED_WORKFLOW ??
-      "https://buy.stripe.com/5kQfZae1QaTYfamfXN0VO06",
+    stripePriceId: process.env.STRIPE_PRICE_ADDON_ADVANCED_WORKFLOW ?? null,
     available: true,
     manualFulfilment: true,
   },
@@ -117,9 +115,7 @@ export const ADDONS: Addon[] = [
     monthlyUsd: 80,
     blurb:
       "Higher-touch monthly tuning: response quality, business knowledge and configuration, reviewed by us.",
-    url:
-      process.env.NEXT_PUBLIC_ADDON_URL_ENHANCED_OPTIMIZATION ??
-      "https://buy.stripe.com/28EeV62j8fae9Q226X0VO04",
+    stripePriceId: process.env.STRIPE_PRICE_ADDON_ENHANCED_OPTIMIZATION ?? null,
     available: true,
     manualFulfilment: true,
   },
@@ -128,4 +124,13 @@ export const ADDONS: Addon[] = [
 /** What a customer may actually be shown. */
 export function availableAddons(): Addon[] {
   return ADDONS.filter((a) => a.available);
+}
+
+/** Reverse lookup: which add-on (if any) a Stripe Price id belongs to. Used
+ * by activeAddonsForClient to map a live subscription's line items back to
+ * this catalogue. Returns null on no match — an item on the subscription that
+ * isn't in this list (the plan's own price, or something stale) is simply not
+ * an add-on, not an error. */
+export function addonForStripePriceId(priceId: string): Addon | null {
+  return ADDONS.find((a) => a.stripePriceId === priceId) ?? null;
 }

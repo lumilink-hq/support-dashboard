@@ -25,8 +25,10 @@ import {
   readOnboarding,
   type BusinessType,
 } from "@/lib/onboarding";
-import { getCurrentClientId, stampClientRef } from "@/lib/entitlements";
+import { getCurrentClientId } from "@/lib/entitlements";
+import { activeAddonsForClient } from "@/lib/services/billing";
 import { createClient } from "@/lib/supabase/server";
+import { AddonToggle } from "@/components/billing/addon-toggle";
 
 export const metadata: Metadata = {
   title: "Welcome To LumiLink",
@@ -56,11 +58,15 @@ export default async function WelcomePage() {
   // sees the same reassurance either way.
   let firstIncompleteHref = "/onboarding";
   let setupOutstanding = true;
-  // Also used below to stamp client_reference_id on each add-on's own
-  // Payment Link — without it, an add-on bought from THIS page (likely the
-  // most common place, since it's the first thing shown after paying) has no
-  // client to attribute the purchase to. See 0040_addon_billing_events.sql.
   const clientId = await getCurrentClientId().catch(() => null);
+  // Right after checkout, clients.stripe_subscription_id may not be written
+  // yet (the webhook lands asynchronously — see the top-of-file note on why
+  // this page never says "not active"). An add-on click that lands before it
+  // shows "Subscribe to a plan first" from the API, which reads oddly one
+  // page after paying, but resolves itself the moment the webhook catches up.
+  const activeAddonKeys = new Set(
+    clientId ? (await activeAddonsForClient(clientId).catch(() => [])).map((a) => a.key) : [],
+  );
   try {
     if (clientId) {
       const supabase = await createClient();
@@ -160,31 +166,37 @@ export default async function WelcomePage() {
           </p>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            {addons.map((a) => (
-              <div
-                key={a.key}
-                className="flex flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
-              >
-                <div className="flex items-baseline justify-between gap-3">
-                  <h3 className="text-base font-semibold text-gray-900">
-                    {a.name}
-                  </h3>
-                  <p className="shrink-0 text-sm font-medium text-gray-900">
-                    ${a.monthlyUsd}
-                    <span className="text-gray-500">/mo</span>
-                  </p>
-                </div>
-                <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-600">
-                  {a.blurb}
-                </p>
-                <a
-                  href={stampClientRef(a.url, clientId) ?? a.url}
-                  className="mt-5 block rounded-md border border-gray-300 px-4 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
+            {addons.map((a) => {
+              const active = activeAddonKeys.has(a.key);
+              return (
+                <div
+                  key={a.key}
+                  className="flex flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
                 >
-                  Add To Plan
-                </a>
-              </div>
-            ))}
+                  <div className="flex items-baseline justify-between gap-3">
+                    <h3 className="text-base font-semibold text-gray-900">
+                      {a.name}
+                    </h3>
+                    {active ? (
+                      <span className="shrink-0 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                        Active
+                      </span>
+                    ) : (
+                      <p className="shrink-0 text-sm font-medium text-gray-900">
+                        ${a.monthlyUsd}
+                        <span className="text-gray-500">/mo</span>
+                      </p>
+                    )}
+                  </div>
+                  <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-600">
+                    {a.blurb}
+                  </p>
+                  <div className="mt-5">
+                    <AddonToggle addonKey={a.key} active={active} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           <p className="mt-6 text-sm text-gray-500">

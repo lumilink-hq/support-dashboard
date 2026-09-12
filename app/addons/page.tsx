@@ -7,11 +7,12 @@
 // availableAddons() call rather than re-describing the catalogue, so a third
 // place can't drift from the other two either.
 //
-// Every add-on's `url` is its own Stripe Payment Link, exactly as /billing
-// links it — no client_reference_id, no session-aware routing. That matches
-// existing behavior for add-ons specifically (unlike plan checkout, which
-// does carry client_reference_id via /plans); see lib/addons.ts's own header
-// comment for why a bare Payment Link is fine here.
+// PURELY INFORMATIONAL for add-ons, unlike /plans. An add-on is a line item
+// added to a client's EXISTING subscription (lib/services/billing.ts) — there
+// is no such thing as a signed-out (or plan-less) visitor buying one, so this
+// page shows price + description only and points at /plans, where the actual
+// subscription starts. Purchasing an add-on happens from inside /billing or
+// /welcome, both of which know who's asking.
 //
 // REWORKED 2026-08-31 per boss feedback: lean into "build your customer
 // service experience" rather than "add-ons" as the framing, and show the
@@ -89,12 +90,12 @@ export default function AddonsPage() {
               <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-600">
                 {a.blurb}
               </p>
-              <a
-                href={a.url}
+              <Link
+                href="/plans"
                 className="mt-4 block rounded-md border border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
-                Add To Plan
-              </a>
+                Start with a plan
+              </Link>
             </div>
           ))}
         </div>

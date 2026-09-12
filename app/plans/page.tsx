@@ -3,11 +3,11 @@
 //   Homepage -> Plans -> pick Starter -> sign in -> Stripe
 //   Already signed in? Straight to Stripe.
 //
-// WHY THIS IS PUBLIC BUT CHECKOUT IS NOT. The Stripe link has to carry
-// client_reference_id, and only an authenticated request knows which tenant that
-// is. Every payment made before we started appending it parked as 'unmapped'
-// with nothing granted. So anyone may READ this page; the button only becomes a
-// checkout link once we know who is clicking it.
+// WHY THIS IS PUBLIC BUT CHECKOUT IS NOT. Creating a Stripe Checkout Session
+// (see CheckoutButton / /api/billing/checkout) requires a client_id to stamp
+// onto it, and only an authenticated request knows which tenant that is. So
+// anyone may READ this page; the button only becomes clickable once we know
+// who is clicking it.
 //
 // This is also why the marketing site can live on Wix but this page cannot: a
 // CMS has no session, so a checkout button it renders can never name the buyer.
@@ -20,6 +20,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
 import { contactHref } from "@/components/marketing/blocks";
+import { CheckoutButton } from "@/components/billing/checkout-button";
 import {
   ENTERPRISE_TIER,
   // OVERAGE is deliberately NOT imported any more: this page stopped quoting a
@@ -31,7 +32,6 @@ import {
   getCurrentClientId,
   getEntitlements,
   isUsable,
-  tierCheckoutUrl,
 } from "@/lib/entitlements";
 
 export const metadata: Metadata = {
@@ -93,13 +93,6 @@ export default async function PlansPage() {
             // `selfServe` here would badge every card "Most popular".
             const featured = tier.mostPopular;
 
-            // Each tier has its OWN Payment Link — the plan price and its setup
-            // fee are line items on the link, so one link cannot serve three
-            // plans. Resolved per card rather than once above, and an unset
-            // variable disables that card's button instead of falling through
-            // to another tier's link.
-            const checkout = tierCheckoutUrl(tier.key, clientId);
-
             return (
               <div
                 key={tier.label}
@@ -146,17 +139,17 @@ export default async function PlansPage() {
                 {/*
                   Four states, in the order they're checked:
                     already paying   -> send them to manage it, not buy again
-                    self-serve + in  -> real checkout link carrying the tenant
+                    self-serve + in  -> CheckoutButton creates a Session on click
                     self-serve + out -> create an account, then come back here
-                    everything else  -> link not configured, button disabled
+                    everything else  -> price not configured, button disabled
 
-                  The last branch used to read "Talk to us" and point at
-                  /signup, because Growth and Scale genuinely had no link. They
-                  do now. What remains is the CONFIGURATION case: a tier whose
-                  CHECKOUT_URL_VOICE_* is unset. It must stay visibly dead
-                  rather than silently borrowing another tier's link — that
-                  would charge a Scale buyer $179 and provision them Starter&rsquo;s
-                  minutes.
+                  The last branch is the CONFIGURATION case: a tier whose
+                  STRIPE_PRICE_VOICE_* env var is unset. It must stay visibly
+                  dead rather than silently falling through to another tier's
+                  price — that would charge a Scale buyer $180 and provision
+                  them Starter's minutes. (This used to be about a Payment
+                  Link; since the move to direct Stripe API calls it's about a
+                  missing price id instead, same failure mode.)
                 */}
                 {alreadySubscribed ? (
                   <Link
@@ -165,17 +158,8 @@ export default async function PlansPage() {
                   >
                     Manage your plan
                   </Link>
-                ) : tier.selfServe && signedIn && checkout ? (
-                  <a
-                    href={checkout}
-                    className={`block rounded-md px-4 py-2.5 text-center text-sm font-medium ${
-                      featured
-                        ? "bg-gray-900 text-white hover:bg-gray-800"
-                        : "border border-gray-300 text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
-                    Continue to checkout
-                  </a>
+                ) : tier.selfServe && signedIn && tier.stripePriceId ? (
+                  <CheckoutButton tier={tier.key} featured={featured} />
                 ) : tier.selfServe && !signedIn ? (
                   // SIGNUP, not login (changed 2026-08-13). This button is the
                   // acquisition path: someone reading the pricing page and
