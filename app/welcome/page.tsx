@@ -25,7 +25,7 @@ import {
   readOnboarding,
   type BusinessType,
 } from "@/lib/onboarding";
-import { getCurrentClientId } from "@/lib/entitlements";
+import { getCurrentClientId, stampClientRef } from "@/lib/entitlements";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -56,8 +56,12 @@ export default async function WelcomePage() {
   // sees the same reassurance either way.
   let firstIncompleteHref = "/onboarding";
   let setupOutstanding = true;
+  // Also used below to stamp client_reference_id on each add-on's own
+  // Payment Link — without it, an add-on bought from THIS page (likely the
+  // most common place, since it's the first thing shown after paying) has no
+  // client to attribute the purchase to. See 0040_addon_billing_events.sql.
+  const clientId = await getCurrentClientId().catch(() => null);
   try {
-    const clientId = await getCurrentClientId();
     if (clientId) {
       const supabase = await createClient();
       const { data } = await supabase
@@ -174,7 +178,7 @@ export default async function WelcomePage() {
                   {a.blurb}
                 </p>
                 <a
-                  href={a.url}
+                  href={stampClientRef(a.url, clientId) ?? a.url}
                   className="mt-5 block rounded-md border border-gray-300 px-4 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Add To Plan

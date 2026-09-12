@@ -58,6 +58,18 @@ export interface CanonicalEvent {
    * forgotten on a link someone rebuilds later).
    */
   planTier?: string | null;
+  /**
+   * WHICH ADD-ON, from that add-on's own Stripe Payment Link `addon_key`
+   * metadata. Load-bearing for the exact reason planTier is: each add-on has
+   * its own Payment Link (lib/addons.ts), so buying one is its own
+   * checkout.session.completed — which carries client_reference_id but NO
+   * PRICE. Without this, the one event that names the client can never say
+   * which add-on it bought, and the follow-up event that DOES carry the price
+   * (customer.subscription.created) carries no client_reference_id either.
+   * Metadata on the Payment Link is copied onto the Checkout Session Stripe
+   * creates, so this one event alone can carry both.
+   */
+  addonKey?: string | null;
   subscriptionRef?: string | null;
   currentPeriodEnd?: string | null; // ISO
   /**
@@ -316,6 +328,15 @@ function asPlanTier(v: unknown): string | null {
   return s === "" ? null : s;
 }
 
+// Same shape and same reasoning as asPlanTier: not validated against a fixed
+// list here. addon_key isn't even an FK anywhere (client_addons.addon_key is
+// free text, see 0039) — the source of truth is lib/addons.ts's Addon.key.
+function asAddonKey(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim().toLowerCase();
+  return s === "" ? null : s;
+}
+
 /**
  * Metadata can sit in several places depending on the object. A Payment Link
  * copies its metadata onto the subscription; invoices carry the subscription's
@@ -434,6 +455,7 @@ export function parseStripeEvent(rawBody: string): CanonicalEvent | null {
     clientId: firstString(meta.client_id, obj?.client_reference_id),
     feature: asFeature(meta.feature),
     planTier: asPlanTier(meta.plan_tier),
+    addonKey: asAddonKey(meta.addon_key),
     externalPriceId: priceIds[0] ?? null,
     externalPriceIds: priceIds,
     subscriptionRef: extractSubscriptionRef(obj),

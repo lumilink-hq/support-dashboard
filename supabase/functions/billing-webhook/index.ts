@@ -303,6 +303,57 @@ async function resolvePlanTier(
   return best?.plan_tier ?? null;
 }
 
+// EVERY add-on price id on the event, resolved to addon_keys. Unlike
+// resolvePlanTier there's no "highest wins" tie-break — a customer can pick
+// several optional items at checkout, and every one of them is a real
+// purchase, not a competing answer to "which one?".
+//
+// Metadata wins here too, and for the same reason: checkout.session.completed
+// (the one event with client_reference_id) carries no price, so on a BRAND
+// NEW add-on it's the only source. See the addonKey field doc on
+// CanonicalEvent and 0040's header note for the full reasoning.
+async function resolveAddonKeys(ev: CanonicalEvent, processor: string): Promise<string[]> {
+  const keys = new Set<string>();
+  if (ev.addonKey) keys.add(ev.addonKey);
+
+  const ids = priceIdsOf(ev);
+  if (ids.length > 0) {
+    const { data } = await supabase
+      .from("billing_price_map")
+      .select("addon_key")
+      .eq("processor", processor)
+      .eq("kind", "addon")
+      .in("external_price_id", ids)
+      .eq("is_active", true);
+    for (const row of (data ?? []) as { addon_key: string | null }[]) {
+      if (row.addon_key) keys.add(row.addon_key);
+    }
+  }
+
+  return Array.from(keys);
+}
+
+// Resolve a client from a subscription we already recorded an add-on against.
+//
+// WHY THIS EXISTS SEPARATELY FROM resolveBySubscription. That one reads
+// entitlements, which only ever holds the PLAN's subscription ref. An add-on
+// bought through its own Payment Link (the /billing "Add To Plan" flow) may
+// ride a DIFFERENT subscription that entitlements has never heard of — so a
+// renewal or cancellation of an add-on-only subscription needs its own
+// lookup, against the ref this same function recorded on the first event.
+async function resolveAddonClientBySubscription(
+  subscriptionRef: string | null | undefined,
+): Promise<string | null> {
+  if (!subscriptionRef) return null;
+  const { data } = await supabase
+    .from("client_addons")
+    .select("client_id")
+    .eq("external_subscription_ref", subscriptionRef)
+    .limit(1)
+    .maybeSingle();
+  return (data?.client_id as string) ?? null;
+}
+
 // The tier for a subscription we already track. Needed for the same reason
 // resolveBySubscription exists: a renewal or a recovery may arrive with prices
 // we can map, but a cancellation carries none at all. Reading the tier back off
@@ -539,6 +590,48 @@ Deno.serve(async (req) => {
   // to kick it and return immediately, never to wait for it or fail on it.
   if (!error && (data as { status?: string } | null)?.status === "applied") {
     kickProvisioning();
+  }
+
+  // Add-ons ride the same event, resolved and applied separately — see 0040's
+  // header for why this isn't a branch inside apply_billing_event. Skipped
+  // entirely on a duplicate delivery (already applied the first time) or when
+  // no client can be resolved at all (nothing safe to attribute the add-on
+  // to). Never blocks or fails the response: an add-on write going wrong must
+  // not turn a successful plan grant into a 500 and a Stripe retry loop.
+  if (!error && (data as { status?: string } | null)?.status !== "duplicate") {
+    try {
+      // clientId already folds in ev.clientId as its own first choice (see
+      // above); the subscription lookup is the one addon-specific fallback.
+      const addonClientId =
+        clientId ?? (await resolveAddonClientBySubscription(ev.subscriptionRef));
+
+      if (addonClientId) {
+        if (ev.type === "subscription_canceled") {
+          await supabase.rpc("apply_addon_billing_event", {
+            p_client_id: addonClientId,
+            p_addon_key: null,
+            p_event_type: ev.type,
+            p_subscription_ref: ev.subscriptionRef ?? null,
+            p_current_period_end: ev.currentPeriodEnd ?? null,
+            p_processor: processor,
+          });
+        } else {
+          const addonKeys = await resolveAddonKeys(ev, processor);
+          for (const addonKey of addonKeys) {
+            await supabase.rpc("apply_addon_billing_event", {
+              p_client_id: addonClientId,
+              p_addon_key: addonKey,
+              p_event_type: ev.type,
+              p_subscription_ref: ev.subscriptionRef ?? null,
+              p_current_period_end: ev.currentPeriodEnd ?? null,
+              p_processor: processor,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.error("add-on billing event failed:", String(e));
+    }
   }
 
   if (error) {

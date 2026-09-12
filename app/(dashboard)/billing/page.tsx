@@ -9,9 +9,11 @@ import {
   STARTER_PLAN,
   entitlementsEnforced,
   featureState,
+  getCurrentClientId,
   getEntitlements,
   getVoiceUsage,
   overageEstimate,
+  stampClientRef,
   type FeatureState,
   type VoiceUsage,
 } from "@/lib/entitlements";
@@ -115,12 +117,17 @@ const ADDON_PILL_LABEL: Record<"active" | "past_due" | "setup" | "canceled", str
 };
 
 export default async function BillingPage() {
-  // client_reference_id is stamped on /plans now, where the tier is chosen, so
-  // this page no longer needs the tenant id to build a checkout URL.
-  const [ent, usage, addons] = await Promise.all([
+  // client_reference_id is stamped on /plans for a PLAN checkout, where the
+  // tier is chosen — this page never needed the tenant id for that. It DOES
+  // need it for an add-on's own "Add To Plan" link (below): each add-on has
+  // its own Payment Link, and without client_reference_id on it the resulting
+  // checkout.session.completed has no client to attribute the purchase to at
+  // all — see 0040_addon_billing_events.sql's header.
+  const [ent, usage, addons, clientId] = await Promise.all([
     getEntitlements(),
     getVoiceUsage(),
     getClientAddons(),
+    getCurrentClientId(),
   ]);
 
   return (
@@ -318,7 +325,7 @@ export default async function BillingPage() {
                     </p>
                   ) : (
                     <a
-                      href={a.url}
+                      href={stampClientRef(a.url, clientId) ?? a.url}
                       className="mt-4 block rounded-md border border-gray-300 px-3 py-2 text-center text-xs font-medium text-gray-700 hover:bg-gray-50"
                     >
                       {state === "canceled" ? "Add again" : "Add To Plan"}

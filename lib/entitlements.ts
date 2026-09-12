@@ -418,8 +418,15 @@ export function tierCheckoutUrl(
  * Append Stripe's `client_reference_id` so the webhook can route the grant to
  * the right tenant. A bare Payment Link carries no identity: without this the
  * purchase arrives unroutable and parks as 'unmapped' awaiting a manual grant.
+ *
+ * Exported for lib/client-addons.ts / /billing's add-on links — an add-on's
+ * "Add To Plan" button needs the exact same stamping a plan checkout URL gets,
+ * for the exact same reason. See apply_addon_billing_event (0040) and
+ * resolveAddonKeys in billing-webhook/index.ts: without client_reference_id on
+ * THIS link, the checkout.session.completed event for a brand-new add-on has
+ * no client to attribute it to at all.
  */
-function stampClientRef(
+export function stampClientRef(
   base: string | null,
   clientId?: string | null,
 ): string | null {
