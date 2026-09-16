@@ -26,7 +26,7 @@ export async function signup(formData: FormData) {
   // anything unrecognised as null rather than trusting it.
   const rawType = String(formData.get("business_type") ?? "").trim().toLowerCase();
   const businessType =
-    rawType === "service" || rawType === "ecommerce" ? rawType : null;
+    rawType === "service" || rawType === "ecommerce" || rawType === "seo" ? rawType : null;
 
   const fail = (message: string) =>
     redirect(`/signup?error=${encodeURIComponent(message)}`);

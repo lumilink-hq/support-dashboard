@@ -34,8 +34,17 @@ import {
 import {
   acknowledgeNumber,
   addService,
+  addSeoCompetitor,
+  addSeoKeyword,
+  addSeoLocation,
   deferStore,
+  finishSeoCompetitors,
+  finishSeoKeywords,
+  finishSeoLocations,
   finishServices,
+  removeSeoCompetitor,
+  removeSeoKeyword,
+  removeSeoLocation,
   removeService,
   saveBasics,
   saveBehaviour,
@@ -64,23 +73,32 @@ export default async function OnboardingPage({
   if (!clientId) redirect("/login?next=%2Fonboarding");
 
   const supabase = await createClient();
-  const [{ data: client }, { data: services }, { data: kbDocs }] = await Promise.all([
-    supabase
-      .from("clients")
-      .select("name, business_type, phone_number, settings")
-      .eq("id", clientId)
-      .maybeSingle(),
-    supabase
-      .from("services")
-      .select("id, name, price_type, price, callout_fee, default_duration_min, emergency_eligible")
-      .eq("client_id", clientId)
-      .order("created_at"),
-    supabase
-      .from("kb_documents")
-      .select("id, title, source_uri, status, chunk_count, last_error")
-      .eq("client_id", clientId)
-      .order("created_at"),
-  ]);
+  const [{ data: client }, { data: services }, { data: kbDocs }, { data: seoLocations }] =
+    await Promise.all([
+      supabase
+        .from("clients")
+        .select("name, business_type, phone_number, settings")
+        .eq("id", clientId)
+        .maybeSingle(),
+      supabase
+        .from("services")
+        .select("id, name, price_type, price, callout_fee, default_duration_min, emergency_eligible")
+        .eq("client_id", clientId)
+        .order("created_at"),
+      supabase
+        .from("kb_documents")
+        .select("id, title, source_uri, status, chunk_count, last_error")
+        .eq("client_id", clientId)
+        .order("created_at"),
+      // Cheap enough to always fetch (RLS-scoped, a handful of rows at most
+      // during onboarding) rather than branch the query on business_type —
+      // the render below already branches on it.
+      supabase
+        .from("seo_locations")
+        .select("id, name, city, region")
+        .eq("client_id", clientId)
+        .order("created_at"),
+    ]);
 
   const settings = (client?.settings ?? {}) as Record<string, unknown>;
   const businessType = (client?.business_type ?? null) as BusinessType | null;
@@ -88,6 +106,23 @@ export default async function OnboardingPage({
   const steps = stepsFor(businessType);
   const { done, total, percent } = progress(state, businessType);
   const blocking = blockingRemaining(state, businessType);
+  const isSeo = businessType === "seo";
+
+  const seoLocationIds = (seoLocations ?? []).map((l) => l.id);
+  const [{ data: seoKeywords }, { data: seoCompetitors }] = isSeo && seoLocationIds.length
+    ? await Promise.all([
+        supabase
+          .from("seo_keywords")
+          .select("id, location_id, keyword")
+          .in("location_id", seoLocationIds)
+          .order("created_at"),
+        supabase
+          .from("seo_competitors")
+          .select("id, location_id, domain")
+          .in("location_id", seoLocationIds)
+          .order("created_at"),
+      ])
+    : [{ data: [] }, { data: [] }];
 
   // Requested step, else resume, else the last step so a returning client sees
   // a finished wizard rather than being bounced somewhere arbitrary.
@@ -104,14 +139,17 @@ export default async function OnboardingPage({
         <div className="flex items-baseline justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
-              Let&rsquo;s get your phone answering
+              {isSeo ? "Let’s get your locations ranking" : "Let’s get your phone answering"}
             </h1>
             <p className="mt-1 text-sm text-gray-500">
               {client?.name ? `Setting up ${client.name}. ` : ""}
               You can stop and come back to it whenever suits you.
             </p>
           </div>
-          <Link href="/conversations" className="shrink-0 text-sm text-gray-500 underline">
+          <Link
+            href={isSeo ? "/settings" : "/conversations"}
+            className="shrink-0 text-sm text-gray-500 underline"
+          >
             Skip for now
           </Link>
         </div>
@@ -139,7 +177,7 @@ export default async function OnboardingPage({
           <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
             <h2 className="text-sm font-semibold text-amber-900">
               Your plan is paid. {blocking.length === 1 ? "One thing" : `${blocking.length} things`}{" "}
-              left before Lumi can answer:
+              left before {isSeo ? "we can start tracking" : "Lumi can answer"}:
             </h2>
             <ul className="mt-2 space-y-1 text-sm text-amber-800">
               {blocking.map((s) => (
@@ -153,8 +191,9 @@ export default async function OnboardingPage({
           </div>
         ) : (
           <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-            Everything we need is in. We&rsquo;re finishing your setup now, and
-            your number appears in Settings as soon as Lumi is live.
+            {isSeo
+              ? "Everything we need is in. We'll start the first crawl and rank check shortly."
+              : "Everything we need is in. We’re finishing your setup now, and your number appears in Settings as soon as Lumi is live."}
           </div>
         )}
 
@@ -715,6 +754,275 @@ export default async function OnboardingPage({
                   </button>
                 </form>
               </div>
+            </div>
+          ) : null}
+
+          {/* ---------------------------------------------------------------- */}
+          {active === "seo_locations" ? (
+            <div className="mt-6 space-y-6">
+              {error === "empty" ? (
+                <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                  Add at least one location. Everything else — keywords,
+                  rankings, findings — is tracked per location.
+                </p>
+              ) : null}
+
+              {seoLocations && seoLocations.length > 0 ? (
+                <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                  {seoLocations.map((loc) => (
+                    <li key={loc.id} className="flex items-center justify-between gap-3 p-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-gray-900">{loc.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {[loc.city, loc.region].filter(Boolean).join(", ") || "No address yet"}
+                        </p>
+                      </div>
+                      <form action={removeSeoLocation}>
+                        <input type="hidden" name="location_id" value={loc.id} />
+                        <button className="text-xs text-gray-400 underline hover:text-red-600">
+                          Remove
+                        </button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              <form action={addSeoLocation} className="space-y-4 rounded-lg border border-gray-200 p-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label className={label} htmlFor="seo_loc_name">
+                      Location name
+                    </label>
+                    <input
+                      id="seo_loc_name"
+                      name="name"
+                      required
+                      placeholder="Downtown branch"
+                      className={input}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={label} htmlFor="seo_loc_address1">
+                      Street address
+                    </label>
+                    <input id="seo_loc_address1" name="address_line1" className={input} />
+                  </div>
+                  <div>
+                    <label className={label} htmlFor="seo_loc_city">
+                      City
+                    </label>
+                    <input id="seo_loc_city" name="city" className={input} />
+                  </div>
+                  <div>
+                    <label className={label} htmlFor="seo_loc_region">
+                      State / region
+                    </label>
+                    <input id="seo_loc_region" name="region" className={input} />
+                  </div>
+                  <div>
+                    <label className={label} htmlFor="seo_loc_postal">
+                      Postal code
+                    </label>
+                    <input id="seo_loc_postal" name="postal_code" className={input} />
+                  </div>
+                  <div>
+                    <label className={label} htmlFor="seo_loc_country">
+                      Country code
+                    </label>
+                    <input
+                      id="seo_loc_country"
+                      name="country_code"
+                      placeholder="US"
+                      maxLength={2}
+                      className={input}
+                    />
+                  </div>
+                  <div>
+                    <label className={label} htmlFor="seo_loc_phone">
+                      Phone
+                    </label>
+                    <input id="seo_loc_phone" name="phone_number" className={input} />
+                  </div>
+                  <div>
+                    <label className={label} htmlFor="seo_loc_website">
+                      Website
+                    </label>
+                    <input
+                      id="seo_loc_website"
+                      name="website_url"
+                      placeholder="acme-heating.com"
+                      className={input}
+                    />
+                  </div>
+                </div>
+                <button type="submit" className={secondary}>
+                  Add location
+                </button>
+              </form>
+
+              <form action={finishSeoLocations}>
+                <button type="submit" className={primary}>
+                  Save and continue
+                </button>
+              </form>
+            </div>
+          ) : null}
+
+          {/* ---------------------------------------------------------------- */}
+          {active === "seo_keywords" ? (
+            <div className="mt-6 space-y-6">
+              {!seoLocations || seoLocations.length === 0 ? (
+                <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  Add a location first — keywords belong to one.
+                </p>
+              ) : (
+                <>
+                  {seoKeywords && seoKeywords.length > 0 ? (
+                    <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                      {seoKeywords.map((kw) => {
+                        const loc = seoLocations.find((l) => l.id === kw.location_id);
+                        return (
+                          <li key={kw.id} className="flex items-center justify-between gap-3 p-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-gray-900">
+                                {kw.keyword}
+                              </p>
+                              <p className="text-xs text-gray-500">{loc?.name ?? "Unknown location"}</p>
+                            </div>
+                            <form action={removeSeoKeyword}>
+                              <input type="hidden" name="keyword_id" value={kw.id} />
+                              <button className="text-xs text-gray-400 underline hover:text-red-600">
+                                Remove
+                              </button>
+                            </form>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+
+                  <form action={addSeoKeyword} className="space-y-4 rounded-lg border border-gray-200 p-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className={label} htmlFor="seo_kw_location">
+                          Location
+                        </label>
+                        <select id="seo_kw_location" name="location_id" className={input}>
+                          {seoLocations.map((loc) => (
+                            <option key={loc.id} value={loc.id}>
+                              {loc.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={label} htmlFor="seo_kw_keyword">
+                          Keyword
+                        </label>
+                        <input
+                          id="seo_kw_keyword"
+                          name="keyword"
+                          required
+                          placeholder="emergency plumber springfield"
+                          className={input}
+                        />
+                      </div>
+                    </div>
+                    <button type="submit" className={secondary}>
+                      Add keyword
+                    </button>
+                  </form>
+                </>
+              )}
+
+              <form action={finishSeoKeywords}>
+                <button type="submit" className={primary}>
+                  {seoKeywords && seoKeywords.length > 0 ? "Save and continue" : "Skip for now"}
+                </button>
+              </form>
+            </div>
+          ) : null}
+
+          {/* ---------------------------------------------------------------- */}
+          {active === "seo_competitors" ? (
+            <div className="mt-6 space-y-6">
+              {error === "too_many" ? (
+                <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                  That location already has 5 competitors — the most we track per location.
+                </p>
+              ) : null}
+
+              {!seoLocations || seoLocations.length === 0 ? (
+                <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  Add a location first — competitors belong to one.
+                </p>
+              ) : (
+                <>
+                  {seoCompetitors && seoCompetitors.length > 0 ? (
+                    <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                      {seoCompetitors.map((c) => {
+                        const loc = seoLocations.find((l) => l.id === c.location_id);
+                        return (
+                          <li key={c.id} className="flex items-center justify-between gap-3 p-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-gray-900">{c.domain}</p>
+                              <p className="text-xs text-gray-500">{loc?.name ?? "Unknown location"}</p>
+                            </div>
+                            <form action={removeSeoCompetitor}>
+                              <input type="hidden" name="competitor_id" value={c.id} />
+                              <button className="text-xs text-gray-400 underline hover:text-red-600">
+                                Remove
+                              </button>
+                            </form>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+
+                  <form
+                    action={addSeoCompetitor}
+                    className="space-y-4 rounded-lg border border-gray-200 p-4"
+                  >
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className={label} htmlFor="seo_comp_location">
+                          Location
+                        </label>
+                        <select id="seo_comp_location" name="location_id" className={input}>
+                          {seoLocations.map((loc) => (
+                            <option key={loc.id} value={loc.id}>
+                              {loc.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={label} htmlFor="seo_comp_domain">
+                          Competitor website
+                        </label>
+                        <input
+                          id="seo_comp_domain"
+                          name="domain"
+                          required
+                          placeholder="competitor.com"
+                          className={input}
+                        />
+                      </div>
+                    </div>
+                    <button type="submit" className={secondary}>
+                      Add competitor
+                    </button>
+                  </form>
+                </>
+              )}
+
+              <form action={finishSeoCompetitors}>
+                <button type="submit" className={primary}>
+                  {seoCompetitors && seoCompetitors.length > 0 ? "Save and finish" : "Skip for now"}
+                </button>
+              </form>
             </div>
           ) : null}
         </section>

@@ -16,9 +16,26 @@
 
 import Stripe from "stripe";
 import { addonForStripePriceId, ADDONS } from "@/lib/addons";
-import { PLAN_TIERS, planTierForStripePriceId, type PlanTierKey } from "@/lib/entitlements";
+import {
+  PLAN_TIERS,
+  planTierForStripePriceId,
+  type Feature,
+  type PlanTierKey,
+} from "@/lib/entitlements";
+import { SEO_STRIPE_PRICE_ID } from "@/lib/seo-pricing";
 import { createServiceClient } from "@/lib/supabase/service";
 import { stripeClient } from "@/lib/stripe";
+
+// Subscriptions created before this file resolved `feature` from metadata
+// (everything prior to 2026-09-16) carry no `feature` key at all — every one
+// of them is a voice subscription, so that's the correct default rather than
+// an unmapped/dropped event.
+const DEFAULT_FEATURE: Feature = "voice";
+
+function featureFromSubscription(subscription: Stripe.Subscription): Feature {
+  const raw = subscription.metadata.feature;
+  return raw === "seo" || raw === "voice" || raw === "email" ? raw : DEFAULT_FEATURE;
+}
 
 export class BillingError extends Error {}
 
@@ -38,6 +55,26 @@ async function getClientRow(clientId: string): Promise<ClientRow> {
   if (error) throw new BillingError(error.message);
   if (!data) throw new BillingError("Client not found");
   return data as ClientRow;
+}
+
+// clients.stripe_subscription_id (0041) is specifically the voice+addons
+// BUNDLE subscription — "ONE subscription id to look up everything this
+// client is subscribed to" per that migration's own comment, because addons
+// ride the same subscription as the plan. SEO is a SEPARATE product with its
+// own subscription (a client can buy SEO without voice, or both, each on its
+// own invoice/cycle), so it cannot reuse that column without clobbering
+// voice's subscription id the moment an SEO event fires. entitlements already
+// carries external_subscription_ref per (client, feature) — that's SEO's
+// source of truth instead.
+async function getSeoSubscriptionId(clientId: string): Promise<string | null> {
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from("entitlements")
+    .select("external_subscription_ref")
+    .eq("client_id", clientId)
+    .eq("feature", "seo")
+    .maybeSingle();
+  return (data?.external_subscription_ref as string | null) ?? null;
 }
 
 // -----------------------------------------------------------------------------
@@ -68,7 +105,7 @@ export async function createCheckoutSessionForClient(input: {
     customer: client.stripe_customer_id ?? undefined,
     client_reference_id: client.id,
     subscription_data: {
-      metadata: { client_id: client.id, plan_tier: input.tier },
+      metadata: { client_id: client.id, plan_tier: input.tier, feature: "voice" },
     },
     success_url: input.successUrl,
     cancel_url: input.cancelUrl,
@@ -76,6 +113,90 @@ export async function createCheckoutSessionForClient(input: {
 
   if (!session.url) throw new BillingError("Stripe did not return a Checkout URL");
   return session.url;
+}
+
+// -----------------------------------------------------------------------------
+// SEO checkout — module 12 (plan.md). One flat price, QUANTITY = location
+// count, no tier. Mirrors createCheckoutSessionForClient's shape (same
+// customer/client_reference_id/metadata pattern) rather than sharing its
+// signature, because there is no PlanTierKey to thread through — a shared
+// function would need an awkward `tier?: never` to opt out of tier lookup.
+// -----------------------------------------------------------------------------
+export async function createSeoCheckoutSessionForClient(input: {
+  clientId: string;
+  locationCount: number;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<string> {
+  if (!SEO_STRIPE_PRICE_ID) {
+    throw new BillingError("No Stripe price is configured for SEO yet.");
+  }
+  if (!Number.isInteger(input.locationCount) || input.locationCount < 1) {
+    throw new BillingError("locationCount must be a positive integer.");
+  }
+
+  const client = await getClientRow(input.clientId);
+  const stripe = stripeClient();
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    line_items: [{ price: SEO_STRIPE_PRICE_ID, quantity: input.locationCount }],
+    customer: client.stripe_customer_id ?? undefined,
+    client_reference_id: client.id,
+    subscription_data: {
+      metadata: { client_id: client.id, feature: "seo" },
+    },
+    success_url: input.successUrl,
+    cancel_url: input.cancelUrl,
+  });
+
+  if (!session.url) throw new BillingError("Stripe did not return a Checkout URL");
+  return session.url;
+}
+
+// -----------------------------------------------------------------------------
+// reconcileSeoSeatCount — proration when a location is added or removed
+// (plan.md module 12). Callers: any future "add/remove location" action
+// (module 11's onboarding wizard, or a later locations-management page) after
+// it writes/deletes the seo_locations row — this function only talks to
+// Stripe, it does not read seo_locations itself, so it has no opinion on what
+// counts as an active location.
+//
+// Idempotent: if Stripe's quantity already matches, this is a no-op — no
+// proration event, no API call beyond the read. proration_behavior is left at
+// Stripe's default ('create_prorations') rather than pinned here, so a
+// platform-wide proration policy change is one Stripe Dashboard setting, not
+// a code change.
+// -----------------------------------------------------------------------------
+export async function reconcileSeoSeatCount(input: {
+  clientId: string;
+  targetLocationCount: number;
+}): Promise<{ changed: boolean; previousQuantity: number | null; quantity: number }> {
+  if (!Number.isInteger(input.targetLocationCount) || input.targetLocationCount < 1) {
+    throw new BillingError("targetLocationCount must be a positive integer.");
+  }
+
+  const seoSubscriptionId = await getSeoSubscriptionId(input.clientId);
+  if (!seoSubscriptionId) {
+    throw new BillingError("Client has no SEO subscription to reconcile — subscribe first.");
+  }
+
+  const stripe = stripeClient();
+  const subscription = await stripe.subscriptions.retrieve(seoSubscriptionId);
+  const item = SEO_STRIPE_PRICE_ID
+    ? subscription.items.data.find((i) => i.price.id === SEO_STRIPE_PRICE_ID)
+    : undefined;
+  if (!item) {
+    throw new BillingError("Client's subscription has no SEO line item to reconcile.");
+  }
+
+  const previousQuantity = item.quantity ?? null;
+  if (previousQuantity === input.targetLocationCount) {
+    return { changed: false, previousQuantity, quantity: previousQuantity };
+  }
+
+  await stripe.subscriptionItems.update(item.id, { quantity: input.targetLocationCount });
+  return { changed: true, previousQuantity, quantity: input.targetLocationCount };
 }
 
 // -----------------------------------------------------------------------------
@@ -201,15 +322,29 @@ export async function syncClientFromStripeSubscription(
     return;
   }
 
+  const feature = featureFromSubscription(subscription);
+
   // Metadata first (set at Checkout-creation time — the reason this whole
   // function doesn't need a price-map lookup chain). Falls back to scanning
-  // items for a renewal event that might not carry it.
+  // items for a renewal event that might not carry it. Meaningless for 'seo'
+  // (no tiers there), so planTierForStripePriceId simply finds nothing and
+  // this resolves to null, which apply_billing_event already treats as
+  // "no tier known" — not an error.
   const planTier =
     (subscription.metadata.plan_tier as PlanTierKey | undefined) ??
     subscription.items.data
       .map((item) => planTierForStripePriceId(item.price.id))
       .find((t): t is PlanTierKey => t !== null) ??
     null;
+
+  // Seat count = quantity on the feature's own line item. For voice/email
+  // (always quantity 1) this resolves to 1 and lands harmlessly on a column
+  // apply_billing_event treats as meaningless for those features; for 'seo'
+  // it's the actual number of locations being paid for.
+  const seatCount =
+    feature === "seo" && SEO_STRIPE_PRICE_ID
+      ? (subscription.items.data.find((item) => item.price.id === SEO_STRIPE_PRICE_ID)?.quantity ?? null)
+      : (subscription.items.data[0]?.quantity ?? null);
 
   const customerId =
     typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
@@ -224,13 +359,22 @@ export async function syncClientFromStripeSubscription(
     null;
 
   const supabase = createServiceClient();
+
+  // clients.stripe_subscription_id/status is the voice+addons BUNDLE
+  // subscription specifically (see getSeoSubscriptionId's comment above) —
+  // an SEO event must still record the (shared) customer id, since that part
+  // really is client-wide, but must NOT overwrite the bundle subscription
+  // id/status with SEO's own subscription. SEO's own id/status already lives
+  // on entitlements.external_subscription_ref/current_period_end via the
+  // apply_billing_event call below.
+  const clientUpdate: Record<string, string | null> = { stripe_customer_id: customerId };
+  if (feature === "voice") {
+    clientUpdate.stripe_subscription_id = subscription.id;
+    clientUpdate.stripe_subscription_status = subscription.status;
+  }
   const { error: updateError } = await supabase
     .from("clients")
-    .update({
-      stripe_customer_id: customerId,
-      stripe_subscription_id: subscription.id,
-      stripe_subscription_status: subscription.status,
-    })
+    .update(clientUpdate)
     .eq("id", clientId);
   if (updateError) {
     console.error(`Failed to update clients for ${clientId}:`, updateError.message);
@@ -241,11 +385,12 @@ export async function syncClientFromStripeSubscription(
     p_external_event_id: externalEventId,
     p_event_type: subscription.status === "past_due" ? "payment_failed" : "subscription_activated",
     p_client_id: clientId,
-    p_feature: "voice",
+    p_feature: feature,
     p_subscription_ref: subscription.id,
     p_current_period_end: currentPeriodEnd ? new Date(currentPeriodEnd * 1000).toISOString() : null,
     p_payload: { source: "stripe_direct_api", status: subscription.status },
     p_plan_tier: planTier,
+    p_seat_count: seatCount,
   });
   if (rpcError) {
     console.error(`apply_billing_event failed for ${clientId}:`, rpcError.message);
@@ -263,22 +408,26 @@ export async function markClientSubscriptionCanceled(
   const clientId = subscription.metadata.client_id;
   if (!clientId) return;
 
+  const feature = featureFromSubscription(subscription);
   const supabase = createServiceClient();
-  await supabase
-    .from("clients")
-    .update({ stripe_subscription_status: subscription.status })
-    .eq("id", clientId);
+  if (feature === "voice") {
+    await supabase
+      .from("clients")
+      .update({ stripe_subscription_status: subscription.status })
+      .eq("id", clientId);
+  }
 
   const { error } = await supabase.rpc("apply_billing_event", {
     p_processor: "stripe",
     p_external_event_id: externalEventId,
     p_event_type: "subscription_canceled",
     p_client_id: clientId,
-    p_feature: "voice",
+    p_feature: feature,
     p_subscription_ref: subscription.id,
     p_current_period_end: null,
     p_payload: { source: "stripe_direct_api", status: subscription.status },
     p_plan_tier: null,
+    p_seat_count: null,
   });
   if (error) {
     console.error(`apply_billing_event (cancel) failed for ${clientId}:`, error.message);

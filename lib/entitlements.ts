@@ -4,7 +4,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 
-export type Feature = "email" | "voice";
+export type Feature = "email" | "voice" | "seo";
 export type EntitlementStatus = "pending" | "active" | "past_due" | "canceled";
 
 export type EntitlementRow = {
@@ -324,6 +324,18 @@ export const FEATURES: FeatureMeta[] = [
   //
   // To bring it back: restore the entry below, un-hide the two Settings
   // sections, and put the Email tab back on /conversations.
+  //
+  // SEO IS THE SAME SITUATION, for a different reason (2026-09-16). feature_t
+  // and Feature carry 'seo' so entitlements/has_feature/getEntitlements work
+  // end to end (see 0044_seo_billing_seats.sql), but this array is what
+  // /billing renders a checkout card FROM — and every "sellable" card here
+  // routes to /plans, the VOICE tier picker (see the `cheapest` / "why this no
+  // longer links straight to Stripe" comment below). SEO has no tiers — it's
+  // one flat per-location price, quantity on checkout — so it needs its own
+  // picker (a location-count input, built alongside module 11's onboarding
+  // wizard) before a card can point anywhere correct. Add it here once that
+  // page exists; until then this array staying two entries long is the
+  // correct state, not an oversight.
   //
   // {
   //   key: "email",

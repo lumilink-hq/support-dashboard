@@ -320,6 +320,177 @@ export async function saveBehaviour(formData: FormData) {
   redirect("/onboarding");
 }
 
+// ---------------------------------------------------------------------------
+// SEO steps (seo business_type only). Every insert below goes through the
+// caller's own session, same as services above — seo_locations/seo_keywords/
+// seo_competitors (0042) already give a tenant full self-serve CRUD on its
+// own rows via RLS, so this needs no service-role client either.
+// ---------------------------------------------------------------------------
+
+export async function addSeoLocation(formData: FormData) {
+  const clientId = await getCurrentClientId();
+  if (!clientId) redirect("/login?next=%2Fonboarding");
+
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) redirect("/onboarding?step=seo_locations");
+
+  const str = (key: string) => {
+    const v = String(formData.get(key) ?? "").trim();
+    return v || null;
+  };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("seo_locations").insert({
+    client_id: clientId,
+    name,
+    address_line1: str("address_line1"),
+    city: str("city"),
+    region: str("region"),
+    postal_code: str("postal_code"),
+    country_code: str("country_code"),
+    phone_number: str("phone_number"),
+    website_url: str("website_url"),
+  });
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/onboarding");
+  redirect("/onboarding?step=seo_locations");
+}
+
+export async function removeSeoLocation(formData: FormData) {
+  const clientId = await getCurrentClientId();
+  if (!clientId) redirect("/login?next=%2Fonboarding");
+
+  const id = String(formData.get("location_id") ?? "");
+  if (id) {
+    const supabase = await createClient();
+    // client_id in the filter as well as RLS. Belt and braces on a delete.
+    await supabase.from("seo_locations").delete().eq("id", id).eq("client_id", clientId);
+  }
+
+  revalidatePath("/onboarding");
+  redirect("/onboarding?step=seo_locations");
+}
+
+export async function finishSeoLocations() {
+  const { clientId, settings } = await loadSettings();
+  const supabase = await createClient();
+
+  // Same reasoning as finishServices: everything downstream (keywords,
+  // rankings, findings, actions) is a child of a location, so a client who
+  // clicks past this with none would have nothing for the rest of the
+  // product to attach to.
+  const { count } = await supabase
+    .from("seo_locations")
+    .select("id", { count: "exact", head: true })
+    .eq("client_id", clientId);
+
+  if (!count) redirect("/onboarding?step=seo_locations&error=empty");
+
+  await completeStep(clientId, settings, "seo_locations");
+  redirect("/onboarding");
+}
+
+export async function addSeoKeyword(formData: FormData) {
+  const clientId = await getCurrentClientId();
+  if (!clientId) redirect("/login?next=%2Fonboarding");
+
+  const locationId = String(formData.get("location_id") ?? "");
+  const keyword = String(formData.get("keyword") ?? "").trim();
+  if (!locationId || !keyword) redirect("/onboarding?step=seo_keywords");
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("seo_keywords").insert({
+    client_id: clientId,
+    location_id: locationId,
+    keyword,
+  });
+  // A duplicate (location_id, keyword) is a re-submit, not a failure worth
+  // surfacing — the unique index (0042) is what catches it.
+  if (error && error.code !== "23505") throw new Error(error.message);
+
+  revalidatePath("/onboarding");
+  redirect("/onboarding?step=seo_keywords");
+}
+
+export async function removeSeoKeyword(formData: FormData) {
+  const clientId = await getCurrentClientId();
+  if (!clientId) redirect("/login?next=%2Fonboarding");
+
+  const id = String(formData.get("keyword_id") ?? "");
+  if (id) {
+    const supabase = await createClient();
+    await supabase.from("seo_keywords").delete().eq("id", id).eq("client_id", clientId);
+  }
+
+  revalidatePath("/onboarding");
+  redirect("/onboarding?step=seo_keywords");
+}
+
+/** Not blocking — a client who doesn't know their keywords yet moves on. */
+export async function finishSeoKeywords() {
+  const { clientId, settings } = await loadSettings();
+  await completeStep(clientId, settings, "seo_keywords");
+  redirect("/onboarding");
+}
+
+export async function addSeoCompetitor(formData: FormData) {
+  const clientId = await getCurrentClientId();
+  if (!clientId) redirect("/login?next=%2Fonboarding");
+
+  const locationId = String(formData.get("location_id") ?? "");
+  const domain = String(formData.get("domain") ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/.*$/, "");
+  if (!locationId || !domain) redirect("/onboarding?step=seo_competitors");
+
+  const supabase = await createClient();
+
+  // "Up to 5" (plan.md) is a product policy, not a DB constraint — enforced
+  // here, same layer finishServices enforces "at least one" at.
+  const { count } = await supabase
+    .from("seo_competitors")
+    .select("id", { count: "exact", head: true })
+    .eq("client_id", clientId)
+    .eq("location_id", locationId);
+  if ((count ?? 0) >= 5) {
+    redirect("/onboarding?step=seo_competitors&error=too_many");
+  }
+
+  const { error } = await supabase.from("seo_competitors").insert({
+    client_id: clientId,
+    location_id: locationId,
+    domain,
+  });
+  if (error && error.code !== "23505") throw new Error(error.message);
+
+  revalidatePath("/onboarding");
+  redirect("/onboarding?step=seo_competitors");
+}
+
+export async function removeSeoCompetitor(formData: FormData) {
+  const clientId = await getCurrentClientId();
+  if (!clientId) redirect("/login?next=%2Fonboarding");
+
+  const id = String(formData.get("competitor_id") ?? "");
+  if (id) {
+    const supabase = await createClient();
+    await supabase.from("seo_competitors").delete().eq("id", id).eq("client_id", clientId);
+  }
+
+  revalidatePath("/onboarding");
+  redirect("/onboarding?step=seo_competitors");
+}
+
+/** Not blocking — competitors can be added later from the dashboard too. */
+export async function finishSeoCompetitors() {
+  const { clientId, settings } = await loadSettings();
+  await completeStep(clientId, settings, "seo_competitors");
+  redirect("/onboarding");
+}
+
 /** Standing channel after onboarding — the same queue, from the dashboard. */
 export async function submitIntakeRequest(formData: FormData) {
   const clientId = await getCurrentClientId();

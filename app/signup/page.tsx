@@ -117,6 +117,24 @@ export default async function SignupPage({
                   </span>
                 </span>
               </label>
+
+              <label className="flex cursor-pointer gap-3 rounded-md border border-gray-300 p-3 hover:bg-gray-50 has-[:checked]:border-gray-900 has-[:checked]:bg-gray-50">
+                <input
+                  type="radio"
+                  name="business_type"
+                  value="seo"
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-900">
+                    We want to rank locally
+                  </span>
+                  <span className="block text-xs text-gray-500">
+                    One or more locations that need to show up in Google
+                    search and maps. No phone answering involved.
+                  </span>
+                </span>
+              </label>
             </div>
             <p className="mt-1 text-xs text-gray-400">
               You can change this later.

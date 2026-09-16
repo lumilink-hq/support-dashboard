@@ -13,7 +13,7 @@
 
 import type { PlanTierKey } from "@/lib/entitlements";
 
-export type BusinessType = "service" | "ecommerce";
+export type BusinessType = "service" | "ecommerce" | "seo";
 
 export type StepKey =
   | "basics"
@@ -22,6 +22,9 @@ export type StepKey =
   | "store"
   | "number"
   | "behaviour"
+  | "seo_locations"
+  | "seo_keywords"
+  | "seo_competitors"
   | "done";
 
 export type StepState = {
@@ -111,6 +114,32 @@ export const STEPS: StepDef[] = [
     title: "How Lumi should sound",
     blurb: "Its greeting, and anything it should always or never say.",
     appliesTo: ["service", "ecommerce"],
+    blocking: false,
+  },
+  {
+    key: "seo_locations",
+    title: "Your locations",
+    blurb: "Every location you want ranked. Add at least one to get started.",
+    appliesTo: ["seo"],
+    // Mirrors "services": everything downstream (keywords, rankings, findings)
+    // is a child of a location, so this is the one step with nothing to do
+    // without it.
+    blocking: true,
+  },
+  {
+    key: "seo_keywords",
+    title: "Seed keywords",
+    blurb: "A few search terms per location, so we know what to start tracking.",
+    appliesTo: ["seo"],
+    // Not blocking: a client who doesn't know their keywords yet can still be
+    // set up and add them once the crawl/audit surfaces some candidates.
+    blocking: false,
+  },
+  {
+    key: "seo_competitors",
+    title: "Competitors",
+    blurb: "Up to 5 competitor websites per location, so we can show how you compare.",
+    appliesTo: ["seo"],
     blocking: false,
   },
 ];
