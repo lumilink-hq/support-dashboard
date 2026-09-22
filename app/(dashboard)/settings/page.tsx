@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
-import { updateClientSettings } from "./actions";
+import { disconnectGoogleAccount, updateClientSettings } from "./actions";
 import { CopyField } from "@/components/copy-field";
-import type { ClientRow } from "@/lib/types";
+import { isGoogleOAuthConfigured } from "@/lib/google-oauth";
+import type { ClientRow, GoogleOAuthConnectionRow } from "@/lib/types";
 
 const inputCls =
   "mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 disabled:bg-gray-50 disabled:text-gray-500";
@@ -29,9 +30,9 @@ function Section({
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; google?: string; google_error?: string }>;
 }) {
-  const { saved, error } = await searchParams;
+  const { saved, error, google, google_error: googleError } = await searchParams;
   const supabase = await createClient();
 
   const {
@@ -48,10 +49,21 @@ export default async function SettingsPage({
   const { data: clientData } = await supabase
     .from("clients")
     .select(
-      "id, name, slug, is_active, store_platform, store_base_url, store_credentials_ref, shipstation_credentials_ref, support_email, phone_number, brand_tone_config, abnormal_status_rules, business_hours, settings",
+      "id, name, slug, is_active, business_type, store_platform, store_base_url, store_credentials_ref, shipstation_credentials_ref, support_email, phone_number, brand_tone_config, abnormal_status_rules, business_hours, settings",
     )
     .maybeSingle();
   const client = clientData as ClientRow | null;
+
+  // Google connection (module 2) — SEO clients only; see lib/entitlements.ts's
+  // note on why this has no /billing card yet either.
+  const { data: googleConnectionData } =
+    client?.business_type === "seo"
+      ? await supabase
+          .from("google_oauth_connections")
+          .select("google_account_email, granted_scopes, status, last_refreshed_at, last_error, connected_at")
+          .maybeSingle()
+      : { data: null };
+  const googleConnection = googleConnectionData as GoogleOAuthConnectionRow | null;
 
   if (!client) {
     return (
@@ -109,6 +121,85 @@ export default async function SettingsPage({
         <div className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
           You have read-only access. Only admins can edit settings.
         </div>
+      ) : null}
+      {google === "connected" ? (
+        <div className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          Google connected.
+        </div>
+      ) : null}
+      {google === "disconnected" ? (
+        <div className="mt-4 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600">
+          Google disconnected.
+        </div>
+      ) : null}
+      {googleError ? (
+        <div className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          {googleError}
+        </div>
+      ) : null}
+
+      {client.business_type === "seo" ? (
+        <section className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-gray-900">Google account</h2>
+          <p className="mt-0.5 text-xs text-gray-500">
+            Connects Search Console so we can read indexing and ranking data.
+            Business Profile access is added later, once Google approves it —
+            you won&apos;t need to reconnect for that.
+          </p>
+          <div className="mt-4">
+            {!isGoogleOAuthConfigured() ? (
+              <p className="text-sm text-gray-400">
+                Google connect isn&apos;t configured on this environment yet.
+              </p>
+            ) : googleConnection && googleConnection.status !== "revoked" ? (
+              <div className="flex items-center justify-between gap-3 rounded-md border border-gray-200 p-3">
+                <div>
+                  <p className="text-sm text-gray-900">
+                    Connected as{" "}
+                    <span className="font-medium">
+                      {googleConnection.google_account_email ?? "unknown account"}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    {googleConnection.status === "error"
+                      ? `Last refresh failed: ${googleConnection.last_error ?? "unknown error"}. We’ll keep retrying.`
+                      : googleConnection.last_refreshed_at
+                        ? `Last refreshed ${new Date(googleConnection.last_refreshed_at).toLocaleString()}.`
+                        : "Waiting on the first refresh."}
+                  </p>
+                </div>
+                {canEdit ? (
+                  <form action={disconnectGoogleAccount}>
+                    <button className="shrink-0 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                      Disconnect
+                    </button>
+                  </form>
+                ) : null}
+              </div>
+            ) : (
+              <div>
+                {googleConnection?.status === "revoked" ? (
+                  <p className="mb-2 text-sm text-amber-700">
+                    Google access was revoked (from your Google Account, not
+                    here) — reconnect to keep reporting up to date.
+                  </p>
+                ) : null}
+                {canEdit ? (
+                  <a
+                    href="/api/oauth/google/connect"
+                    className="inline-block rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+                  >
+                    Connect Google
+                  </a>
+                ) : (
+                  <p className="text-sm text-gray-400">
+                    Only admins can connect Google.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
       ) : null}
 
       <form action={updateClientSettings} className="mt-6 space-y-6">

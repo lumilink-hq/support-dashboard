@@ -10,6 +10,7 @@ export type ClientRow = {
   name: string;
   slug: string;
   is_active: boolean;
+  business_type: string | null;
   store_platform: string | null;
   store_base_url: string | null;
   store_credentials_ref: string | null;
@@ -152,6 +153,17 @@ export type ServiceRow = {
   default_duration_min: number;
   emergency_eligible: boolean;
   active: boolean;
+};
+
+// --- Google OAuth (module 2) ---
+
+export type GoogleOAuthConnectionRow = {
+  google_account_email: string | null;
+  granted_scopes: string[];
+  status: "connected" | "revoked" | "error";
+  last_refreshed_at: string | null;
+  last_error: string | null;
+  connected_at: string;
 };
 
 export type AppointmentRow = {

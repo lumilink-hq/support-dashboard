@@ -14,6 +14,9 @@ export type EntitlementRow = {
   current_period_end: string | null;
   activated_at: string | null;
   canceled_at: string | null;
+  /** Units of the feature paid for (0044) — location count for 'seo'. Null
+   * for quantity-always-1 features (voice, email). */
+  seat_count: number | null;
 };
 
 // UI state for a feature the tenant may or may not hold. Absence of a row = locked.
@@ -432,7 +435,7 @@ export async function getEntitlements(): Promise<
   const { data } = await supabase
     .from("entitlements")
     .select(
-      "feature, status, source, current_period_end, activated_at, canceled_at",
+      "feature, status, source, current_period_end, activated_at, canceled_at, seat_count",
     );
   const map: Partial<Record<Feature, EntitlementRow>> = {};
   for (const r of (data ?? []) as EntitlementRow[]) map[r.feature] = r;

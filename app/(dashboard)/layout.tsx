@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/sidebar";
 import { signout } from "@/app/login/actions";
+import { getSeoAccess } from "@/lib/seo-access";
 
 export default async function DashboardLayout({
   children,
@@ -29,11 +30,12 @@ export default async function DashboardLayout({
 
   const clientName =
     (profile?.clients as { name?: string } | null)?.name ?? "Workspace";
+  const { allowed: showSeo } = await getSeoAccess();
   const displayName = profile?.full_name || profile?.email || user.email || "";
 
   return (
     <div className="flex min-h-full flex-1">
-      <Sidebar clientName={clientName} />
+      <Sidebar clientName={clientName} showSeo={showSeo} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">

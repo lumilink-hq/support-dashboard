@@ -385,6 +385,41 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# SEO functions authenticate with the shared-secret header, not Supabase's JWT
+# gateway. Leaving verify_jwt on silently 401s every scheduled dispatch.
+[functions.google-token-refresh]
+verify_jwt = false
+
+[functions.seo-crawl]
+verify_jwt = false
+
+[functions.seo-technical-audit]
+verify_jwt = false
+
+[functions.seo-rank-tracking]
+verify_jwt = false
+
+[functions.seo-backlinks]
+verify_jwt = false
+
+[functions.seo-ai-visibility]
+verify_jwt = false
+
+[functions.seo-draft]
+verify_jwt = false
+
+[functions.seo-publish]
+verify_jwt = false
+
+[functions.seo-content]
+verify_jwt = false
+
+[functions.seo-report]
+verify_jwt = false
+
+[functions.seo-geocode]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

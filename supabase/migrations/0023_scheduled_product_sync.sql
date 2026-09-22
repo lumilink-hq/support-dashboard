@@ -192,7 +192,7 @@ grant  execute on function run_due_product_syncs(int) to service_role;
 -- -----------------------------------------------------------------------------
 do $$
 begin
-  if to_regproc('cron.schedule') is null then
+  if to_regprocedure('cron.schedule(text,text,text)') is null then
     raise notice 'pg_cron not installed — automatic product sync NOT scheduled. '
                  'Enable the extension, then re-run this migration.';
     return;

@@ -64,6 +64,7 @@ const GATED = [
   "/appointments",
   "/leads",
   "/review-queue",
+  "/seo-approvals",
   "/services",
   "/settings",
   "/billing",

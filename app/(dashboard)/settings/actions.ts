@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { revokeGoogleToken } from "@/lib/google-oauth";
 
 function fail(message: string): never {
   redirect(`/settings?error=${encodeURIComponent(message)}`);
@@ -189,4 +190,31 @@ export async function updateClientSettings(formData: FormData) {
 
   revalidatePath("/settings");
   redirect("/settings?saved=1");
+}
+
+// ---------------------------------------------------------------------------
+// Google connection (module 2). Connect happens via a plain link to
+// /api/oauth/google/connect (starts the redirect flow); disconnect is a
+// server action because it also has to call Google's own /revoke endpoint
+// first, best-effort, before forgetting the connection locally.
+// ---------------------------------------------------------------------------
+export async function disconnectGoogleAccount() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login?next=%2Fsettings");
+
+  const { data: accessToken } = await supabase.rpc("get_my_google_access_token");
+  if (accessToken) {
+    await revokeGoogleToken(accessToken as string);
+  }
+
+  const { error } = await supabase.rpc("disconnect_google_oauth");
+  if (error) {
+    redirect(`/settings?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/settings");
+  redirect("/settings?google=disconnected");
 }

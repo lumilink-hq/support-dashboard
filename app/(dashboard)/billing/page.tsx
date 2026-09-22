@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { AddonToggle } from "@/components/billing/addon-toggle";
 import { ManageBillingButton } from "@/components/billing/manage-billing-button";
+import { SeoCheckoutForm } from "@/components/billing/seo-checkout-form";
 import { availableAddons } from "@/lib/addons";
 import { formatDateTime } from "@/lib/format";
+import { createClient } from "@/lib/supabase/server";
 import {
   activeAddonsForClient,
   hasStripeCustomerForClient,
 } from "@/lib/services/billing";
+import { isSeoCheckoutConfigured, SEO_PRICE_PER_LOCATION_USD } from "@/lib/seo-pricing";
 import {
   FEATURES,
   OVERAGE,
@@ -104,18 +107,30 @@ const PILL_LABEL: Record<FeatureState, string> = {
   locked: "Not on your plan",
 };
 
-export default async function BillingPage() {
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ checkout?: string }>;
+}) {
+  const { checkout } = await searchParams;
+
   // Add-on ownership (below) is a live Stripe read keyed by client_id, unlike
   // getEntitlements()/getVoiceUsage() which are RLS-scoped with no parameter —
   // so clientId has to resolve first, not join the same Promise.all.
   const clientId = await getCurrentClientId();
-  const [ent, usage, activeAddons, hasStripeCustomer] = await Promise.all([
+  const supabase = await createClient();
+  const [ent, usage, activeAddons, hasStripeCustomer, clientRow, seoLocationCount] = await Promise.all([
     getEntitlements(),
     getVoiceUsage(),
     clientId ? activeAddonsForClient(clientId) : Promise.resolve([]),
     clientId ? hasStripeCustomerForClient(clientId) : Promise.resolve(false),
+    supabase.from("clients").select("business_type").maybeSingle(),
+    supabase.from("seo_locations").select("id", { count: "exact", head: true }),
   ]);
   const activeAddonKeys = new Set(activeAddons.map((a) => a.key));
+  const isSeoClient = clientRow.data?.business_type === "seo";
+  const seoEntitlement = ent.seo;
+  const seoState = featureState(seoEntitlement);
 
   return (
     <div className="max-w-4xl">
@@ -124,6 +139,11 @@ export default async function BillingPage() {
         Turn features on for your workspace. Unlock a plan and it&rsquo;s set up
         automatically.
       </p>
+      {checkout === "canceled" ? (
+        <div className="mt-4 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600">
+          Checkout canceled — nothing was charged.
+        </div>
+      ) : null}
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         {FEATURES.map((f) => {
@@ -248,6 +268,75 @@ export default async function BillingPage() {
           );
         })}
       </div>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Local SEO — deliberately NOT in the FEATURES loop above. Every card */}
+      {/* there routes a "sellable" checkout through /plans, the VOICE tier   */}
+      {/* picker (see that loop's own comment) — SEO has no tiers, it's one   */}
+      {/* flat per-location price with a quantity the client picks, so it    */}
+      {/* needs its own section and its own checkout route                   */}
+      {/* (/api/billing/seo-checkout, module 12).                            */}
+      {/* ------------------------------------------------------------------ */}
+      {isSeoClient ? (
+        <div className="mt-10 max-w-md">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-gray-900">Local SEO</h2>
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${PILL[seoState]}`}
+            >
+              {PILL_LABEL[seoState]}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-gray-600">
+            ${SEO_PRICE_PER_LOCATION_USD.toLocaleString()}/location/mo. Ranks
+            your locations in Google search and maps.
+          </p>
+
+          {!isSeoCheckoutConfigured() ? (
+            <p className="mt-4 text-sm text-gray-400">
+              SEO checkout isn&rsquo;t configured on this environment yet.
+            </p>
+          ) : seoState === "active" || seoState === "past_due" ? (
+            <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4 text-sm">
+              {seoState === "past_due" ? (
+                <p className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  There&rsquo;s a payment issue — please update your billing to
+                  avoid losing access.
+                </p>
+              ) : null}
+              <p className="text-gray-900">
+                {seoEntitlement?.seat_count ?? "—"} location
+                {seoEntitlement?.seat_count === 1 ? "" : "s"}
+              </p>
+              <p className="mt-1 text-gray-500">
+                {seoEntitlement?.current_period_end
+                  ? `Renews ${formatDateTime(seoEntitlement.current_period_end)}`
+                  : "Active on your workspace."}
+              </p>
+              <p className="mt-2 text-xs text-gray-400">
+                Add or remove locations from the dashboard — billing adjusts
+                automatically, prorated.
+              </p>
+            </div>
+          ) : seoState === "setup" ? (
+            <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+              <button
+                disabled
+                className="w-full cursor-default rounded-md bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700"
+              >
+                Setting up your plan&hellip;
+              </button>
+              <p className="mt-2 text-xs text-gray-400">
+                Payment received. We&rsquo;re provisioning this now.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-4">
+              <SeoCheckoutForm initialLocationCount={seoLocationCount.count ?? 0} />
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {/* ------------------------------------------------------------------ */}
       {/* Add-ons — the same catalogue the post-purchase screen shows, from   */}

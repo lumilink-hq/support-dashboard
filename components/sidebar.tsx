@@ -3,20 +3,24 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-type NavItem = { href: string; label: string; soon?: boolean };
+type NavItem = { href: string; label: string; soon?: boolean; seo?: boolean };
 
 const NAV: NavItem[] = [
   { href: "/conversations", label: "Conversations" },
   { href: "/appointments", label: "Appointments" },
   { href: "/leads", label: "Leads" },
   { href: "/review-queue", label: "Review Queue" },
+  { href: "/seo", label: "SEO", seo: true },
+  { href: "/seo-approvals", label: "SEO approvals", seo: true },
   { href: "/services", label: "Services" },
   { href: "/knowledge-base", label: "Knowledge base", soon: true },
   { href: "/settings", label: "Settings" },
   { href: "/billing", label: "Plans & billing" },
 ];
 
-export function Sidebar({ clientName }: { clientName: string }) {
+// `showSeo` is the tenant's active `seo` entitlement, decided by the layout: the
+// SEO entries are hidden for a client that doesn't have the product.
+export function Sidebar({ clientName, showSeo }: { clientName: string; showSeo: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -31,7 +35,7 @@ export function Sidebar({ clientName }: { clientName: string }) {
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
-        {NAV.map((item) => {
+        {NAV.filter((item) => !item.seo || showSeo).map((item) => {
           if (item.soon) {
             return (
               <div
