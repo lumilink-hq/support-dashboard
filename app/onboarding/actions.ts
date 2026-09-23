@@ -341,6 +341,26 @@ export async function addSeoLocation(formData: FormData) {
     return v || null;
   };
 
+  // WEBSITE: the same cleanup as the phone agent's website step. People type
+  // "acme.com", and seo-crawl hands the stored value straight to new URL(),
+  // which rejects anything without a scheme, so a bare domain meant a crawl
+  // that could never succeed (found on the first real location, 2026-09-23).
+  // Blank is allowed (the crawl skips a location with no website); only text
+  // that can't be read as an address is refused.
+  const rawWebsite = str("website_url");
+  const websiteUrl = rawWebsite ? normalizeSiteUrl(rawWebsite) : null;
+  if (rawWebsite && !websiteUrl) redirect("/onboarding?step=seo_locations&error=website");
+
+  // COUNTRY: a two-letter code (ISO 3166-1). seo_geocode_targets (0058) only
+  // geocodes blank, US or USA, so anything else, like the phone prefix "1"
+  // that the first real location was saved with, silently meant no map
+  // coordinates and no geo grid. "USA" is accepted and stored as "US".
+  const rawCountry = (str("country_code") ?? "").toUpperCase();
+  const countryCode = rawCountry === "USA" ? "US" : rawCountry || null;
+  if (countryCode && !/^[A-Z]{2}$/.test(countryCode)) {
+    redirect("/onboarding?step=seo_locations&error=country");
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.from("seo_locations").insert({
     client_id: clientId,
@@ -349,9 +369,9 @@ export async function addSeoLocation(formData: FormData) {
     city: str("city"),
     region: str("region"),
     postal_code: str("postal_code"),
-    country_code: str("country_code"),
+    country_code: countryCode,
     phone_number: str("phone_number"),
-    website_url: str("website_url"),
+    website_url: websiteUrl,
   });
   if (error) throw new Error(error.message);
 

@@ -56,7 +56,9 @@ export function normalizeSiteUrl(raw: string): string | null {
     const u = new URL(withScheme);
     // A bare word like "acme" parses as a valid URL with hostname "acme" and
     // would then be fetched, fail, and surface as a confusing ingestion error.
-    if (!u.hostname.includes(".")) return null;
+    // Requiring a letters-only final label also refuses what a number becomes:
+    // "1" parses as the IP address 0.0.0.1.
+    if (!/\.[a-z]{2,}$/i.test(u.hostname)) return null;
     return normalizeUrl(u.toString());
   } catch {
     return null;

@@ -804,6 +804,17 @@ export default async function OnboardingPage({
                   rankings, findings — is tracked per location.
                 </p>
               ) : null}
+              {error === "website" ? (
+                <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                  That website address couldn&rsquo;t be read. Enter it like
+                  acme-heating.com.
+                </p>
+              ) : null}
+              {error === "country" ? (
+                <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                  Use a two-letter country code, like US.
+                </p>
+              ) : null}
 
               {seoLocations && seoLocations.length > 0 ? (
                 <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
@@ -866,13 +877,20 @@ export default async function OnboardingPage({
                   </div>
                   <div>
                     <label className={label} htmlFor="seo_loc_country">
-                      Country code
+                      Country
                     </label>
+                    {/*
+                      Prefilled, and checked in the browser so a typo is caught
+                      before the whole address is submitted and lost. The
+                      server checks it again (addSeoLocation).
+                    */}
                     <input
                       id="seo_loc_country"
                       name="country_code"
-                      placeholder="US"
+                      defaultValue="US"
                       maxLength={2}
+                      pattern="[A-Za-z]{2}"
+                      title="Two-letter country code, like US"
                       className={input}
                     />
                   </div>
