@@ -133,8 +133,10 @@ function NavRow({ page, active }: { page: DashboardPage; active: boolean }) {
   return (
     <Link
       href={page.href}
-      className={`block rounded-md px-3 py-2 text-sm font-medium ${
-        active ? "bg-gray-900 text-white" : "text-gray-700 hover:bg-gray-100"
+      className={`relative block rounded-md px-3 py-2 text-sm font-medium ${
+        active
+          ? "bg-lumi-50 text-gray-900 before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-lumi-500"
+          : "text-gray-700 hover:bg-gray-100"
       }`}
     >
       {page.label}

@@ -10,6 +10,57 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-bricolage);
+}
+
+/*
+  BRAND LAYER (2026-09-23). The app was stock Tailwind gray on white in Geist,
+  which is exactly what create-next-app ships, so it read as a template.
+
+  WARM PAPER, NAVY INK. The light end of the gray scale (surfaces, borders,
+  hovers) is re-tinted warm; the dark end (text, buttons) is left as Tailwind's
+  navy-leaning gray, which already matches the wordmark. Lightness is unchanged
+  step for step, so every contrast ratio in the app is what it was. Overriding
+  the scale here retints ~1,000 `gray-*` usages without touching a component.
+
+  ONE ACCENT, USED SPARINGLY: eyebrows, the active sidebar marker, focus
+  rings, text selection, the hero glow. Deliberately NOT buttons (they stay
+  ink) and not status colours — amber/green/red keep meaning warning/ok/error.
+  To change the brand colour, change these values and nothing else.
+*/
+@theme {
+  --color-gray-50: oklch(98.4% 0.004 80);
+  --color-gray-100: oklch(96.6% 0.006 80);
+  --color-gray-200: oklch(92.6% 0.008 75);
+  --color-gray-300: oklch(87.2% 0.01 70);
+
+  --color-lumi-50: oklch(97.5% 0.02 55);
+  --color-lumi-100: oklch(94.5% 0.045 55);
+  --color-lumi-400: oklch(74% 0.15 50);
+  --color-lumi-500: oklch(67% 0.18 45);
+  --color-lumi-600: oklch(58% 0.18 42);
+  --color-lumi-700: oklch(50% 0.16 40);
+}
+
+/* In the base layer so a component's own utilities (tracking-*, outline-none)
+   still win. Headings get the display face; body and UI stay in Geist. */
+@layer base {
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display), var(--font-geist-sans), ui-sans-serif, sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  ::selection {
+    background: var(--color-lumi-100);
+    color: var(--color-gray-900);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-lumi-500);
+    outline-offset: 2px;
+  }
 }
 
 /*

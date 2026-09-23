@@ -185,7 +185,8 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
       {/* ---------------------------------------------------------------- */}
       {/* Hero                                                             */}
       {/* ---------------------------------------------------------------- */}
-      <Section className="pb-20 pt-16 md:pb-28 md:pt-24">
+      {/* The faint glow behind the mockup is the "Lumi" in LumiLink; keep it faint. */}
+      <Section className="bg-[radial-gradient(ellipse_55%_60%_at_78%_45%,var(--color-lumi-100),transparent)] pb-20 pt-16 md:pb-28 md:pt-24">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
             <Eyebrow>AI Customer Service For Growing Businesses</Eyebrow>

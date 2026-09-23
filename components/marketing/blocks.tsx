@@ -89,7 +89,8 @@ export function Section({
 
 export function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+    <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-lumi-700">
+      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-lumi-500" />
       {children}
     </p>
   );
