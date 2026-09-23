@@ -4,6 +4,7 @@ import { ManageBillingButton } from "@/components/billing/manage-billing-button"
 import { SeoCheckoutForm } from "@/components/billing/seo-checkout-form";
 import { availableAddons } from "@/lib/addons";
 import { formatDateTime } from "@/lib/format";
+import { readProfile } from "@/lib/onboarding";
 import { createClient } from "@/lib/supabase/server";
 import {
   activeAddonsForClient,
@@ -124,13 +125,17 @@ export default async function BillingPage({
     getVoiceUsage(),
     clientId ? activeAddonsForClient(clientId) : Promise.resolve([]),
     clientId ? hasStripeCustomerForClient(clientId) : Promise.resolve(false),
-    supabase.from("clients").select("business_type").maybeSingle(),
+    supabase.from("clients").select("business_type, products").maybeSingle(),
     supabase.from("seo_locations").select("id", { count: "exact", head: true }),
   ]);
   const activeAddonKeys = new Set(activeAddons.map((a) => a.key));
-  const isSeoClient = clientRow.data?.business_type === "seo";
   const seoEntitlement = ent.seo;
   const seoState = featureState(seoEntitlement);
+  // Shown to any workspace that has set up Local SEO (clients.products, 0059)
+  // or already holds an SEO entitlement (e.g. one granted by hand). Until
+  // 0059 this was business_type = 'seo', which a phone client could never be.
+  const isSeoClient =
+    readProfile(clientRow.data).products.includes("seo") || seoState !== "locked";
 
   return (
     <div className="max-w-4xl">
@@ -278,7 +283,9 @@ export default async function BillingPage({
       {/* (/api/billing/seo-checkout, module 12).                            */}
       {/* ------------------------------------------------------------------ */}
       {isSeoClient ? (
-        <div className="mt-10 max-w-md">
+        // id="seo": the sidebar's "Add Local SEO" row links to /billing#seo
+        // (addProductHref in lib/catalog.ts).
+        <div id="seo" className="mt-10 max-w-md scroll-mt-6">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold text-gray-900">Local SEO</h2>
             <span

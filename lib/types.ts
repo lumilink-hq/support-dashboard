@@ -11,6 +11,8 @@ export type ClientRow = {
   slug: string;
   is_active: boolean;
   business_type: string | null;
+  /** Products set up in this workspace (0059): voice and/or seo. */
+  products: string[];
   store_platform: string | null;
   store_base_url: string | null;
   store_credentials_ref: string | null;

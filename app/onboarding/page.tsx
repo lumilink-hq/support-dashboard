@@ -7,8 +7,10 @@
 // after their number went live, so the first call an agent took was often its
 // worst.
 //
-// BRANCHES ON business_type (0032/0034). A service client is never shown the
-// store step; a shop is never asked for call-out fees.
+// BRANCHES ON THE WORKSPACE PROFILE (0059): the steps of every product the
+// client uses (clients.products), narrowed by industry (business_type). A
+// service client is never shown the store step; a shop is never asked for
+// call-out fees; a phone client that adds Local SEO resumes at the SEO steps.
 //
 // Resumable: lands on the first incomplete step, because people abandon a form
 // that asks for a price list and come back later.
@@ -18,9 +20,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentClientId } from "@/lib/entitlements";
+import { featureState, getCurrentClientId, getEntitlements, isUsable } from "@/lib/entitlements";
 import {
-  type BusinessType,
   type StepKey,
   COMMON_TIMEZONES,
   WEEKDAYS,
@@ -29,6 +30,7 @@ import {
   isStepDone,
   progress,
   readOnboarding,
+  readProfile,
   stepsFor,
 } from "@/lib/onboarding";
 import {
@@ -77,7 +79,7 @@ export default async function OnboardingPage({
     await Promise.all([
       supabase
         .from("clients")
-        .select("name, business_type, phone_number, settings")
+        .select("name, business_type, products, phone_number, settings")
         .eq("id", clientId)
         .maybeSingle(),
       supabase
@@ -101,12 +103,18 @@ export default async function OnboardingPage({
     ]);
 
   const settings = (client?.settings ?? {}) as Record<string, unknown>;
-  const businessType = (client?.business_type ?? null) as BusinessType | null;
+  const profile = readProfile(client);
   const state = readOnboarding(settings);
-  const steps = stepsFor(businessType);
-  const { done, total, percent } = progress(state, businessType);
-  const blocking = blockingRemaining(state, businessType);
-  const isSeo = businessType === "seo";
+  const steps = stepsFor(profile);
+  const { done, total, percent } = progress(state, profile);
+  const blocking = blockingRemaining(state, profile);
+  const hasVoice = profile.products.includes("voice");
+  // SEO onboarding runs BEFORE checkout (the seat count is the location
+  // count), unlike the phone agent's, which runs after. So an SEO client can
+  // be here unpaid, and this page must say so rather than "your plan is paid".
+  const seoUnpaid =
+    profile.products.includes("seo") && !isUsable(featureState((await getEntitlements()).seo));
+  const isSeo = profile.products.includes("seo");
 
   const seoLocationIds = (seoLocations ?? []).map((l) => l.id);
   const [{ data: seoKeywords }, { data: seoCompetitors }] = isSeo && seoLocationIds.length
@@ -128,7 +136,7 @@ export default async function OnboardingPage({
   // a finished wizard rather than being bounced somewhere arbitrary.
   const requested = steps.find((s) => s.key === stepParam)?.key;
   const active: StepKey =
-    requested ?? firstIncompleteStep(state, businessType) ?? steps[steps.length - 1].key;
+    requested ?? firstIncompleteStep(state, profile) ?? steps[steps.length - 1].key;
 
   const scheduling = (settings.scheduling ?? {}) as Record<string, unknown>;
   const hours = (scheduling.hours ?? {}) as Record<string, string[]>;
@@ -139,7 +147,11 @@ export default async function OnboardingPage({
         <div className="flex items-baseline justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
-              {isSeo ? "Let’s get your locations ranking" : "Let’s get your phone answering"}
+              {hasVoice && isSeo
+                ? "Let’s get everything set up"
+                : isSeo
+                  ? "Let’s get your locations ranking"
+                  : "Let’s get your phone answering"}
             </h1>
             <p className="mt-1 text-sm text-gray-500">
               {client?.name ? `Setting up ${client.name}. ` : ""}
@@ -147,7 +159,7 @@ export default async function OnboardingPage({
             </p>
           </div>
           <Link
-            href={isSeo ? "/settings" : "/conversations"}
+            href={hasVoice ? "/conversations" : "/settings"}
             className="shrink-0 text-sm text-gray-500 underline"
           >
             Skip for now
@@ -176,8 +188,13 @@ export default async function OnboardingPage({
         {blocking.length > 0 ? (
           <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
             <h2 className="text-sm font-semibold text-amber-900">
-              Your plan is paid. {blocking.length === 1 ? "One thing" : `${blocking.length} things`}{" "}
-              left before {isSeo ? "we can start tracking" : "Lumi can answer"}:
+              {seoUnpaid ? "" : "Your plan is paid. "}
+              {blocking.length === 1 ? "One thing" : `${blocking.length} things`}{" "}
+              left before{" "}
+              {blocking.every((s) => s.product === "seo")
+                ? "we can start tracking"
+                : "Lumi can answer"}
+              :
             </h2>
             <ul className="mt-2 space-y-1 text-sm text-amber-800">
               {blocking.map((s) => (
@@ -191,11 +208,32 @@ export default async function OnboardingPage({
           </div>
         ) : (
           <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-            {isSeo
-              ? "Everything we need is in. We'll start the first crawl and rank check shortly."
-              : "Everything we need is in. We’re finishing your setup now, and your number appears in Settings as soon as Lumi is live."}
+            Everything we need is in.
+            {hasVoice
+              ? " We’re finishing your setup now, and your number appears in Settings as soon as Lumi is live."
+              : null}
+            {isSeo && !seoUnpaid ? " We'll start the first crawl and rank check shortly." : null}
           </div>
         )}
+
+        {/*
+          THE SEO CHECKOUT PROMPT. Before 2026-09-23 nothing on this page
+          pointed an SEO client at checkout once their locations were in, so
+          the wizard finished on "we'll start the first crawl" for a client
+          who hadn't paid, and nothing would ever start.
+        */}
+        {seoUnpaid ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-sm text-gray-700">
+              {blocking.some((s) => s.product === "seo")
+                ? "Once your locations are in, choose how many to pay for and we start tracking."
+                : "Last step: choose how many locations to pay for, and we start tracking."}
+            </p>
+            <Link href="/billing#seo" className={primary}>
+              Check out
+            </Link>
+          </div>
+        ) : null}
 
         {/* Step nav */}
         <nav className="mt-6 flex flex-wrap gap-2">

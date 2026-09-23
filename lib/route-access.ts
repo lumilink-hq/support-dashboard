@@ -23,6 +23,9 @@ export const PUBLIC_PREFIXES = [
   // file and nothing else. There is no /solutions index page — a bare
   // /solutions 404s, which is correct until one is written.
   "/solutions",
+  // Product pages: /products/seo (lib/catalog.ts). Prefix for the same reason
+  // as /solutions. There is no /products index page.
+  "/products",
   // Partner/channel landing pages: /partners/merchant-support,
   // /partners/3pl-customer-support, /partners/agency-white-label,
   // /partners/ecommerce-community, and whatever gets added next (the
@@ -72,7 +75,9 @@ export const PUBLIC_EXACT = [
   "/plans",
   "/story",
   "/contact",
-  "/addons",
+  // Was "/addons" until 2026-09-23; that path now redirects here
+  // (next.config.ts). Redirects run before the proxy, so it needs no entry.
+  "/pricing",
 ] as const;
 
 /**

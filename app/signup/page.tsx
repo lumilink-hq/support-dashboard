@@ -1,16 +1,32 @@
 import Link from "next/link";
 import { signup } from "./actions";
 import { safeNextPath } from "@/lib/route-access";
+import { productByKey, type ProductKey } from "@/lib/catalog";
 
 export default async function SignupPage({
   searchParams,
 }: {
   // Next 16: searchParams is async.
-  searchParams: Promise<{ error?: string; confirm?: string; next?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    confirm?: string;
+    next?: string;
+    product?: string;
+    type?: string;
+  }>;
 }) {
-  const { error, confirm, next } = await searchParams;
+  const { error, confirm, next, product: productParam, type } = await searchParams;
   // Sanitised here and again in the action; the action is the security boundary.
   const nextPath = safeNextPath(next);
+  // THE PRODUCT COMES FROM THE LINK, NOT A QUESTION. A product page links
+  // here with ?product=… (/products/seo sends ?product=seo); anything else
+  // signs up for the phone agent, which is what every other CTA sells.
+  // ?type=seo is the pre-2026-09-23 spelling of the same link. actions.ts
+  // and handle_new_user (0059) both validate it again.
+  const product: ProductKey =
+    productParam === "seo" || type === "seo" ? "seo" : "voice";
+  // ?type=ecommerce still preselects the industry. Display default only.
+  const defaultIndustry = type === "ecommerce" ? "ecommerce" : "service";
 
   // Post-submit: account created, waiting on email confirmation.
   if (confirm) {
@@ -38,7 +54,10 @@ export default async function SignupPage({
       <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
         <h1 className="text-xl font-semibold text-gray-900">Create your workspace</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Set up a new support dashboard for your business.
+          {product === "seo"
+            ? `Start with ${productByKey("seo").name} for your locations.`
+            : "Set up a new support dashboard for your business."}{" "}
+          You can add other products later.
         </p>
 
         {error ? (
@@ -49,6 +68,7 @@ export default async function SignupPage({
 
         <form action={signup} className="mt-6 space-y-4">
           <input type="hidden" name="next" value={nextPath} />
+          <input type="hidden" name="product" value={product} />
           <div>
             <label
               htmlFor="business_name"
@@ -67,10 +87,13 @@ export default async function SignupPage({
           </div>
 
           {/*
-            THE ARCHETYPE. Asked at signup rather than in the wizard, because it
+            THE INDUSTRY. Asked at signup rather than in the wizard, because it
             decides which wizard the client sees — an HVAC company must never be
             shown the store-connection step, and a shop must never be asked for
-            call-out fees.
+            call-out fees. Asked for every product, including Local SEO: it's
+            what the client IS, so it's still right if they add the phone agent
+            later. (Until 2026-09-23 "We want to rank locally" was a third
+            option here, which made a product look like an industry.)
 
             Radios, not a select: two options, and the difference between them
             is worth a sentence each. A dropdown hides that explanation behind a
@@ -86,7 +109,7 @@ export default async function SignupPage({
                   type="radio"
                   name="business_type"
                   value="service"
-                  defaultChecked
+                  defaultChecked={defaultIndustry === "service"}
                   className="mt-0.5"
                 />
                 <span>
@@ -94,8 +117,8 @@ export default async function SignupPage({
                     We book appointments
                   </span>
                   <span className="block text-xs text-gray-500">
-                    HVAC, plumbing, electrical, salons, clinics. Callers want to
-                    book a job or get a price.
+                    HVAC, plumbing, electrical, salons, clinics. Customers book
+                    a job or ask for a price.
                   </span>
                 </span>
               </label>
@@ -105,6 +128,7 @@ export default async function SignupPage({
                   type="radio"
                   name="business_type"
                   value="ecommerce"
+                  defaultChecked={defaultIndustry === "ecommerce"}
                   className="mt-0.5"
                 />
                 <span>
@@ -112,26 +136,8 @@ export default async function SignupPage({
                     We sell online
                   </span>
                   <span className="block text-xs text-gray-500">
-                    A store with orders to look up. Callers ask where their
-                    order is, or about a product.
-                  </span>
-                </span>
-              </label>
-
-              <label className="flex cursor-pointer gap-3 rounded-md border border-gray-300 p-3 hover:bg-gray-50 has-[:checked]:border-gray-900 has-[:checked]:bg-gray-50">
-                <input
-                  type="radio"
-                  name="business_type"
-                  value="seo"
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="block text-sm font-medium text-gray-900">
-                    We want to rank locally
-                  </span>
-                  <span className="block text-xs text-gray-500">
-                    One or more locations that need to show up in Google
-                    search and maps. No phone answering involved.
+                    A store with orders. Customers ask where their order is,
+                    or about a product.
                   </span>
                 </span>
               </label>

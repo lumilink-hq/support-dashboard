@@ -129,12 +129,12 @@ const STEPS = [
   },
 ];
 
-// Real catalogue, from lib/addons.ts — same source /billing and /addons use.
+// Real catalogue, from lib/addons.ts — same source /billing and /pricing use.
 // The $15/$39 "extra number, routing tree" figures that used to live here
 // came from docs/BUILD-PLAN-2026-08.md, which didn't match any actual Stripe
 // object; this pulls the real, currently-sellable add-ons instead. Just the
 // first two, cheapest-first, so the homepage teases rather than repeats the
-// full list on /addons.
+// full list on /pricing.
 const ADD_ONS = availableAddons()
   .slice()
   .sort((a, b) => a.monthlyUsd - b.monthlyUsd)
@@ -304,7 +304,7 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
         {/*
           Honest about what's shipped vs. what's next: every item in
           CAPABILITIES above ships today, which is what the checkmarks
-          promise. Website Chat is now sold (see /addons) and no longer
+          promise. Website Chat is now sold (see /pricing) and no longer
           belongs in this "next" line. Insights has no code at all — say so
           plainly rather than checkmarking something a customer can't
           actually get yet.
@@ -399,7 +399,7 @@ export function Landing({ homeHref = "/" }: { homeHref?: string }) {
             ))}
           </ul>
           <p className="mt-3 text-xs text-gray-500">
-            <Link href="/addons" className="font-medium text-gray-900 underline underline-offset-4 hover:text-gray-700">
+            <Link href="/pricing" className="font-medium text-gray-900 underline underline-offset-4 hover:text-gray-700">
               See every add-on
             </Link>
             .

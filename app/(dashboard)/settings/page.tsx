@@ -3,6 +3,7 @@ import { disconnectGoogleAccount, updateClientSettings } from "./actions";
 import { CopyField } from "@/components/copy-field";
 import { isGoogleOAuthConfigured } from "@/lib/google-oauth";
 import type { ClientRow, GoogleOAuthConnectionRow } from "@/lib/types";
+import { readProfile } from "@/lib/onboarding";
 
 const inputCls =
   "mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 disabled:bg-gray-50 disabled:text-gray-500";
@@ -49,15 +50,15 @@ export default async function SettingsPage({
   const { data: clientData } = await supabase
     .from("clients")
     .select(
-      "id, name, slug, is_active, business_type, store_platform, store_base_url, store_credentials_ref, shipstation_credentials_ref, support_email, phone_number, brand_tone_config, abnormal_status_rules, business_hours, settings",
+      "id, name, slug, is_active, business_type, products, store_platform, store_base_url, store_credentials_ref, shipstation_credentials_ref, support_email, phone_number, brand_tone_config, abnormal_status_rules, business_hours, settings",
     )
     .maybeSingle();
   const client = clientData as ClientRow | null;
 
-  // Google connection (module 2) — SEO clients only; see lib/entitlements.ts's
-  // note on why this has no /billing card yet either.
+  // Google connection (module 2) — workspaces that use Local SEO only.
+  const usesSeo = readProfile(client).products.includes("seo");
   const { data: googleConnectionData } =
-    client?.business_type === "seo"
+    usesSeo
       ? await supabase
           .from("google_oauth_connections")
           .select("google_account_email, granted_scopes, status, last_refreshed_at, last_error, connected_at")
@@ -138,7 +139,7 @@ export default async function SettingsPage({
         </div>
       ) : null}
 
-      {client.business_type === "seo" ? (
+      {usesSeo ? (
         <section className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-gray-900">Google account</h2>
           <p className="mt-0.5 text-xs text-gray-500">

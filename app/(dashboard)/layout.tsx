@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Sidebar } from "@/components/sidebar";
+import { Sidebar, type ProductAccess } from "@/components/sidebar";
 import { signout } from "@/app/login/actions";
 import { getSeoAccess } from "@/lib/seo-access";
+import { featureGate, featureState, getEntitlements, isUsable } from "@/lib/entitlements";
+import { addProductHref } from "@/lib/catalog";
+import { readProfile } from "@/lib/onboarding";
 
 export default async function DashboardLayout({
   children,
@@ -24,18 +27,46 @@ export default async function DashboardLayout({
   // Tenant + profile for the chrome. RLS scopes this to the caller's client.
   const { data: profile } = await supabase
     .from("users")
-    .select("email, full_name, role, clients(name)")
+    .select("email, full_name, role, clients(name, business_type, products)")
     .eq("id", user.id)
     .single();
 
-  const clientName =
-    (profile?.clients as { name?: string } | null)?.name ?? "Workspace";
-  const { allowed: showSeo } = await getSeoAccess();
+  const client = profile?.clients as
+    | { name?: string; business_type?: string | null; products?: string[] | null }
+    | null;
+  const clientName = client?.name ?? "Workspace";
+  const { products } = readProfile(client);
+
+  // Same two gates the pages themselves use, so the sidebar can't offer a
+  // page that then renders locked (or hide one that would open). Voice is
+  // only gated once ENFORCE_ENTITLEMENTS=1; SEO always is (lib/seo-access.ts).
+  const [voice, seo] = await Promise.all([featureGate("voice"), getSeoAccess()]);
+  // featureGate("voice") is open for everyone while ENFORCE_ENTITLEMENTS is
+  // off — that exists so LEGACY voice tenants keep access. A workspace that
+  // never set up the phone agent was never one, so without a voice
+  // entitlement of its own it gets the collapsed "Add Phone Agent" row
+  // instead of five empty phone pages.
+  const voiceState = products.includes("voice")
+    ? voice.state
+    : featureState((await getEntitlements()).voice);
+  const voiceUsable = products.includes("voice") ? !voice.locked : isUsable(voiceState);
+  const access: ProductAccess = {
+    voice: {
+      usable: voiceUsable,
+      state: voiceState,
+      addHref: addProductHref("voice", products),
+    },
+    seo: {
+      usable: seo.allowed,
+      state: seo.state,
+      addHref: addProductHref("seo", products),
+    },
+  };
   const displayName = profile?.full_name || profile?.email || user.email || "";
 
   return (
     <div className="flex min-h-full flex-1">
-      <Sidebar clientName={clientName} showSeo={showSeo} />
+      <Sidebar clientName={clientName} access={access} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">

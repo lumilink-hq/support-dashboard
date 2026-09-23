@@ -23,7 +23,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentClientId } from "@/lib/entitlements";
-import { blockingRemaining, readOnboarding, type BusinessType } from "@/lib/onboarding";
+import { blockingRemaining, readOnboarding, readProfile } from "@/lib/onboarding";
 
 /** The default post-auth destination, i.e. "the user did not ask for anywhere". */
 export const DEFAULT_LANDING = "/conversations";
@@ -48,17 +48,16 @@ export async function landingPathAfterAuth(requestedNext: string): Promise<strin
     const supabase = await createClient();
     const { data } = await supabase
       .from("clients")
-      .select("business_type, settings")
+      .select("business_type, products, settings")
       .eq("id", clientId)
       .maybeSingle();
 
     const settings = (data?.settings ?? {}) as Record<string, unknown>;
-    const businessType = (data?.business_type ?? null) as BusinessType | null;
 
     // BLOCKING steps only. A client who skipped the optional website step is
     // live and working; dragging them back to the wizard every sign-in would be
     // nagging, not onboarding.
-    return blockingRemaining(readOnboarding(settings), businessType).length > 0
+    return blockingRemaining(readOnboarding(settings), readProfile(data)).length > 0
       ? "/onboarding"
       : requestedNext;
   } catch (e) {

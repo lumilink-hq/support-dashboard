@@ -247,7 +247,7 @@ export default async function PlansPage() {
               period, or until you move up a plan.
             </li>
             <li>
-              <Link href="/addons" className="underline hover:text-gray-900">
+              <Link href="/pricing" className="underline hover:text-gray-900">
                 Add-ons
               </Link>{" "}
               are optional and billed monthly on the same subscription.

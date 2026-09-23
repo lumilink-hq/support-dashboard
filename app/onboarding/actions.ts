@@ -14,9 +14,11 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentClientId } from "@/lib/entitlements";
 import { normalizeSiteUrl } from "@/lib/url";
+import type { ProductKey } from "@/lib/catalog";
 import {
   type StepKey,
   WEEKDAYS,
+  readProfile,
   withStepDone,
 } from "@/lib/onboarding";
 
@@ -511,4 +513,61 @@ export async function submitIntakeRequest(formData: FormData) {
 
   revalidatePath("/onboarding");
   redirect("/onboarding?step=behaviour&sent=1");
+}
+
+// ---------------------------------------------------------------------------
+// Adding a product to an existing workspace (/onboarding/add, 0059)
+// ---------------------------------------------------------------------------
+
+/**
+ * Adds a product to clients.products and sends the client to its next step.
+ *
+ * products is intent, not payment (0059), so the tenant writing it through
+ * its own session is fine: it unlocks the product's onboarding steps and
+ * checkout, and nothing that is billed. Entitlements still gate access.
+ *
+ *  - Local SEO: straight into the location steps. Checkout comes after,
+ *    because the seat count IS the location count.
+ *  - Phone agent: to /plans to pick a tier. Its onboarding runs after
+ *    payment, same as a phone signup. It needs an industry for the agent's
+ *    mode, so a workspace without one must choose it on the form.
+ */
+export async function addProduct(formData: FormData) {
+  const clientId = await getCurrentClientId();
+  if (!clientId) redirect("/login?next=%2Fonboarding%2Fadd");
+
+  const raw = String(formData.get("product") ?? "");
+  if (raw !== "voice" && raw !== "seo") redirect("/onboarding");
+  const product = raw as ProductKey;
+
+  const supabase = await createClient();
+  const { data: client, error: readError } = await supabase
+    .from("clients")
+    .select("business_type, products")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (readError) throw new Error(readError.message);
+  const profile = readProfile(client);
+
+  const update: { products: ProductKey[]; business_type?: string } = {
+    products: profile.products.includes(product)
+      ? profile.products
+      : [...profile.products, product],
+  };
+
+  if (product === "voice" && !profile.industry) {
+    const industry = String(formData.get("business_type") ?? "");
+    if (industry !== "service" && industry !== "ecommerce") {
+      redirect("/onboarding/add?product=voice&error=industry");
+    }
+    // Written with products in ONE update, so sync_voice_agent_mode (0059)
+    // sees the phone agent and the industry together and sets the mode once.
+    update.business_type = industry;
+  }
+
+  const { error } = await supabase.from("clients").update(update).eq("id", clientId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/", "layout");
+  redirect(product === "seo" ? "/onboarding?step=seo_locations" : "/plans");
 }

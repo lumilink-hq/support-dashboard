@@ -23,7 +23,7 @@ import { availableAddons } from "@/lib/addons";
 import {
   blockingRemaining,
   readOnboarding,
-  type BusinessType,
+  readProfile,
 } from "@/lib/onboarding";
 import { getCurrentClientId } from "@/lib/entitlements";
 import { activeAddonsForClient } from "@/lib/services/billing";
@@ -72,12 +72,11 @@ export default async function WelcomePage() {
       const supabase = await createClient();
       const { data } = await supabase
         .from("clients")
-        .select("business_type, settings")
+        .select("business_type, products, settings")
         .eq("id", clientId)
         .maybeSingle();
       const settings = (data?.settings ?? {}) as Record<string, unknown>;
-      const businessType = (data?.business_type ?? null) as BusinessType | null;
-      const blocking = blockingRemaining(readOnboarding(settings), businessType);
+      const blocking = blockingRemaining(readOnboarding(settings), readProfile(data));
       setupOutstanding = blocking.length > 0;
       if (blocking[0]) firstIncompleteHref = `/onboarding?step=${blocking[0].key}`;
     }

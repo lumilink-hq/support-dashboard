@@ -12,8 +12,38 @@
 // =============================================================================
 
 import type { PlanTierKey } from "@/lib/entitlements";
+import type { ProductKey } from "@/lib/catalog";
 
-export type BusinessType = "service" | "ecommerce" | "seo";
+/**
+ * The client's industry: clients.business_type. Until 0059 that column also
+ * held 'seo', which is a product, not an industry; what the client uses now
+ * lives in clients.products. See WorkspaceProfile.
+ */
+export type Industry = "service" | "ecommerce";
+
+/** Which onboarding a client sees: what it is, and what it uses. */
+export type WorkspaceProfile = {
+  industry: Industry | null;
+  products: ProductKey[];
+};
+
+/**
+ * Normalise a clients row (business_type, products) into a profile. Tolerant
+ * on purpose: an unknown industry is null, and an empty or unreadable
+ * products list is the phone agent, which is what every client was before
+ * products existed (0059's column default).
+ */
+export function readProfile(row: {
+  business_type?: string | null;
+  products?: string[] | null;
+} | null | undefined): WorkspaceProfile {
+  const bt = row?.business_type;
+  const industry: Industry | null = bt === "service" || bt === "ecommerce" ? bt : null;
+  const products = (row?.products ?? []).filter(
+    (p): p is ProductKey => p === "voice" || p === "seo",
+  );
+  return { industry, products: products.length ? products : ["voice"] };
+}
 
 export type StepKey =
   | "basics"
@@ -44,14 +74,17 @@ export type StepDef = {
   title: string;
   /** One line under the heading. Says what this step is for, not what it is. */
   blurb: string;
+  /** The product this step sets up. Shown only to clients using it. */
+  product: ProductKey;
   /**
-   * Which archetypes see this step. The whole point of asking at signup: a
-   * service client shown the store step will either skip it in confusion or,
-   * worse, fill it in — and `provisionVoice` refuses to provision a client with
-   * `store_platform` set but no credentials, parking them at needs_human for a
-   * feature they do not use.
+   * Narrows a step to some industries; omitted means every industry. The
+   * whole point of asking the industry at signup: a service client shown the
+   * store step will either skip it in confusion or, worse, fill it in — and
+   * `provisionVoice` refuses to provision a client with `store_platform` set
+   * but no credentials, parking them at needs_human for a feature they do not
+   * use.
    */
-  appliesTo: BusinessType[];
+  industries?: Industry[];
   /**
    * Blocking steps gate go-live. A client who skips one sits on
    * "Setting up your plan…" — so the list is deliberately short, and each entry
@@ -67,7 +100,7 @@ export const STEPS: StepDef[] = [
     key: "basics",
     title: "Business basics",
     blurb: "Your timezone and opening hours, so bookings land when you're open.",
-    appliesTo: ["service", "ecommerce"],
+    product: "voice",
     // Without hours the availability engine offers slots while they are shut,
     // and the customer finds out by turning up to a locked door.
     blocking: true,
@@ -76,14 +109,15 @@ export const STEPS: StepDef[] = [
     key: "website",
     title: "Your website",
     blurb: "We read your public pages so Lumi knows your business before its first call.",
-    appliesTo: ["service", "ecommerce"],
+    product: "voice",
     blocking: false,
   },
   {
     key: "services",
     title: "Services and prices",
     blurb: "What you do and what it costs. This is what Lumi quotes from.",
-    appliesTo: ["service"],
+    product: "voice",
+    industries: ["service"],
     // "How much" is the most common question on the line. An agent with no
     // price list cannot answer the thing people actually call to ask.
     blocking: true,
@@ -92,7 +126,8 @@ export const STEPS: StepDef[] = [
     key: "store",
     title: "Connect your store",
     blurb: "So Lumi can answer questions about orders.",
-    appliesTo: ["ecommerce"],
+    product: "voice",
+    industries: ["ecommerce"],
     blocking: false,
     // Deferred: there is nowhere safe to put an API key yet. See the step body.
     informational: true,
@@ -103,7 +138,7 @@ export const STEPS: StepDef[] = [
     // We provision it — the step reports status rather than asking for one.
     // Wording matched to the site's promise ("we provide one") on 2026-08-13.
     blurb: "The number we set up for you, and what your customers will call.",
-    appliesTo: ["service", "ecommerce"],
+    product: "voice",
     blocking: true,
     // Numbers are bought by hand on Twilio today, so this step reports status
     // rather than collecting anything.
@@ -113,14 +148,14 @@ export const STEPS: StepDef[] = [
     key: "behaviour",
     title: "How Lumi should sound",
     blurb: "Its greeting, and anything it should always or never say.",
-    appliesTo: ["service", "ecommerce"],
+    product: "voice",
     blocking: false,
   },
   {
     key: "seo_locations",
     title: "Your locations",
     blurb: "Every location you want ranked. Add at least one to get started.",
-    appliesTo: ["seo"],
+    product: "seo",
     // Mirrors "services": everything downstream (keywords, rankings, findings)
     // is a child of a location, so this is the one step with nothing to do
     // without it.
@@ -130,7 +165,7 @@ export const STEPS: StepDef[] = [
     key: "seo_keywords",
     title: "Seed keywords",
     blurb: "A few search terms per location, so we know what to start tracking.",
-    appliesTo: ["seo"],
+    product: "seo",
     // Not blocking: a client who doesn't know their keywords yet can still be
     // set up and add them once the crawl/audit surfaces some candidates.
     blocking: false,
@@ -139,18 +174,26 @@ export const STEPS: StepDef[] = [
     key: "seo_competitors",
     title: "Competitors",
     blurb: "Up to 5 competitor websites per location, so we can show how you compare.",
-    appliesTo: ["seo"],
+    product: "seo",
     blocking: false,
   },
 ];
 
-/** The steps this client actually sees, in order. */
-export function stepsFor(businessType: BusinessType | null): StepDef[] {
-  // An unknown archetype (a pre-0034 client, or a SQL-seeded one) gets every
-  // step rather than none. Showing one extra question beats hiding the price
-  // list from an HVAC company and leaving their agent unable to quote.
-  if (!businessType) return STEPS;
-  return STEPS.filter((s) => s.appliesTo.includes(businessType));
+/**
+ * The steps this client actually sees, in order: every step of every product
+ * it uses (phone steps first, so a phone client that adds SEO resumes at the
+ * SEO steps), narrowed by industry.
+ */
+export function stepsFor(profile: WorkspaceProfile): StepDef[] {
+  return STEPS.filter(
+    (s) =>
+      profile.products.includes(s.product) &&
+      // An unknown industry (a pre-0034 client, or a SQL-seeded one) gets
+      // every industry's steps rather than none. Showing one extra question
+      // beats hiding the price list from an HVAC company and leaving their
+      // agent unable to quote.
+      (!s.industries || !profile.industry || s.industries.includes(profile.industry)),
+  );
 }
 
 export function readOnboarding(settings: unknown): OnboardingState {
@@ -170,9 +213,9 @@ export function isStepDone(state: OnboardingState, key: StepKey): boolean {
  */
 export function firstIncompleteStep(
   state: OnboardingState,
-  businessType: BusinessType | null,
+  profile: WorkspaceProfile,
 ): StepKey | null {
-  for (const step of stepsFor(businessType)) {
+  for (const step of stepsFor(profile)) {
     if (!isStepDone(state, step.key)) return step.key;
   }
   return null;
@@ -180,9 +223,9 @@ export function firstIncompleteStep(
 
 export function progress(
   state: OnboardingState,
-  businessType: BusinessType | null,
+  profile: WorkspaceProfile,
 ): { done: number; total: number; percent: number } {
-  const steps = stepsFor(businessType);
+  const steps = stepsFor(profile);
   const done = steps.filter((s) => isStepDone(state, s.key)).length;
   return {
     done,
@@ -199,9 +242,9 @@ export function progress(
  */
 export function blockingRemaining(
   state: OnboardingState,
-  businessType: BusinessType | null,
+  profile: WorkspaceProfile,
 ): StepDef[] {
-  return stepsFor(businessType).filter(
+  return stepsFor(profile).filter(
     (s) => s.blocking && !isStepDone(state, s.key),
   );
 }

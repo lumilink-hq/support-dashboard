@@ -17,19 +17,25 @@ export async function signup(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  // The onboarding archetype. Asked here rather than in the wizard because it
-  // decides WHICH wizard they see — an HVAC company should never be shown the
-  // store-connection step, and a shop should never be asked for call-out fees.
+  // The industry and the product (0059). The industry is asked here rather
+  // than in the wizard because, with the product, it decides WHICH wizard
+  // they see — an HVAC company should never be shown the store-connection
+  // step, and a shop should never be asked for call-out fees. The product
+  // comes from the link the visitor arrived on (a hidden field).
   //
-  // Validated here and again in handle_new_user (0034). This value travels
-  // through auth metadata, which is client-supplied, so the trigger treats
-  // anything unrecognised as null rather than trusting it.
+  // Validated here and again in handle_new_user (0059). Both travel through
+  // auth metadata, which is client-supplied, so the trigger treats anything
+  // unrecognised as null / 'voice' rather than trusting it.
   const rawType = String(formData.get("business_type") ?? "").trim().toLowerCase();
-  const businessType =
-    rawType === "service" || rawType === "ecommerce" || rawType === "seo" ? rawType : null;
+  const businessType = rawType === "service" || rawType === "ecommerce" ? rawType : null;
+  const product = String(formData.get("product") ?? "") === "seo" ? "seo" : "voice";
 
+  // Keeps the product on a retry, so a failed SEO signup doesn't come back
+  // as a phone signup.
   const fail = (message: string) =>
-    redirect(`/signup?error=${encodeURIComponent(message)}`);
+    redirect(
+      `/signup?error=${encodeURIComponent(message)}${product === "seo" ? "&product=seo" : ""}`,
+    );
 
   if (!businessName) fail("Enter your business name.");
   if (!email) fail("Enter your email address.");
@@ -71,9 +77,11 @@ export async function signup(formData: FormData) {
       data: {
         business_name: businessName,
         full_name: fullName,
-        // Read by handle_new_user (0034), which writes clients.business_type;
-        // the 0032 trigger then derives the agent mode from it.
+        // Read by handle_new_user (0059), which writes clients.business_type
+        // and clients.products; sync_voice_agent_mode then derives the agent
+        // mode for a phone client.
         ...(businessType ? { business_type: businessType } : {}),
+        product,
       },
       emailRedirectTo: confirmUrl,
     },

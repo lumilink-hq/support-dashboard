@@ -173,8 +173,8 @@ export async function PricingGrid({
   heading = "What You Pay, And Where The Limits Are",
   blurb = "Every plan comes with a set number of calls and no setup fee. When you outgrow one, you move up a plan — we never bill you for going over.",
   // Which page rendered this grid, so an Enterprise lead through /contact
-  // knows where it came from. Defaults to /plans since that's the canonical
-  // pricing page; /addons passes its own path for accurate attribution.
+  // knows where it came from. Defaults to /plans, the phone-plan checkout
+  // page; /pricing passes its own path for accurate attribution.
   contactSource = "/plans",
 }: {
   heading?: string;
@@ -379,10 +379,14 @@ export function ClosingCta({
   // Was "Book A Discovery Call". We don't run discovery calls, and this link
   // has always gone to /signup — the label was inventing a step.
   cta = "Create Your Account",
+  // Still signup by default; /products/seo passes its own CTA (signup with
+  // ?product=seo, or adding SEO to a signed-in workspace).
+  href = SIGNUP_CTA,
 }: {
   heading: string;
   body: string;
   cta?: string;
+  href?: string;
 }) {
   return (
     <Section className="py-20">
@@ -393,7 +397,7 @@ export function ClosingCta({
         <p className="mx-auto mt-4 max-w-xl text-gray-600">{body}</p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link
-            href={SIGNUP_CTA}
+            href={href}
             className="rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white hover:bg-gray-800"
           >
             {cta}
