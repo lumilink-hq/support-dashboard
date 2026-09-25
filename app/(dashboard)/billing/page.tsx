@@ -9,8 +9,9 @@ import { createClient } from "@/lib/supabase/server";
 import {
   activeAddonsForClient,
   hasStripeCustomerForClient,
+  seoSubscriptionForClient,
 } from "@/lib/services/billing";
-import { isSeoCheckoutConfigured, SEO_PRICE_PER_LOCATION_USD } from "@/lib/seo-pricing";
+import { availableSeoPlans, isSeoCheckoutConfigured, seoPlanByKey } from "@/lib/seo-pricing";
 import {
   FEATURES,
   OVERAGE,
@@ -136,6 +137,13 @@ export default async function BillingPage({
   // 0059 this was business_type = 'seo', which a phone client could never be.
   const isSeoClient =
     readProfile(clientRow.data).products.includes("seo") || seoState !== "locked";
+  // Which plan they're on, read live from Stripe (like add-ons). null for a
+  // hand-granted entitlement with no subscription, or a PACKS/enterprise one.
+  const seoSub =
+    clientId && (seoState === "active" || seoState === "past_due")
+      ? await seoSubscriptionForClient(clientId).catch(() => null)
+      : null;
+  const seoPlanName = seoSub?.plan ? seoPlanByKey(seoSub.plan).name : null;
 
   return (
     <div className="max-w-4xl">
@@ -277,9 +285,9 @@ export default async function BillingPage({
       {/* ------------------------------------------------------------------ */}
       {/* Local SEO — deliberately NOT in the FEATURES loop above. Every card */}
       {/* there routes a "sellable" checkout through /plans, the VOICE tier   */}
-      {/* picker (see that loop's own comment) — SEO has no tiers, it's one   */}
-      {/* flat per-location price with a quantity the client picks, so it    */}
-      {/* needs its own section and its own checkout route                   */}
+      {/* picker (see that loop's own comment) — SEO has its own plans       */}
+      {/* (lib/seo-pricing.ts), some with a location quantity, so it needs   */}
+      {/* its own section and its own checkout route                         */}
       {/* (/api/billing/seo-checkout, module 12).                            */}
       {/* ------------------------------------------------------------------ */}
       {isSeoClient ? (
@@ -287,7 +295,7 @@ export default async function BillingPage({
         // (addProductHref in lib/catalog.ts).
         <div id="seo" className="mt-10 max-w-md scroll-mt-6">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-gray-900">Local SEO</h2>
+            <h2 className="text-base font-semibold text-gray-900">SEO + AI Search</h2>
             <span
               className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${PILL[seoState]}`}
             >
@@ -295,8 +303,8 @@ export default async function BillingPage({
             </span>
           </div>
           <p className="mt-1 text-sm text-gray-600">
-            ${SEO_PRICE_PER_LOCATION_USD.toLocaleString()}/location/mo. Ranks
-            your locations in Google search and maps.
+            Website SEO, Local SEO for your Google Business Profile locations,
+            or both. AI Search Optimization is included with website plans.
           </p>
 
           {!isSeoCheckoutConfigured() ? (
@@ -311,10 +319,13 @@ export default async function BillingPage({
                   avoid losing access.
                 </p>
               ) : null}
-              <p className="text-gray-900">
-                {seoEntitlement?.seat_count ?? "—"} location
-                {seoEntitlement?.seat_count === 1 ? "" : "s"}
-              </p>
+              {seoPlanName ? <p className="font-medium text-gray-900">{seoPlanName}</p> : null}
+              {seoSub?.plan !== "website" ? (
+                <p className="text-gray-900">
+                  {seoEntitlement?.seat_count ?? "—"} location
+                  {seoEntitlement?.seat_count === 1 ? "" : "s"}
+                </p>
+              ) : null}
               <p className="mt-1 text-gray-500">
                 {seoEntitlement?.current_period_end
                   ? `Renews ${formatDateTime(seoEntitlement.current_period_end)}`
@@ -339,7 +350,10 @@ export default async function BillingPage({
             </div>
           ) : (
             <div className="mt-4">
-              <SeoCheckoutForm initialLocationCount={seoLocationCount.count ?? 0} />
+              <SeoCheckoutForm
+                plans={availableSeoPlans().map((p) => p.key)}
+                initialLocationCount={seoLocationCount.count ?? 0}
+              />
             </div>
           )}
         </div>

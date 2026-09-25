@@ -1,10 +1,10 @@
 // /products/seo — the Local SEO product page (plan.md, the SEO build plan).
 //
 // A different product from the phone agent: no calls involved, its own
-// subscription, one flat per-location price (lib/seo-pricing.ts) rather than
-// the Starter/Growth/Scale ladder. So this page does NOT use PricingGrid; it
-// renders its own single price card from SEO_PRICE_PER_LOCATION_USD, so the
-// number here can't disagree with what /billing charges.
+// subscription, its own plans (lib/seo-pricing.ts's SEO_PLANS: website,
+// local per location, or both) rather than the Starter/Growth/Scale ladder.
+// So this page does NOT use PricingGrid; it renders its own plan cards from
+// SEO_PLANS, so the numbers here can't disagree with what /billing charges.
 //
 // COPY ONLY CLAIMS WHAT IS BUILT (plan.md §3, 2026-09-22). Google Business
 // Profile sync, profile edits and review replies (Phase 4) wait on Google's
@@ -28,12 +28,12 @@ import {
   Section,
 } from "@/components/marketing/blocks";
 import { MockupFrame } from "@/components/marketing/dashboard-mockups";
-import { SEO_PRICE_PER_LOCATION_USD } from "@/lib/seo-pricing";
+import { SEO_EXTRA_LOCATION, SEO_PLANS, seoPlanByKey } from "@/lib/seo-pricing";
 
 export const SEO_METADATA = {
   title: "Local SEO for every location | LumiLink",
   description:
-    "Weekly site audits, rank tracking with a map-pack geo grid, competitor and AI search visibility, and fixes you approve before anything goes live. One flat price per location.",
+    "Weekly site audits, rank tracking with a map-pack geo grid, competitor and AI search visibility, and fixes you approve before anything goes live. Website SEO, Local SEO per location, or both.",
 };
 
 // Signed out: create an account for Local SEO (?product=seo).
@@ -43,7 +43,7 @@ export const SEO_METADATA = {
 const SIGNUP_SEO = "/signup?product=seo";
 const ADD_SEO = "/onboarding/add?product=seo";
 
-const PRICE = SEO_PRICE_PER_LOCATION_USD.toLocaleString("en-US");
+const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
 
 const PILLARS = [
   {
@@ -108,15 +108,6 @@ const COMING_SOON = [
   "Review replies in your voice, with anything under three stars sent to a person first",
 ];
 
-const INCLUDED = [
-  "Weekly site and technical audits",
-  "Weekly rank tracking with a map-pack geo grid",
-  "Up to five competitors tracked",
-  "AI search visibility and backlink monitoring",
-  "Fixes and articles drafted for your approval",
-  "Client portal and a monthly report",
-];
-
 const FAQS = [
   {
     q: "Who is this for?",
@@ -144,7 +135,7 @@ const FAQS = [
   },
   {
     q: "How is pricing calculated?",
-    a: `$${PRICE} per location per month on one subscription. Add or remove a location and the next invoice is prorated.`,
+    a: `Website SEO + AI Search is ${usd(seoPlanByKey("website").monthlyUsd)} a month for one website. Local SEO is ${usd(seoPlanByKey("local").monthlyUsd)} a month per location. Full SEO + AI Search covers one website and one location for ${usd(seoPlanByKey("bundle").monthlyUsd)} a month, and each extra location is ${usd(SEO_EXTRA_LOCATION.monthlyUsd)}. Groups with many brands, sites or locations get a custom quote.`,
   },
   {
     q: "Do you build links?",
@@ -253,7 +244,7 @@ function SeoPortalMockup({ caption }: { caption: string }) {
 }
 
 /**
- * The Local SEO price card with its pitch. Shared by this page and /pricing so
+ * The SEO plan cards with their pitch. Shared by this page and /pricing so
  * the two can't quote the SEO product differently.
  */
 export function SeoPricingSection({
@@ -270,51 +261,77 @@ export function SeoPricingSection({
 }) {
   return (
     <Section id={id} className="border-t border-gray-200 py-20">
-      <div className="grid items-center gap-12 md:grid-cols-2">
-        <div className="max-w-md">
-          <Eyebrow>{eyebrow}</Eyebrow>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
-            One price per location
-          </h2>
-          <p className="mt-3 text-gray-600">
-            No tiers to choose between. Every location gets the full
-            service, and your subscription grows or shrinks with the number
-            of locations you have.
-          </p>
-          {learnMoreHref ? (
-            <Link
-              href={learnMoreHref}
-              className="mt-4 inline-block text-sm font-medium text-gray-900 underline underline-offset-4 hover:text-gray-700"
-            >
-              What Local SEO includes
-            </Link>
-          ) : null}
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-          <p className="text-sm font-medium text-gray-500">Local SEO</p>
-          <p className="mt-2 text-4xl font-semibold tracking-tight text-gray-900">
-            ${PRICE}
-            <span className="text-base font-normal text-gray-500">
-              {" "}
-              / location / month
-            </span>
-          </p>
-          <ul className="mt-6 space-y-2">
-            {INCLUDED.map((item) => (
-              <li key={item} className="flex gap-2 text-sm text-gray-600">
-                <Check /> {item}
-              </li>
-            ))}
-          </ul>
+      <div className="max-w-2xl">
+        <Eyebrow>{eyebrow}</Eyebrow>
+        <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+          Your website, your locations, or both
+        </h2>
+        <p className="mt-3 text-gray-600">
+          AI search optimization is included with every website plan. Local SEO
+          grows with the number of locations you have.
+        </p>
+        {learnMoreHref ? (
           <Link
-            href={ctaHref}
-            className="mt-8 block rounded-md bg-gray-900 px-4 py-3 text-center text-sm font-medium text-white hover:bg-gray-800"
+            href={learnMoreHref}
+            className="mt-4 inline-block text-sm font-medium text-gray-900 underline underline-offset-4 hover:text-gray-700"
           >
-            Get started
+            What SEO includes
           </Link>
-        </div>
+        ) : null}
       </div>
+
+      <div className="mt-10 grid gap-6 lg:grid-cols-3">
+        {SEO_PLANS.map((plan) => {
+          const featured = plan.key === "bundle";
+          return (
+            <div
+              key={plan.key}
+              className={`flex flex-col rounded-2xl border bg-white p-8 shadow-sm ${
+                featured ? "border-gray-900" : "border-gray-200"
+              }`}
+            >
+              <p className="text-sm font-medium text-gray-500">{plan.name}</p>
+              <p className="mt-2 text-4xl font-semibold tracking-tight text-gray-900">
+                {usd(plan.monthlyUsd)}
+                <span className="text-base font-normal text-gray-500">
+                  {plan.perLocation ? " / location / month" : " / month"}
+                </span>
+              </p>
+              <p className="mt-3 text-sm text-gray-600">{plan.headline}</p>
+              <ul className="mt-6 flex-1 space-y-2">
+                {plan.includes.map((item) => (
+                  <li key={item} className="flex gap-2 text-sm text-gray-600">
+                    <Check /> {item}
+                  </li>
+                ))}
+              </ul>
+              {plan.footnote ? <p className="mt-4 text-xs text-gray-400">{plan.footnote}</p> : null}
+              <Link
+                href={ctaHref}
+                className={`mt-6 block rounded-md px-4 py-3 text-center text-sm font-medium ${
+                  featured
+                    ? "bg-gray-900 text-white hover:bg-gray-800"
+                    : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                Get started
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="mt-8 text-sm text-gray-500">
+        Many brands, sites or locations?{" "}
+        <Link
+          href="/contact"
+          className="font-medium text-gray-900 underline underline-offset-4 hover:text-gray-700"
+        >
+          Talk to us about Enterprise
+        </Link>
+        . Prices exclude setup, custom development, paid media, third-party
+        fees and taxes.
+      </p>
     </Section>
   );
 }

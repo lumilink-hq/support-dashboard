@@ -2,16 +2,19 @@
 // entry point that calls createSeoCheckoutSessionForClient (lib/services/
 // billing.ts), which existed since module 12 but had nothing wired to it.
 // Mirrors app/api/billing/checkout/route.ts (the voice tier picker's route)
-// almost exactly — the one real difference is `locationCount` (a number the
-// client chooses) in place of `tier` (a fixed enum).
+// almost exactly — the difference is `locationCount` (a number the client
+// chooses) alongside `plan` (lib/seo-pricing.ts's SEO_PLANS).
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireClientId } from "@/lib/entitlements";
 import { BillingError, createSeoCheckoutSessionForClient } from "@/lib/services/billing";
 import { isStripeConfigured } from "@/lib/stripe";
-import { isSeoCheckoutConfigured } from "@/lib/seo-pricing";
+import { availableSeoPlans, isSeoCheckoutConfigured } from "@/lib/seo-pricing";
 
-const bodySchema = z.object({ locationCount: z.number().int().min(1).max(1000) });
+const bodySchema = z.object({
+  plan: z.enum(["website", "local", "bundle"]),
+  locationCount: z.number().int().min(0).max(1000),
+});
 
 export async function POST(request: Request) {
   if (!isStripeConfigured() || !isSeoCheckoutConfigured()) {
@@ -25,7 +28,10 @@ export async function POST(request: Request) {
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "Enter a valid number of locations." }, { status: 400 });
+    return NextResponse.json({ error: "Pick a plan and a valid number of locations." }, { status: 400 });
+  }
+  if (!availableSeoPlans().some((p) => p.key === parsed.data.plan)) {
+    return NextResponse.json({ error: "That plan isn't available yet." }, { status: 400 });
   }
 
   // Same fallback chain as app/signup/actions.ts and the voice checkout route.
@@ -37,6 +43,7 @@ export async function POST(request: Request) {
   try {
     const url = await createSeoCheckoutSessionForClient({
       clientId,
+      plan: parsed.data.plan,
       locationCount: parsed.data.locationCount,
       // Straight back to onboarding, not /welcome (that page is voice/addon
       // copy) — "you just paid, now let's finish your locations" is the

@@ -22,7 +22,14 @@ import {
   type Feature,
   type PlanTierKey,
 } from "@/lib/entitlements";
-import { SEO_STRIPE_PRICE_ID } from "@/lib/seo-pricing";
+import {
+  SEO_EXTRA_LOCATION,
+  seoCheckoutLineItems,
+  seoLocationsFromItems,
+  seoPlanByKey,
+  seoPlanFromItems,
+  type SeoPlanKey,
+} from "@/lib/seo-pricing";
 import { createServiceClient } from "@/lib/supabase/service";
 import { stripeClient } from "@/lib/stripe";
 
@@ -116,23 +123,29 @@ export async function createCheckoutSessionForClient(input: {
 }
 
 // -----------------------------------------------------------------------------
-// SEO checkout — module 12 (plan.md). One flat price, QUANTITY = location
-// count, no tier. Mirrors createCheckoutSessionForClient's shape (same
-// customer/client_reference_id/metadata pattern) rather than sharing its
-// signature, because there is no PlanTierKey to thread through — a shared
-// function would need an awkward `tier?: never` to opt out of tier lookup.
+// SEO checkout — module 12 (plan.md), repriced 2026-09-25 to the SEO product
+// catalog (lib/seo-pricing.ts): one of three plans, with the location count
+// as quantity where the plan bills per location. Mirrors
+// createCheckoutSessionForClient's shape (same customer/client_reference_id/
+// metadata pattern) rather than sharing its signature, because an SEO plan is
+// not a PlanTierKey.
 // -----------------------------------------------------------------------------
 export async function createSeoCheckoutSessionForClient(input: {
   clientId: string;
+  plan: SeoPlanKey;
   locationCount: number;
   successUrl: string;
   cancelUrl: string;
 }): Promise<string> {
-  if (!SEO_STRIPE_PRICE_ID) {
-    throw new BillingError("No Stripe price is configured for SEO yet.");
+  if (!Number.isInteger(input.locationCount) || input.locationCount < 0) {
+    throw new BillingError("locationCount must be a whole number.");
   }
-  if (!Number.isInteger(input.locationCount) || input.locationCount < 1) {
-    throw new BillingError("locationCount must be a positive integer.");
+
+  let lineItems: { price: string; quantity: number }[];
+  try {
+    lineItems = seoCheckoutLineItems(input.plan, input.locationCount);
+  } catch (e) {
+    throw new BillingError(e instanceof Error ? e.message : String(e));
   }
 
   const client = await getClientRow(input.clientId);
@@ -140,11 +153,12 @@ export async function createSeoCheckoutSessionForClient(input: {
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
-    line_items: [{ price: SEO_STRIPE_PRICE_ID, quantity: input.locationCount }],
+    line_items: lineItems,
     customer: client.stripe_customer_id ?? undefined,
     client_reference_id: client.id,
     subscription_data: {
-      metadata: { client_id: client.id, feature: "seo" },
+      description: seoPlanByKey(input.plan).headline,
+      metadata: { client_id: client.id, feature: "seo", seo_plan: input.plan },
     },
     success_url: input.successUrl,
     cancel_url: input.cancelUrl,
@@ -154,19 +168,33 @@ export async function createSeoCheckoutSessionForClient(input: {
   return session.url;
 }
 
+/** The client's SEO plan and billed location count, read live from Stripe. */
+export async function seoSubscriptionForClient(
+  clientId: string,
+): Promise<{ plan: SeoPlanKey | null; locations: number | null } | null> {
+  const seoSubscriptionId = await getSeoSubscriptionId(clientId);
+  if (!seoSubscriptionId) return null;
+  const subscription = await stripeClient().subscriptions.retrieve(seoSubscriptionId);
+  const items = subscription.items.data.map((i) => ({ priceId: i.price.id, quantity: i.quantity }));
+  return { plan: seoPlanFromItems(items), locations: seoLocationsFromItems(items) };
+}
+
 // -----------------------------------------------------------------------------
 // reconcileSeoSeatCount — proration when a location is added or removed
-// (plan.md module 12). Callers: any future "add/remove location" action
-// (module 11's onboarding wizard, or a later locations-management page) after
-// it writes/deletes the seo_locations row — this function only talks to
-// Stripe, it does not read seo_locations itself, so it has no opinion on what
-// counts as an active location.
+// (plan.md module 12). No caller yet: it's for a future "add/remove location"
+// action, after it writes/deletes the seo_locations row. It only talks to
+// Stripe and does not read seo_locations, so it has no opinion on what counts
+// as an active location.
 //
-// Idempotent: if Stripe's quantity already matches, this is a no-op — no
-// proration event, no API call beyond the read. proration_behavior is left at
-// Stripe's default ('create_prorations') rather than pinned here, so a
-// platform-wide proration policy change is one Stripe Dashboard setting, not
-// a code change.
+// Per plan: Local SEO sets its item's quantity to the count; the bundle keeps
+// its one included location and puts the rest on the "Additional SEO
+// Location" item (created, updated or deleted as needed). Website SEO covers
+// no locations, so a location change there is refused: that's a plan change,
+// done in the Stripe portal or by us.
+//
+// Idempotent: if Stripe already matches, this is a no-op. proration_behavior
+// is left at Stripe's default ('create_prorations'), so a platform-wide
+// proration policy change is one Stripe Dashboard setting, not a code change.
 // -----------------------------------------------------------------------------
 export async function reconcileSeoSeatCount(input: {
   clientId: string;
@@ -183,20 +211,48 @@ export async function reconcileSeoSeatCount(input: {
 
   const stripe = stripeClient();
   const subscription = await stripe.subscriptions.retrieve(seoSubscriptionId);
-  const item = SEO_STRIPE_PRICE_ID
-    ? subscription.items.data.find((i) => i.price.id === SEO_STRIPE_PRICE_ID)
-    : undefined;
-  if (!item) {
-    throw new BillingError("Client's subscription has no SEO line item to reconcile.");
+  const items = subscription.items.data;
+  const plan = seoPlanFromItems(items.map((i) => ({ priceId: i.price.id })));
+  const previousQuantity = seoLocationsFromItems(
+    items.map((i) => ({ priceId: i.price.id, quantity: i.quantity })),
+  );
+
+  if (plan === "local") {
+    const item = items.find((i) => i.price.id === seoPlanByKey("local").stripePriceId)!;
+    if (item.quantity === input.targetLocationCount) {
+      return { changed: false, previousQuantity, quantity: input.targetLocationCount };
+    }
+    await stripe.subscriptionItems.update(item.id, { quantity: input.targetLocationCount });
+    return { changed: true, previousQuantity, quantity: input.targetLocationCount };
   }
 
-  const previousQuantity = item.quantity ?? null;
-  if (previousQuantity === input.targetLocationCount) {
-    return { changed: false, previousQuantity, quantity: previousQuantity };
+  if (plan === "bundle") {
+    const extraPriceId = SEO_EXTRA_LOCATION.stripePriceId;
+    if (!extraPriceId) throw new BillingError("No Stripe price is configured for additional locations.");
+    const wantExtra = input.targetLocationCount - seoPlanByKey("bundle").includedLocations;
+    const extraItem = items.find((i) => i.price.id === extraPriceId);
+    const haveExtra = extraItem?.quantity ?? 0;
+    if (haveExtra === wantExtra) {
+      return { changed: false, previousQuantity, quantity: input.targetLocationCount };
+    }
+    if (!extraItem) {
+      await stripe.subscriptionItems.create({
+        subscription: seoSubscriptionId,
+        price: extraPriceId,
+        quantity: wantExtra,
+      });
+    } else if (wantExtra === 0) {
+      await stripe.subscriptionItems.del(extraItem.id);
+    } else {
+      await stripe.subscriptionItems.update(extraItem.id, { quantity: wantExtra });
+    }
+    return { changed: true, previousQuantity, quantity: input.targetLocationCount };
   }
 
-  await stripe.subscriptionItems.update(item.id, { quantity: input.targetLocationCount });
-  return { changed: true, previousQuantity, quantity: input.targetLocationCount };
+  if (plan === "website") {
+    throw new BillingError("Website SEO doesn't include locations. Switch to Full SEO to add them.");
+  }
+  throw new BillingError("Client's SEO subscription isn't on a self-serve plan; change it in Stripe.");
 }
 
 // -----------------------------------------------------------------------------
@@ -337,13 +393,15 @@ export async function syncClientFromStripeSubscription(
       .find((t): t is PlanTierKey => t !== null) ??
     null;
 
-  // Seat count = quantity on the feature's own line item. For voice/email
-  // (always quantity 1) this resolves to 1 and lands harmlessly on a column
-  // apply_billing_event treats as meaningless for those features; for 'seo'
-  // it's the actual number of locations being paid for.
+  // Seat count = Google Business Profile locations paid for
+  // (seoLocationsFromItems, lib/seo-pricing.ts). For voice/email (always
+  // quantity 1) this resolves to 1 and lands harmlessly on a column
+  // apply_billing_event treats as meaningless for those features.
   const seatCount =
-    feature === "seo" && SEO_STRIPE_PRICE_ID
-      ? (subscription.items.data.find((item) => item.price.id === SEO_STRIPE_PRICE_ID)?.quantity ?? null)
+    feature === "seo"
+      ? seoLocationsFromItems(
+          subscription.items.data.map((item) => ({ priceId: item.price.id, quantity: item.quantity })),
+        )
       : (subscription.items.data[0]?.quantity ?? null);
 
   const customerId =

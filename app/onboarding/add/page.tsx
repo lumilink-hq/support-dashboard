@@ -18,7 +18,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentClientId, STARTER_PLAN } from "@/lib/entitlements";
 import { productByKey, type ProductKey } from "@/lib/catalog";
 import { readProfile } from "@/lib/onboarding";
-import { SEO_PRICE_PER_LOCATION_USD } from "@/lib/seo-pricing";
+import { seoPlanByKey } from "@/lib/seo-pricing";
 import { addProduct } from "../actions";
 
 export const metadata: Metadata = { title: "Add a product | LumiLink" };
@@ -33,10 +33,10 @@ const DETAILS: Record<ProductKey, { price: string; next: string[] }> = {
     ],
   },
   seo: {
-    price: `$${SEO_PRICE_PER_LOCATION_USD.toLocaleString("en-US")} per location per month.`,
+    price: `Local SEO from $${seoPlanByKey("local").monthlyUsd} per location per month; website SEO from $${seoPlanByKey("website").monthlyUsd.toLocaleString("en-US")} a month.`,
     next: [
       "Add the locations you want ranked, a few keywords, and competitors.",
-      "Choose how many locations to pay for on Plans & billing.",
+      "Pick your plan and how many locations on Plans & billing.",
       "We run the first audit and rank check, and your reports start.",
     ],
   },

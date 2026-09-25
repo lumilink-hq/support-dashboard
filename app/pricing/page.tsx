@@ -33,7 +33,7 @@ import { productByKey } from "@/lib/catalog";
 export const metadata: Metadata = {
   title: "Pricing | LumiLink",
   description:
-    "Every plan, add-on and product in one place: the AI phone agent, website chat, extra lines and locations, and Local SEO priced per location.",
+    "Every plan, add-on and product in one place: the AI phone agent, website chat, extra lines and locations, and SEO + AI search for your website and every location.",
   alternates: { canonical: "/pricing" },
 };
 
