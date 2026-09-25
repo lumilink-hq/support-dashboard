@@ -11,7 +11,8 @@ import {
   hasStripeCustomerForClient,
   seoSubscriptionForClient,
 } from "@/lib/services/billing";
-import { availableSeoPlans, isSeoCheckoutConfigured, seoPlanByKey } from "@/lib/seo-pricing";
+import { addProductHref } from "@/lib/catalog";
+import { availableSeoPlans, isSeoCheckoutConfigured, SEO_PLANS, seoPlanByKey } from "@/lib/seo-pricing";
 import {
   FEATURES,
   OVERAGE,
@@ -132,9 +133,11 @@ export default async function BillingPage({
   const activeAddonKeys = new Set(activeAddons.map((a) => a.key));
   const seoEntitlement = ent.seo;
   const seoState = featureState(seoEntitlement);
-  // Shown to any workspace that has set up Local SEO (clients.products, 0059)
-  // or already holds an SEO entitlement (e.g. one granted by hand). Until
-  // 0059 this was business_type = 'seo', which a phone client could never be.
+  // Whether the workspace has set up SEO (clients.products, 0059) or already
+  // holds an SEO entitlement (e.g. one granted by hand). The section below is
+  // shown to everyone; a workspace that hasn't set SEO up yet sees the plans
+  // and a link to set it up rather than the checkout form, because checkout
+  // quotes against the locations that setup collects.
   const isSeoClient =
     readProfile(clientRow.data).products.includes("seo") || seoState !== "locked";
   // Which plan they're on, read live from Stripe (like add-ons). null for a
@@ -290,74 +293,96 @@ export default async function BillingPage({
       {/* its own section and its own checkout route                         */}
       {/* (/api/billing/seo-checkout, module 12).                            */}
       {/* ------------------------------------------------------------------ */}
-      {isSeoClient ? (
-        // id="seo": the sidebar's "Add Local SEO" row links to /billing#seo
-        // (addProductHref in lib/catalog.ts).
-        <div id="seo" className="mt-10 max-w-md scroll-mt-6">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-gray-900">SEO + AI Search</h2>
-            <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${PILL[seoState]}`}
-            >
-              {PILL_LABEL[seoState]}
-            </span>
-          </div>
-          <p className="mt-1 text-sm text-gray-600">
-            Website SEO, Local SEO for your Google Business Profile locations,
-            or both. AI Search Optimization is included with website plans.
-          </p>
-
-          {!isSeoCheckoutConfigured() ? (
-            <p className="mt-4 text-sm text-gray-400">
-              SEO checkout isn&rsquo;t configured on this environment yet.
-            </p>
-          ) : seoState === "active" || seoState === "past_due" ? (
-            <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4 text-sm">
-              {seoState === "past_due" ? (
-                <p className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                  There&rsquo;s a payment issue — please update your billing to
-                  avoid losing access.
-                </p>
-              ) : null}
-              {seoPlanName ? <p className="font-medium text-gray-900">{seoPlanName}</p> : null}
-              {seoSub?.plan !== "website" ? (
-                <p className="text-gray-900">
-                  {seoEntitlement?.seat_count ?? "—"} location
-                  {seoEntitlement?.seat_count === 1 ? "" : "s"}
-                </p>
-              ) : null}
-              <p className="mt-1 text-gray-500">
-                {seoEntitlement?.current_period_end
-                  ? `Renews ${formatDateTime(seoEntitlement.current_period_end)}`
-                  : "Active on your workspace."}
-              </p>
-              <p className="mt-2 text-xs text-gray-400">
-                Add or remove locations from the dashboard — billing adjusts
-                automatically, prorated.
-              </p>
-            </div>
-          ) : seoState === "setup" ? (
-            <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
-              <button
-                disabled
-                className="w-full cursor-default rounded-md bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700"
-              >
-                Setting up your plan&hellip;
-              </button>
-              <p className="mt-2 text-xs text-gray-400">
-                Payment received. We&rsquo;re provisioning this now.
-              </p>
-            </div>
-          ) : (
-            <div className="mt-4">
-              <SeoCheckoutForm
-                plans={availableSeoPlans().map((p) => p.key)}
-                initialLocationCount={seoLocationCount.count ?? 0}
-              />
-            </div>
-          )}
+      {/* id="seo": the sidebar's "Add Local SEO" row links to /billing#seo */}
+      {/* (addProductHref in lib/catalog.ts). */}
+      <div id="seo" className="mt-10 max-w-md scroll-mt-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-gray-900">SEO + AI Search</h2>
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${PILL[seoState]}`}
+          >
+            {PILL_LABEL[seoState]}
+          </span>
         </div>
-      ) : null}
+        <p className="mt-1 text-sm text-gray-600">
+          Website SEO, Local SEO for your Google Business Profile locations,
+          or both. AI Search Optimization is included with website plans.
+        </p>
+
+        {!isSeoClient ? (
+          <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4 text-sm">
+            <ul className="space-y-1 text-gray-700">
+              {SEO_PLANS.map((p) => (
+                <li key={p.key} className="flex justify-between gap-3">
+                  <span>{p.name}</span>
+                  <span className="text-gray-500">
+                    ${p.monthlyUsd.toLocaleString()}
+                    {p.perLocation ? "/location/mo" : "/mo"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <Link
+              href={addProductHref("seo", readProfile(clientRow.data).products)}
+              className="mt-4 block w-full rounded-md bg-gray-900 px-4 py-2 text-center text-sm font-medium text-white hover:bg-gray-800"
+            >
+              Set up SEO
+            </Link>
+            <p className="mt-2 text-xs text-gray-400">
+              Add your website and locations first; you pick a plan and pay
+              after that.
+            </p>
+          </div>
+        ) : !isSeoCheckoutConfigured() ? (
+          <p className="mt-4 text-sm text-gray-400">
+            SEO checkout isn&rsquo;t configured on this environment yet.
+          </p>
+        ) : seoState === "active" || seoState === "past_due" ? (
+          <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4 text-sm">
+            {seoState === "past_due" ? (
+              <p className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                There&rsquo;s a payment issue — please update your billing to
+                avoid losing access.
+              </p>
+            ) : null}
+            {seoPlanName ? <p className="font-medium text-gray-900">{seoPlanName}</p> : null}
+            {seoSub?.plan !== "website" ? (
+              <p className="text-gray-900">
+                {seoEntitlement?.seat_count ?? "—"} location
+                {seoEntitlement?.seat_count === 1 ? "" : "s"}
+              </p>
+            ) : null}
+            <p className="mt-1 text-gray-500">
+              {seoEntitlement?.current_period_end
+                ? `Renews ${formatDateTime(seoEntitlement.current_period_end)}`
+                : "Active on your workspace."}
+            </p>
+            <p className="mt-2 text-xs text-gray-400">
+              Add or remove locations from the dashboard — billing adjusts
+              automatically, prorated.
+            </p>
+          </div>
+        ) : seoState === "setup" ? (
+          <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+            <button
+              disabled
+              className="w-full cursor-default rounded-md bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700"
+            >
+              Setting up your plan&hellip;
+            </button>
+            <p className="mt-2 text-xs text-gray-400">
+              Payment received. We&rsquo;re provisioning this now.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4">
+            <SeoCheckoutForm
+              plans={availableSeoPlans().map((p) => p.key)}
+              initialLocationCount={seoLocationCount.count ?? 0}
+            />
+          </div>
+        )}
+      </div>
 
       {/* ------------------------------------------------------------------ */}
       {/* Add-ons — the same catalogue the post-purchase screen shows, from   */}
