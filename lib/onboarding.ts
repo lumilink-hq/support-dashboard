@@ -31,6 +31,12 @@ export type Industry = "service" | "ecommerce";
  * picks the wizard steps and the phone agent's mode (scheduling vs orders).
  * `industry` maps each option onto it. The option key itself travels as
  * auth metadata (`industry_detail`) so it isn't lost, without a migration.
+ *
+ * ONLY WHAT WE CAN COVER FOR SURE (2026-09-29, user). The seven-option list
+ * (clinics, restaurants, retail…) promised verticals the agent hasn't been
+ * proven on, so it's back to the two we deliver today plus "Other".
+ * Accounts that signed up with one of the removed keys keep their stored
+ * industry; only the metadata key is orphaned.
  */
 export const INDUSTRY_OPTIONS: {
   key: string;
@@ -39,27 +45,9 @@ export const INDUSTRY_OPTIONS: {
   industry: Industry;
 }[] = [
   {
-    key: "home_services",
-    title: "Home & Field Services",
-    body: "HVAC, plumbing, electrical, cleaning, landscaping.",
-    industry: "service",
-  },
-  {
-    key: "health_wellness",
-    title: "Health, Beauty & Wellness",
-    body: "Clinics, dental, salons, spas, fitness.",
-    industry: "service",
-  },
-  {
-    key: "professional",
-    title: "Professional Services",
-    body: "Legal, accounting, real estate, agencies, consultants.",
-    industry: "service",
-  },
-  {
-    key: "hospitality",
-    title: "Restaurants & Hospitality",
-    body: "Restaurants, cafés, hotels, event venues.",
+    key: "hvac",
+    title: "HVAC",
+    body: "Heating and cooling. Customers book a job or ask for a price.",
     industry: "service",
   },
   {
@@ -69,15 +57,9 @@ export const INDUSTRY_OPTIONS: {
     industry: "ecommerce",
   },
   {
-    key: "retail",
-    title: "Retail & Local Shops",
-    body: "A physical store. Customers ask about stock, hours and pricing.",
-    industry: "service",
-  },
-  {
     key: "other",
-    title: "Something Else",
-    body: "Anything else. Tell us more once you're in.",
+    title: "Other",
+    body: "Something else. Tell us more once you're in.",
     industry: "service",
   },
 ];

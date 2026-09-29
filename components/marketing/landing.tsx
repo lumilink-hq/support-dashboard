@@ -74,15 +74,11 @@ const addonUsd = (key: string) =>
   availableAddons().find((a) => a.key === key)?.monthlyUsd ?? null;
 const cheapestTier = Math.min(...PLAN_TIERS.map((t) => t.monthlyUsd));
 const chatUsd = addonUsd("website_chat");
-const workflowFrom = Math.min(
-  addonUsd("managed_integration") ?? Infinity,
-  addonUsd("advanced_workflow") ?? Infinity,
-);
 
 /**
  * Every product, equal weight. Prices are read from their sources, never
- * typed. Website Chat and workflows are add-ons on a phone plan (lib/addons.ts)
- * and say so in their price line.
+ * typed. Website Chat is an add-on on a phone plan (lib/addons.ts) and says so
+ * in its price line.
  */
 const PRODUCT_CARDS = [
   {
@@ -112,15 +108,8 @@ const PRODUCT_CARDS = [
     href: "/products/seo",
     cta: "See SEO + AI Search",
   },
-  {
-    tag: "Workflows",
-    title: "Workflows & Integrations",
-    body: "Connect LumiLink to the software you already run, so a conversation ends with the next step done.",
-    bullets: ["Managed integrations", "Automated follow-up actions", "Built and maintained by us"],
-    price: Number.isFinite(workflowFrom) ? `From +${usd(workflowFrom)}/mo on any phone plan` : "Add-on on any phone plan",
-    href: "/pricing#addons",
-    cta: "See Add-Ons",
-  },
+  // A "Workflows & Integrations" card sat here until 2026-09-29; removed at
+  // the user's request. Those add-ons are still sold on /pricing#addons.
 ];
 
 // "Why LumiLink Works". Was three phone-only pillars from the Wix site; SEO
@@ -322,7 +311,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
           </p>
         </div>
 
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-12 grid gap-6 md:grid-cols-3">
           {PRODUCT_CARDS.map((p) => (
             <Link
               key={p.title}

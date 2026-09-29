@@ -28,7 +28,7 @@ export async function signup(formData: FormData) {
   // auth metadata, which is client-supplied, so the trigger treats anything
   // unrecognised as null / 'voice' rather than trusting it.
   //
-  // The form sends an INDUSTRY_OPTIONS key (e.g. "health_wellness");
+  // The form sends an INDUSTRY_OPTIONS key (e.g. "hvac");
   // industryForOption maps it onto the stored two-value industry. The key
   // itself rides along as `industry_detail` metadata.
   const rawType = String(formData.get("business_type") ?? "").trim().toLowerCase();

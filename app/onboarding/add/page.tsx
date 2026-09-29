@@ -76,7 +76,7 @@ export default async function AddProductPage({
 
   return (
     <main className="min-h-full bg-gray-50 py-10">
-      <div className="mx-auto max-w-xl px-6">
+      <div className="mx-auto max-w-lg px-6">
         <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
             Add to {client?.name ?? "your workspace"}
@@ -115,7 +115,7 @@ export default async function AddProductPage({
                     Choose one so Lumi knows what callers will ask for.
                   </p>
                 ) : null}
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <div className="mt-2 space-y-2">
                   {INDUSTRY_OPTIONS.map((o) => (
                     <label
                       key={o.key}

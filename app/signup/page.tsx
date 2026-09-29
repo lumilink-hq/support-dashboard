@@ -31,8 +31,8 @@ export default async function SignupPage({
   const product: ProductKey =
     productParam === "seo" || type === "seo" ? "seo" : "voice";
   // ?type=ecommerce still preselects the online-store option. Otherwise
-  // nothing is preselected: with seven options a default is a guess, and a
-  // wrong one silently picks the wrong wizard.
+  // nothing is preselected: a default is a guess, and a wrong one silently
+  // picks the wrong wizard.
   const defaultOption = type === "ecommerce" ? "ecommerce" : null;
 
   // Post-submit: account created, waiting on email confirmation.
@@ -58,7 +58,7 @@ export default async function SignupPage({
 
   return (
     <main className="flex min-h-full items-center justify-center bg-gray-50 p-6">
-      <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
+      <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
         <h1 className="text-xl font-semibold text-gray-900">Create Your Workspace</h1>
         <p className="mt-1 text-sm text-gray-500">
           {product === "seo"
@@ -119,15 +119,15 @@ export default async function SignupPage({
             the client IS, so it's still right if they add the phone agent
             later.
 
-            SEVEN OPTIONS, NOT TWO (2026-09-28). "We book appointments" / "We
-            sell online" left most businesses guessing. Each option maps onto
-            the stored two-value industry (INDUSTRY_OPTIONS, lib/onboarding.ts).
-            Still radios, not a select: each option's one-line description is
-            what stops it being picked wrong.
+            HVAC, ONLINE STORE, OTHER (2026-09-29): only what we can cover for
+            sure. Each option maps onto the stored two-value industry
+            (INDUSTRY_OPTIONS, lib/onboarding.ts). Still radios, not a select:
+            each option's one-line description is what stops it being picked
+            wrong.
           */}
           <fieldset>
             <legend className={labelClass}>What Kind Of Business Are You?</legend>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <div className="mt-2 space-y-2">
               {INDUSTRY_OPTIONS.map((o) => (
                 <label
                   key={o.key}
