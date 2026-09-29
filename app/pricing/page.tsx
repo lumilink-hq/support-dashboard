@@ -45,13 +45,10 @@ import { PlanFinder } from "@/components/marketing/plan-finder";
 import { finderPrices } from "@/components/marketing/finder-prices";
 import { availableAddons } from "@/lib/addons";
 import { productByKey } from "@/lib/catalog";
+import { PLAN_TIERS } from "@/lib/entitlements";
+import { seoPlanByKey } from "@/lib/seo-pricing";
 
-const JUMPS = [
-  { href: "#phone", label: "Phone Agent" },
-  { href: "#addons", label: "Add-Ons" },
-  { href: "#seo", label: "SEO + AI Search" },
-  { href: "#enterprise", label: "Enterprise" },
-];
+const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
 
 export const metadata: Metadata = {
   title: "Pricing | LumiLink",
@@ -63,6 +60,14 @@ export const metadata: Metadata = {
 export default async function PricingPage() {
   const addons = availableAddons();
   const seoHref = await seoCtaHref();
+  // Starting prices on the jump cards, read from the same sources as the
+  // sections they jump to.
+  const jumps = [
+    { href: "#phone", label: "Phone Agent", from: `From ${usd(Math.min(...PLAN_TIERS.map((t) => t.monthlyUsd)))}/mo` },
+    { href: "#addons", label: "Add-Ons", from: `From +${usd(Math.min(...addons.map((a) => a.monthlyUsd)))}/mo` },
+    { href: "#seo", label: "SEO + AI Search", from: `From ${usd(seoPlanByKey("local").monthlyUsd)}/location/mo` },
+    { href: "#enterprise", label: "Enterprise", from: "Custom quote" },
+  ];
 
   return (
     <MarketingShell>
@@ -79,30 +84,57 @@ export default async function PricingPage() {
           </p>
         </div>
 
-        <nav aria-label="Pricing sections" className="mt-8 flex flex-wrap gap-2">
-          {JUMPS.map((j) => (
+        {/*
+          MORE PRONOUNCED (2026-09-29, user feedback: people glazed over the
+          small pill links and the one-line quiz heading). The jump links are
+          cards with a starting price, and the quiz sits in its own tinted
+          panel with a full-size heading.
+        */}
+        <nav aria-label="Pricing sections" className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {jumps.map((j) => (
             <a
               key={j.href}
               href={j.href}
-              className="rounded-full border border-gray-300 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-700 hover:border-gray-900 hover:text-gray-900"
+              className="group flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition hover:-translate-y-0.5 hover:border-gray-900 hover:shadow-md"
             >
-              {j.label}
+              <span>
+                <span className="block text-base font-semibold text-gray-900">{j.label}</span>
+                <span className="mt-0.5 block text-sm text-gray-500">{j.from}</span>
+              </span>
+              <span
+                aria-hidden
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gray-100 text-gray-700 transition group-hover:bg-gray-900 group-hover:text-white"
+              >
+                &darr;
+              </span>
             </a>
           ))}
         </nav>
       </Section>
 
-      <Section id="finder" className="pb-12">
-        <h2 className="text-lg font-semibold text-gray-900">
-          Not Sure Where To Start? Let Us Figure Out What Your Business Needs.
-        </h2>
-        <div className="mt-5">
-          <PlanFinder
-            prices={finderPrices()}
-            signupHref={SIGNUP_CTA}
-            seoSignupHref={seoHref}
-            enterpriseHref={contactHref("/pricing", "Enterprise / White Label")}
-          />
+      <Section id="finder" className="pb-16 pt-4">
+        <div className="rounded-3xl border border-lumi-100 bg-gradient-to-br from-lumi-50 via-white to-lumi-50 p-6 shadow-sm md:p-10">
+          <div className="max-w-2xl">
+            <p className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-white">
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-lumi-400" />
+              Plan Finder · About A Minute
+            </p>
+            <h2 className="mt-5 text-3xl font-semibold tracking-tight text-gray-900 md:text-4xl">
+              Not Sure Where To Start? Let Us Figure Out What Your Business Needs.
+            </h2>
+            <p className="mt-3 text-lg text-gray-600">
+              Tell us what you want off your plate and how big you are. We&rsquo;ll
+              recommend the right products with a monthly estimate.
+            </p>
+          </div>
+          <div className="mt-8">
+            <PlanFinder
+              prices={finderPrices()}
+              signupHref={SIGNUP_CTA}
+              seoSignupHref={seoHref}
+              enterpriseHref={contactHref("/pricing", "Enterprise / White Label")}
+            />
+          </div>
         </div>
       </Section>
 
