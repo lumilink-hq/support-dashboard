@@ -21,6 +21,74 @@ import type { ProductKey } from "@/lib/catalog";
  */
 export type Industry = "service" | "ecommerce";
 
+/**
+ * What a signup picks from (2026-09-28). The question used to be two
+ * radios, "We book appointments" / "We sell online", which left clinics,
+ * law firms, restaurants and agencies guessing which one they were.
+ *
+ * The finer choice is for the CUSTOMER; the database still stores the
+ * two-value Industry (clients_business_type_chk, 0059), because that is what
+ * picks the wizard steps and the phone agent's mode (scheduling vs orders).
+ * `industry` maps each option onto it. The option key itself travels as
+ * auth metadata (`industry_detail`) so it isn't lost, without a migration.
+ */
+export const INDUSTRY_OPTIONS: {
+  key: string;
+  title: string;
+  body: string;
+  industry: Industry;
+}[] = [
+  {
+    key: "home_services",
+    title: "Home & Field Services",
+    body: "HVAC, plumbing, electrical, cleaning, landscaping.",
+    industry: "service",
+  },
+  {
+    key: "health_wellness",
+    title: "Health, Beauty & Wellness",
+    body: "Clinics, dental, salons, spas, fitness.",
+    industry: "service",
+  },
+  {
+    key: "professional",
+    title: "Professional Services",
+    body: "Legal, accounting, real estate, agencies, consultants.",
+    industry: "service",
+  },
+  {
+    key: "hospitality",
+    title: "Restaurants & Hospitality",
+    body: "Restaurants, cafés, hotels, event venues.",
+    industry: "service",
+  },
+  {
+    key: "ecommerce",
+    title: "Online Store",
+    body: "Shopify, WooCommerce. Customers ask about orders and products.",
+    industry: "ecommerce",
+  },
+  {
+    key: "retail",
+    title: "Retail & Local Shops",
+    body: "A physical store. Customers ask about stock, hours and pricing.",
+    industry: "service",
+  },
+  {
+    key: "other",
+    title: "Something Else",
+    body: "Anything else. Tell us more once you're in.",
+    industry: "service",
+  },
+];
+
+/** The stored Industry for an INDUSTRY_OPTIONS key; null when unrecognised. */
+export function industryForOption(key: string): Industry | null {
+  // The two legacy values still arrive from old links and forms.
+  if (key === "service" || key === "ecommerce") return key;
+  return INDUSTRY_OPTIONS.find((o) => o.key === key)?.industry ?? null;
+}
+
 /** Which onboarding a client sees: what it is, and what it uses. */
 export type WorkspaceProfile = {
   industry: Industry | null;
@@ -98,7 +166,7 @@ export type StepDef = {
 export const STEPS: StepDef[] = [
   {
     key: "basics",
-    title: "Business basics",
+    title: "Business Basics",
     blurb: "Your timezone and opening hours, so bookings land when you're open.",
     product: "voice",
     // Without hours the availability engine offers slots while they are shut,
@@ -107,14 +175,14 @@ export const STEPS: StepDef[] = [
   },
   {
     key: "website",
-    title: "Your website",
+    title: "Your Website",
     blurb: "We read your public pages so Lumi knows your business before its first call.",
     product: "voice",
     blocking: false,
   },
   {
     key: "services",
-    title: "Services and prices",
+    title: "Services And Prices",
     blurb: "What you do and what it costs. This is what Lumi quotes from.",
     product: "voice",
     industries: ["service"],
@@ -124,7 +192,7 @@ export const STEPS: StepDef[] = [
   },
   {
     key: "store",
-    title: "Connect your store",
+    title: "Connect Your Store",
     blurb: "So Lumi can answer questions about orders.",
     product: "voice",
     industries: ["ecommerce"],
@@ -134,7 +202,7 @@ export const STEPS: StepDef[] = [
   },
   {
     key: "number",
-    title: "Your phone number",
+    title: "Your Phone Number",
     // We provision it — the step reports status rather than asking for one.
     // Wording matched to the site's promise ("we provide one") on 2026-08-13.
     blurb: "The number we set up for you, and what your customers will call.",
@@ -146,14 +214,14 @@ export const STEPS: StepDef[] = [
   },
   {
     key: "behaviour",
-    title: "How Lumi should sound",
+    title: "How Lumi Should Sound",
     blurb: "Its greeting, and anything it should always or never say.",
     product: "voice",
     blocking: false,
   },
   {
     key: "seo_locations",
-    title: "Your locations",
+    title: "Your Locations",
     blurb: "Every location you want ranked. Add at least one to get started.",
     product: "seo",
     // Mirrors "services": everything downstream (keywords, rankings, findings)
@@ -163,7 +231,7 @@ export const STEPS: StepDef[] = [
   },
   {
     key: "seo_keywords",
-    title: "Seed keywords",
+    title: "Seed Keywords",
     blurb: "A few search terms per location, so we know what to start tracking.",
     product: "seo",
     // Not blocking: a client who doesn't know their keywords yet can still be

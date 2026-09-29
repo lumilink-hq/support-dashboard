@@ -36,13 +36,17 @@ function navGroups(marketingHome: string) {
       blurb: p.blurb,
     })),
     solutions: SOLUTIONS.map((s) => ({ href: s.href, label: s.name, blurb: s.blurb })),
+    // ENTERPRISE IS A TOP-LEVEL LINK (2026-09-28): it used to exist only as
+    // a row under the phone plans, which multi-location buyers never found.
     top: [
       { href: "/pricing", label: "Pricing" },
+      { href: "/pricing#enterprise", label: "Enterprise" },
       { href: "/story", label: "Our Story" },
     ] as NavItem[],
     company: [
       { href: `${marketingHome}#how`, label: "How It Works" },
       { href: "/pricing", label: "Pricing" },
+      { href: "/pricing#enterprise", label: "Enterprise" },
       { href: "/story", label: "Our Story" },
       { href: `${marketingHome}#faq`, label: "FAQ" },
       { href: "/contact", label: "Contact" },
@@ -52,8 +56,14 @@ function navGroups(marketingHome: string) {
 
 /**
  * A hover/focus dropdown with no client JS: the panel shows while the pointer
- * is over the group or focus is inside it, so keyboard users can Tab from the
- * button into the links.
+ * is over the group, or while KEYBOARD focus is inside it, so keyboard users
+ * can Tab from the button into the links.
+ *
+ * :focus-visible, NOT :focus-within (fixed 2026-09-28). Clicking the button
+ * focuses it, and with focus-within the panel then stayed open after the
+ * pointer left, until you clicked somewhere else; hovering the next menu
+ * showed both panels on top of each other. A mouse click doesn't match
+ * :focus-visible, so only keyboard focus holds a panel open now.
  */
 function NavMenu({ label, items }: { label: string; items: NavItem[] }) {
   return (
@@ -61,14 +71,14 @@ function NavMenu({ label, items }: { label: string; items: NavItem[] }) {
       <button
         type="button"
         aria-haspopup="true"
-        className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900 group-focus-within:text-gray-900"
+        className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900 group-has-[:focus-visible]:text-gray-900"
       >
         {label}
         <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4 fill-current">
           <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
         </svg>
       </button>
-      <div className="invisible absolute left-1/2 top-full z-50 -translate-x-1/2 pt-3 opacity-0 transition group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+      <div className="invisible absolute left-1/2 top-full z-50 -translate-x-1/2 pt-3 opacity-0 transition group-has-[:focus-visible]:visible group-has-[:focus-visible]:opacity-100 group-hover:visible group-hover:opacity-100">
         <div className="w-72 rounded-xl border border-gray-200 bg-white p-2 shadow-lg shadow-gray-900/10">
           {items.map((item) => (
             <a
@@ -141,7 +151,7 @@ function MobileMenu({
             href="/login"
             className="mt-5 block border-t border-gray-200 pt-4 text-sm font-medium text-gray-700 hover:text-gray-900"
           >
-            Sign in
+            Sign In
           </a>
         )}
       </div>
@@ -250,7 +260,7 @@ export async function MarketingShell({
                 href="/conversations"
                 className="whitespace-nowrap rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
               >
-                Go to dashboard
+                Go To Dashboard
               </Link>
             ) : (
               <>
@@ -260,13 +270,13 @@ export async function MarketingShell({
                   href="/login"
                   className="hidden text-sm font-medium text-gray-600 hover:text-gray-900 sm:inline"
                 >
-                  Sign in
+                  Sign In
                 </Link>
                 <Link
                   href="/signup"
                   className="whitespace-nowrap rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
                 >
-                  Get started
+                  Get Started
                 </Link>
               </>
             )}
@@ -286,7 +296,7 @@ export async function MarketingShell({
                 href="/login"
                 className="mt-4 block text-sm text-gray-500 hover:text-gray-900"
               >
-                Sign in
+                Sign In
               </Link>
             </div>
             {[

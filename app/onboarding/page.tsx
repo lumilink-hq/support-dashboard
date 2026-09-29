@@ -162,7 +162,7 @@ export default async function OnboardingPage({
             href={hasVoice ? "/conversations" : "/settings"}
             className="shrink-0 text-sm text-gray-500 underline"
           >
-            Skip for now
+            Skip For Now
           </Link>
         </div>
 
@@ -230,7 +230,7 @@ export default async function OnboardingPage({
                 : "Last step: choose how many locations to pay for, and we start tracking."}
             </p>
             <Link href="/billing#seo" className={primary}>
-              Check out
+              Check Out
             </Link>
           </div>
         ) : null}
@@ -300,7 +300,7 @@ export default async function OnboardingPage({
                 </div>
                 <div>
                   <label className={label} htmlFor="area_code">
-                    Preferred area code
+                    Preferred Area Code
                   </label>
                   <input
                     id="area_code"
@@ -319,7 +319,7 @@ export default async function OnboardingPage({
 
               <div>
                 <label className={label} htmlFor="service_area">
-                  Where do you work?
+                  Where Do You Work?
                 </label>
                 <input
                   id="service_area"
@@ -334,7 +334,7 @@ export default async function OnboardingPage({
               </div>
 
               <fieldset>
-                <legend className={label}>Opening hours</legend>
+                <legend className={label}>Opening Hours</legend>
                 <div className="mt-2 space-y-2">
                   {WEEKDAYS.map((day) => {
                     const existing = hours[day.key]?.[0] ?? "";
@@ -371,7 +371,7 @@ export default async function OnboardingPage({
               </fieldset>
 
               <button type="submit" className={primary}>
-                Save and continue
+                Save And Continue
               </button>
             </form>
           ) : null}
@@ -382,7 +382,7 @@ export default async function OnboardingPage({
               <form action={saveWebsite} className="space-y-4">
                 <div>
                   <label className={label} htmlFor="website_url">
-                    Your website address
+                    Your Website Address
                   </label>
                   <input
                     id="website_url"
@@ -398,7 +398,7 @@ export default async function OnboardingPage({
                 </div>
                 <div className="flex gap-2">
                   <button type="submit" className={primary}>
-                    Save and continue
+                    Save And Continue
                   </button>
                   <button
                     type="submit"
@@ -492,18 +492,18 @@ export default async function OnboardingPage({
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2">
                     <label className={label} htmlFor="name">
-                      Service name
+                      Service Name
                     </label>
                     <input id="name" name="name" required placeholder="AC repair" className={input} />
                   </div>
 
                   <div>
                     <label className={label} htmlFor="price_type">
-                      How is it priced?
+                      How Is It Priced?
                     </label>
                     <select id="price_type" name="price_type" className={input}>
                       <option value="quote">Quote after a call-out</option>
-                      <option value="fixed">Fixed price</option>
+                      <option value="fixed">Fixed Price</option>
                     </select>
                     {/*
                       Quote-only is the default because most trades do not want
@@ -518,11 +518,11 @@ export default async function OnboardingPage({
 
                   <div>
                     <label className={label} htmlFor="price">
-                      Fixed price
+                      Fixed Price
                     </label>
                     <input id="price" name="price" inputMode="decimal" placeholder="129" className={input} />
                     <label className={`${label} mt-3`} htmlFor="callout_fee">
-                      Call-out fee
+                      Call-Out Fee
                     </label>
                     <input id="callout_fee" name="callout_fee" inputMode="decimal" placeholder="89" className={input} />
                   </div>
@@ -543,13 +543,13 @@ export default async function OnboardingPage({
                 </div>
 
                 <button type="submit" className={secondary}>
-                  Add service
+                  Add Service
                 </button>
               </form>
 
               <form action={finishServices}>
                 <button type="submit" className={primary}>
-                  Save and continue
+                  Save And Continue
                 </button>
               </form>
             </div>
@@ -561,18 +561,18 @@ export default async function OnboardingPage({
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className={label} htmlFor="store_platform">
-                    What do you sell on?
+                    What Do You Sell On?
                   </label>
                   <select id="store_platform" name="store_platform" className={input}>
                     <option value="">Choose…</option>
                     <option value="shopify">Shopify</option>
                     <option value="woocommerce">WooCommerce</option>
-                    <option value="other">Something else</option>
+                    <option value="other">Something Else</option>
                   </select>
                 </div>
                 <div>
                   <label className={label} htmlFor="store_base_url">
-                    Store address
+                    Store Address
                   </label>
                   <input id="store_base_url" name="store_base_url" placeholder="shop.acme.com" className={input} />
                 </div>
@@ -605,7 +605,7 @@ export default async function OnboardingPage({
               </div>
 
               <button type="submit" className={primary}>
-                Save and continue
+                Save And Continue
               </button>
             </form>
           ) : null}
@@ -655,7 +655,7 @@ export default async function OnboardingPage({
                 </div>
               )}
               <button type="submit" className={primary}>
-                Got it, continue
+                Got It, Continue
               </button>
             </form>
           ) : null}
@@ -672,7 +672,7 @@ export default async function OnboardingPage({
               <form action={saveBehaviour} className="space-y-5">
                 <div>
                   <label className={label} htmlFor="greeting">
-                    How should Lumi answer the phone?
+                    How Should Lumi Answer The Phone?
                   </label>
                   <input
                     id="greeting"
@@ -726,7 +726,7 @@ export default async function OnboardingPage({
 
                 <div>
                   <label className={label} htmlFor="never_say">
-                    Anything Lumi should never say or promise?
+                    Anything Lumi Should Never Say Or Promise?
                   </label>
                   <textarea
                     id="never_say"
@@ -762,7 +762,7 @@ export default async function OnboardingPage({
                 </div>
 
                 <button type="submit" className={primary}>
-                  Save and finish
+                  Save And Finish
                 </button>
               </form>
 
@@ -772,13 +772,13 @@ export default async function OnboardingPage({
                 </h3>
                 <form action={submitIntakeRequest} className="mt-3 space-y-3">
                   <select name="topic" className={input} defaultValue="other">
-                    <option value="greeting">The greeting</option>
-                    <option value="tone">How it sounds</option>
-                    <option value="never_say">Something it shouldn&rsquo;t say</option>
+                    <option value="greeting">The Greeting</option>
+                    <option value="tone">How It Sounds</option>
+                    <option value="never_say">Something It Shouldn&rsquo;t Say</option>
                     <option value="faq">A question it should be able to answer</option>
-                    <option value="escalation">When it should transfer</option>
-                    <option value="hours">Hours and availability</option>
-                    <option value="other">Something else</option>
+                    <option value="escalation">When It Should Transfer</option>
+                    <option value="hours">Hours And Availability</option>
+                    <option value="other">Something Else</option>
                   </select>
                   <textarea
                     name="body"
@@ -788,7 +788,7 @@ export default async function OnboardingPage({
                     className={input}
                   />
                   <button type="submit" className={secondary}>
-                    Send to our team
+                    Send To Our Team
                   </button>
                 </form>
               </div>
@@ -841,7 +841,7 @@ export default async function OnboardingPage({
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2">
                     <label className={label} htmlFor="seo_loc_name">
-                      Location name
+                      Location Name
                     </label>
                     <input
                       id="seo_loc_name"
@@ -853,7 +853,7 @@ export default async function OnboardingPage({
                   </div>
                   <div className="sm:col-span-2">
                     <label className={label} htmlFor="seo_loc_address1">
-                      Street address
+                      Street Address
                     </label>
                     <input id="seo_loc_address1" name="address_line1" className={input} />
                   </div>
@@ -865,13 +865,13 @@ export default async function OnboardingPage({
                   </div>
                   <div>
                     <label className={label} htmlFor="seo_loc_region">
-                      State / region
+                      State / Region
                     </label>
                     <input id="seo_loc_region" name="region" className={input} />
                   </div>
                   <div>
                     <label className={label} htmlFor="seo_loc_postal">
-                      Postal code
+                      Postal Code
                     </label>
                     <input id="seo_loc_postal" name="postal_code" className={input} />
                   </div>
@@ -913,13 +913,13 @@ export default async function OnboardingPage({
                   </div>
                 </div>
                 <button type="submit" className={secondary}>
-                  Add location
+                  Add Location
                 </button>
               </form>
 
               <form action={finishSeoLocations}>
                 <button type="submit" className={primary}>
-                  Save and continue
+                  Save And Continue
                 </button>
               </form>
             </div>
@@ -986,7 +986,7 @@ export default async function OnboardingPage({
                       </div>
                     </div>
                     <button type="submit" className={secondary}>
-                      Add keyword
+                      Add Keyword
                     </button>
                   </form>
                 </>
@@ -994,7 +994,7 @@ export default async function OnboardingPage({
 
               <form action={finishSeoKeywords}>
                 <button type="submit" className={primary}>
-                  {seoKeywords && seoKeywords.length > 0 ? "Save and continue" : "Skip for now"}
+                  {seoKeywords && seoKeywords.length > 0 ? "Save And Continue" : "Skip For Now"}
                 </button>
               </form>
             </div>
@@ -1056,7 +1056,7 @@ export default async function OnboardingPage({
                       </div>
                       <div>
                         <label className={label} htmlFor="seo_comp_domain">
-                          Competitor website
+                          Competitor Website
                         </label>
                         <input
                           id="seo_comp_domain"
@@ -1068,7 +1068,7 @@ export default async function OnboardingPage({
                       </div>
                     </div>
                     <button type="submit" className={secondary}>
-                      Add competitor
+                      Add Competitor
                     </button>
                   </form>
                 </>
@@ -1076,7 +1076,7 @@ export default async function OnboardingPage({
 
               <form action={finishSeoCompetitors}>
                 <button type="submit" className={primary}>
-                  {seoCompetitors && seoCompetitors.length > 0 ? "Save and finish" : "Skip for now"}
+                  {seoCompetitors && seoCompetitors.length > 0 ? "Save And Finish" : "Skip For Now"}
                 </button>
               </form>
             </div>

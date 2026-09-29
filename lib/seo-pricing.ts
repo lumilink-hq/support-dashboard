@@ -105,7 +105,6 @@ export const SEO_PLANS: SeoPlan[] = [
       "More locations at $400/mo each",
       "One combined monthly report",
     ],
-    footnote: "Saves $90 a month against buying both separately.",
   },
 ];
 
@@ -120,6 +119,30 @@ export const SEO_PACKS_STORE = {
   monthlyUsd: 900,
   stripePriceId: process.env.STRIPE_PRICE_SEO_PACKS_STORE ?? null,
 };
+
+/**
+ * What the Full SEO bundle saves against buying Website SEO and Local SEO
+ * separately, derived from the prices above so a savings tag can never quote
+ * a number the plans disagree with. Today: $90/mo on the base bundle, and $95
+ * on every extra location ($400 against $495).
+ */
+export function seoBundleSavings(locations = 1): {
+  baseMonthlyUsd: number;
+  perExtraLocationUsd: number;
+  totalMonthlyUsd: number;
+} {
+  const website = seoPlanByKey("website").monthlyUsd;
+  const local = seoPlanByKey("local").monthlyUsd;
+  const bundle = seoPlanByKey("bundle");
+  const baseMonthlyUsd = website + local * bundle.includedLocations - bundle.monthlyUsd;
+  const perExtraLocationUsd = local - SEO_EXTRA_LOCATION.monthlyUsd;
+  const extra = Math.max(Math.floor(locations) - bundle.includedLocations, 0);
+  return {
+    baseMonthlyUsd,
+    perExtraLocationUsd,
+    totalMonthlyUsd: baseMonthlyUsd + extra * perExtraLocationUsd,
+  };
+}
 
 export function seoPlanByKey(key: SeoPlanKey): SeoPlan {
   const plan = SEO_PLANS.find((p) => p.key === key);

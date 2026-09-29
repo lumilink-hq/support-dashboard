@@ -17,7 +17,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentClientId, STARTER_PLAN } from "@/lib/entitlements";
 import { productByKey, type ProductKey } from "@/lib/catalog";
-import { readProfile } from "@/lib/onboarding";
+import { INDUSTRY_OPTIONS, readProfile } from "@/lib/onboarding";
 import { seoPlanByKey } from "@/lib/seo-pricing";
 import { addProduct } from "../actions";
 
@@ -33,7 +33,7 @@ const DETAILS: Record<ProductKey, { price: string; next: string[] }> = {
     ],
   },
   seo: {
-    price: `Local SEO from $${seoPlanByKey("local").monthlyUsd} per location per month; website SEO from $${seoPlanByKey("website").monthlyUsd.toLocaleString("en-US")} a month.`,
+    price: `Local SEO from $${seoPlanByKey("local").monthlyUsd} per location per month; Website SEO + AI Search from $${seoPlanByKey("website").monthlyUsd.toLocaleString("en-US")} a month.`,
     next: [
       "Add the locations you want ranked, a few keywords, and competitors.",
       "Pick your plan and how many locations on Plans & billing.",
@@ -76,7 +76,7 @@ export default async function AddProductPage({
 
   return (
     <main className="min-h-full bg-gray-50 py-10">
-      <div className="mx-auto max-w-lg px-6">
+      <div className="mx-auto max-w-xl px-6">
         <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
             Add to {client?.name ?? "your workspace"}
@@ -90,10 +90,10 @@ export default async function AddProductPage({
             href={product.marketingHref === "/" ? "/home" : product.marketingHref}
             className="mt-1 inline-block text-sm text-gray-500 underline underline-offset-4 hover:text-gray-900"
           >
-            What&rsquo;s included
+            What&rsquo;s Included
           </Link>
 
-          <h2 className="mt-6 text-sm font-semibold text-gray-900">What happens next</h2>
+          <h2 className="mt-6 text-sm font-semibold text-gray-900">What Happens Next</h2>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-gray-600">
             {details.next.map((line) => (
               <li key={line}>{line}</li>
@@ -108,34 +108,23 @@ export default async function AddProductPage({
               // industry, and this workspace was never asked (0059).
               <fieldset className="mb-5">
                 <legend className="text-sm font-medium text-gray-700">
-                  What does your business do?
+                  What Kind Of Business Are You?
                 </legend>
                 {error === "industry" ? (
                   <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
                     Choose one so Lumi knows what callers will ask for.
                   </p>
                 ) : null}
-                <div className="mt-2 space-y-2">
-                  {[
-                    {
-                      value: "service",
-                      title: "We book appointments",
-                      body: "Callers want to book a job or get a price.",
-                    },
-                    {
-                      value: "ecommerce",
-                      title: "We sell online",
-                      body: "Callers ask where their order is, or about a product.",
-                    },
-                  ].map((o) => (
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {INDUSTRY_OPTIONS.map((o) => (
                     <label
-                      key={o.value}
-                      className="flex cursor-pointer gap-3 rounded-md border border-gray-300 p-3 hover:bg-gray-50 has-[:checked]:border-gray-900 has-[:checked]:bg-gray-50"
+                      key={o.key}
+                      className="flex cursor-pointer gap-2.5 rounded-md border border-gray-300 p-2.5 hover:bg-gray-50 has-[:checked]:border-gray-900 has-[:checked]:bg-gray-50"
                     >
-                      <input type="radio" name="business_type" value={o.value} className="mt-0.5" />
+                      <input type="radio" name="business_type" value={o.key} className="mt-0.5" />
                       <span>
                         <span className="block text-sm font-medium text-gray-900">{o.title}</span>
-                        <span className="block text-xs text-gray-500">{o.body}</span>
+                        <span className="block text-xs leading-snug text-gray-500">{o.body}</span>
                       </span>
                     </label>
                   ))}
@@ -151,7 +140,7 @@ export default async function AddProductPage({
                 Add {product.name}
               </button>
               <Link href={backHref} className="text-sm text-gray-500 underline hover:text-gray-900">
-                Not now
+                Not Now
               </Link>
             </div>
             <p className="mt-3 text-xs text-gray-400">

@@ -104,14 +104,15 @@ export function Check() {
   );
 }
 
-/** Three-across numbered pillars. */
+/** Numbered pillars: three across, or two-then-four across when there are four. */
 export function Pillars({
   items,
 }: {
   items: { n: string; title: string; body: string }[];
 }) {
+  const cols = items.length === 4 ? "md:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-3";
   return (
-    <div className="mt-10 grid gap-10 md:grid-cols-3">
+    <div className={`mt-10 grid gap-10 ${cols}`}>
       {items.map((p) => (
         <div key={p.n}>
           <p className="text-sm font-semibold text-gray-400">{p.n}</p>
@@ -177,10 +178,14 @@ export async function PricingGrid({
   // knows where it came from. Defaults to /plans, the phone-plan checkout
   // page; /pricing passes its own path for accurate attribution.
   contactSource = "/plans",
+  // /pricing renders the full EnterpriseBand below the products instead, so
+  // it hides this row rather than saying the same thing twice.
+  showEnterprise = true,
 }: {
   heading?: string;
   blurb?: string;
   contactSource?: string;
+  showEnterprise?: boolean;
 }) {
   const ctaHref = await planCtaHref();
 
@@ -257,10 +262,11 @@ export async function PricingGrid({
         and no self-serve checkout, just the /contact form, so it gets its
         own full-width row rather than a fourth card in the 3-column grid.
       */}
+      {showEnterprise ? (
       <div className="mt-6 flex flex-col items-start justify-between gap-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center">
         <div>
           <h3 className="text-lg font-semibold text-gray-900">
-            {ENTERPRISE_TIER.label} / white label
+            {ENTERPRISE_TIER.label} / White Label
           </h3>
           <p className="mt-1 text-sm text-gray-600">{ENTERPRISE_TIER.blurb}</p>
           <p className="mt-1 text-xs text-gray-500">
@@ -271,9 +277,10 @@ export async function PricingGrid({
           href={contactHref(contactSource, "Enterprise / White Label")}
           className="shrink-0 rounded-md border border-gray-300 px-4 py-2.5 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
-          Contact us
+          Contact Us
         </a>
       </div>
+      ) : null}
 
       {/* ------------------------------------------------------------------ */}
       {/* What's not included — HIDDEN. Moved here from landing.tsx when the  */}
@@ -309,6 +316,77 @@ export async function PricingGrid({
         </p>
       </div>
       */}
+    </Section>
+  );
+}
+
+/**
+ * Enterprise, as a section of its own (2026-09-28). It used to be one row
+ * under the phone plans, which a multi-location or multi-brand buyer, the
+ * people it's for, scrolled past. id="enterprise" is what the nav's
+ * "Enterprise" link lands on at /pricing.
+ *
+ * No price and no checkout: Enterprise is quoted (a Stripe Quote for SEO,
+ * custom limits for phone), so the only CTA is the /contact form.
+ */
+export function EnterpriseBand({
+  contactSource,
+  id = "enterprise",
+}: {
+  contactSource: string;
+  id?: string;
+}) {
+  const points = [
+    {
+      title: "Every Location, One Account",
+      body: "Phone agents, website chat and SEO across all your locations and brands, managed and reported in one place.",
+    },
+    {
+      title: "White Label",
+      body: "Resell LumiLink under your own brand to your clients or franchisees.",
+    },
+    {
+      title: "Custom Limits And Workflows",
+      body: "Minute allowances, phone numbers, integrations and automations sized to how you actually operate.",
+    },
+    {
+      title: "A Dedicated Team",
+      body: "Hands-on onboarding, a direct line to the people who build it, and priority support.",
+    },
+  ];
+  return (
+    <Section id={id} className="py-20">
+      <div className="rounded-2xl bg-gray-900 px-8 py-12 text-white md:px-12">
+        <div className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-widest text-lumi-400">
+              {ENTERPRISE_TIER.label}
+            </p>
+            <h2 className="mt-4 text-2xl font-semibold tracking-tight md:text-3xl">
+              Multi-Location, Multi-Brand, Or Reselling? Let&rsquo;s Build It Together.
+            </h2>
+            <p className="mt-4 leading-relaxed text-gray-300">
+              For groups, franchises and agencies that need more than the
+              self-serve plans. Priced per organisation, around what you
+              actually need.
+            </p>
+          </div>
+          <a
+            href={contactHref(contactSource, "Enterprise / White Label")}
+            className="shrink-0 rounded-md bg-white px-5 py-3 text-center text-sm font-medium text-gray-900 hover:bg-gray-100"
+          >
+            Talk To Us About Enterprise
+          </a>
+        </div>
+        <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          {points.map((p) => (
+            <div key={p.title} className="border-t border-white/15 pt-5">
+              <h3 className="text-sm font-semibold">{p.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-gray-300">{p.body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </Section>
   );
 }
@@ -407,7 +485,7 @@ export function ClosingCta({
             href="/login"
             className="rounded-md border border-gray-300 px-6 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            Sign in
+            Sign In
           </Link>
         </div>
       </div>

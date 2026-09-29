@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { safeNextPath } from "@/lib/route-access";
+import { industryForOption } from "@/lib/onboarding";
 
 /**
  * Self-serve signup. Creates the auth user with the workspace + name in
@@ -26,8 +27,13 @@ export async function signup(formData: FormData) {
   // Validated here and again in handle_new_user (0059). Both travel through
   // auth metadata, which is client-supplied, so the trigger treats anything
   // unrecognised as null / 'voice' rather than trusting it.
+  //
+  // The form sends an INDUSTRY_OPTIONS key (e.g. "health_wellness");
+  // industryForOption maps it onto the stored two-value industry. The key
+  // itself rides along as `industry_detail` metadata.
   const rawType = String(formData.get("business_type") ?? "").trim().toLowerCase();
-  const businessType = rawType === "service" || rawType === "ecommerce" ? rawType : null;
+  const businessType = industryForOption(rawType);
+  const industryDetail = businessType ? rawType : null;
   const product = String(formData.get("product") ?? "") === "seo" ? "seo" : "voice";
 
   // Keeps the product on a retry, so a failed SEO signup doesn't come back
@@ -37,6 +43,7 @@ export async function signup(formData: FormData) {
       `/signup?error=${encodeURIComponent(message)}${product === "seo" ? "&product=seo" : ""}`,
     );
 
+  if (!fullName) fail("Enter your full name.");
   if (!businessName) fail("Enter your business name.");
   if (!email) fail("Enter your email address.");
   if (password.length < 8) fail("Password must be at least 8 characters.");
@@ -81,6 +88,7 @@ export async function signup(formData: FormData) {
         // and clients.products; sync_voice_agent_mode then derives the agent
         // mode for a phone client.
         ...(businessType ? { business_type: businessType } : {}),
+        ...(industryDetail ? { industry_detail: industryDetail } : {}),
         product,
       },
       emailRedirectTo: confirmUrl,

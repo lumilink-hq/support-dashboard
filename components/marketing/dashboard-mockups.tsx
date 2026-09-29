@@ -318,3 +318,47 @@ export function ReviewQueueMockup({
     </MockupFrame>
   );
 }
+
+// Hero mockup for the homepage (2026-09-28): one feed of what LumiLink did
+// today across every product, so the first picture a visitor sees says
+// "automates the business", not "answers the phone". Invented names and
+// numbers, same rule as everything else in this file.
+const FEED = [
+  { product: "Phone", tone: "green" as const, title: "Booked a furnace tune-up", detail: "Marcus Webb · Thu 9:00a · quoted $129", time: "2m" },
+  { product: "Chat", tone: "green" as const, title: "Answered a question on your website", detail: "“Do you service tankless heaters?”", time: "14m" },
+  { product: "SEO", tone: "green" as const, title: "“emergency plumber” moved up to #2", detail: "Map pack · Eastside location", time: "1h" },
+  { product: "AI Search", tone: "green" as const, title: "Cited in a ChatGPT answer", detail: "“best HVAC company near me”", time: "3h" },
+  { product: "Follow-up", tone: "amber" as const, title: "Callback ticket for a pricing question", detail: "Waiting on you · due in 2h", time: "4h" },
+];
+
+export function AutomationFeedMockup({
+  caption,
+  className,
+}: {
+  caption: string;
+  className?: string;
+}) {
+  return (
+    <MockupFrame caption={caption} className={className}>
+      <div className="grid grid-cols-3 gap-2">
+        <Kpi label="Handled today" value="47" sub="no staff time" />
+        <Kpi label="Jobs booked" value="12" sub="+$4,860" />
+        <Kpi label="Top 3 keywords" value="18" sub="+4 this week" />
+      </div>
+      <ul className="mt-4 divide-y divide-gray-100">
+        {FEED.map((f) => (
+          <li key={f.title} className="flex items-center gap-3 py-2.5 last:pb-0">
+            <span className="w-[4.75rem] shrink-0 whitespace-nowrap">
+              <Pill tone={f.tone === "amber" ? "amber" : "gray"}>{f.product}</Pill>
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-gray-900">{f.title}</p>
+              <p className="truncate text-xs text-gray-500">{f.detail}</p>
+            </div>
+            <span className="w-8 shrink-0 text-right text-[10px] text-gray-400">{f.time}</span>
+          </li>
+        ))}
+      </ul>
+    </MockupFrame>
+  );
+}

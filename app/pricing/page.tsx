@@ -19,16 +19,39 @@
 // buy one; the cards point at /plans, where the subscription starts. Buying
 // an add-on happens inside /billing or /welcome, which know who is asking.
 //
+// THE PLAN FINDER (2026-09-28). A short quiz at the top recommends products
+// and a monthly estimate (components/marketing/plan-finder.tsx). Its prices
+// come from finder-prices.ts, which reads the same sources as the sections
+// below (the homepage embeds the same quiz), and the
+// sections carry ids (#phone, #addons, #seo, #enterprise) for its links and
+// the jump bar.
+//
 // /plans IS STILL THE PHONE-PLAN CHECKOUT PAGE. Signup (?next=/plans) and
 // PricingGrid's cards route through it, so it isn't merged into this page.
 
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
-import { Eyebrow, PricingGrid, Section } from "@/components/marketing/blocks";
+import {
+  contactHref,
+  EnterpriseBand,
+  Eyebrow,
+  PricingGrid,
+  Section,
+  SIGNUP_CTA,
+} from "@/components/marketing/blocks";
 import { SeoPricingSection, seoCtaHref } from "@/components/marketing/seo";
+import { PlanFinder } from "@/components/marketing/plan-finder";
+import { finderPrices } from "@/components/marketing/finder-prices";
 import { availableAddons } from "@/lib/addons";
 import { productByKey } from "@/lib/catalog";
+
+const JUMPS = [
+  { href: "#phone", label: "Phone Agent" },
+  { href: "#addons", label: "Add-Ons" },
+  { href: "#seo", label: "SEO + AI Search" },
+  { href: "#enterprise", label: "Enterprise" },
+];
 
 export const metadata: Metadata = {
   title: "Pricing | LumiLink",
@@ -50,21 +73,49 @@ export default async function PricingPage() {
             Build What Your Business Needs
           </h1>
           <p className="mt-3 text-lg text-gray-600">
-            Automating the whole thing is a matter of clicking what you want:
-            start with a phone plan, add exactly what your business needs, and
-            add Local SEO for every location. Everything we sell is on this
-            page.
+            Phone calls, website chat, workflows, and getting found on Google
+            and in AI search. Answer four questions and we&rsquo;ll tell you
+            what fits, or scroll down: everything we sell is on this page.
           </p>
+        </div>
+
+        <nav aria-label="Pricing sections" className="mt-8 flex flex-wrap gap-2">
+          {JUMPS.map((j) => (
+            <a
+              key={j.href}
+              href={j.href}
+              className="rounded-full border border-gray-300 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-700 hover:border-gray-900 hover:text-gray-900"
+            >
+              {j.label}
+            </a>
+          ))}
+        </nav>
+      </Section>
+
+      <Section id="finder" className="pb-12">
+        <h2 className="text-lg font-semibold text-gray-900">
+          Not Sure Where To Start? Let Us Figure Out What Your Business Needs.
+        </h2>
+        <div className="mt-5">
+          <PlanFinder
+            prices={finderPrices()}
+            signupHref={SIGNUP_CTA}
+            seoSignupHref={seoHref}
+            enterpriseHref={contactHref("/pricing", "Enterprise / White Label")}
+          />
         </div>
       </Section>
 
-      <PricingGrid
-        heading="Phone Agent: Start With A Core Plan"
-        blurb="Every plan includes 24/7 answering, booking, and a website knowledge sync. No setup fee on any of them."
-        contactSource="/pricing"
-      />
+      <div id="phone" className="scroll-mt-16 border-t border-gray-200">
+        <PricingGrid
+          heading="Phone Agent: Start With A Core Plan"
+          blurb="Every plan includes 24/7 answering, booking, and a website knowledge sync. No setup fee on any of them."
+          contactSource="/pricing"
+          showEnterprise={false}
+        />
+      </div>
 
-      <Section className="border-t border-gray-200 bg-gray-50 py-20">
+      <Section id="addons" className="border-t border-gray-200 bg-gray-50 py-20">
         <div className="max-w-2xl">
           <Eyebrow>Add-Ons</Eyebrow>
           <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
@@ -98,7 +149,7 @@ export default async function PricingPage() {
                 href="/plans"
                 className="mt-4 block rounded-md border border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
-                Start with a plan
+                Start With A Plan
               </Link>
             </div>
           ))}
@@ -107,10 +158,12 @@ export default async function PricingPage() {
 
       <SeoPricingSection
         id="seo"
-        eyebrow="Local SEO"
+        eyebrow="SEO + AI Search"
         ctaHref={seoHref}
         learnMoreHref={productByKey("seo").marketingHref}
       />
+
+      <EnterpriseBand contactSource="/pricing" />
 
       <Section className="border-t border-gray-200 py-12">
         <p className="text-sm text-gray-500">
@@ -119,7 +172,7 @@ export default async function PricingPage() {
             href="/contact"
             className="font-medium text-gray-900 underline underline-offset-4 hover:text-gray-700"
           >
-            Contact us
+            Contact Us
           </Link>
           .
         </p>

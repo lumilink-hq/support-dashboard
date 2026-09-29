@@ -81,7 +81,7 @@ export default async function ContactPage({
 
               <fieldset>
                 <legend className="block text-sm font-medium text-gray-700">
-                  Which one is you?
+                  Which One Is You?
                 </legend>
                 <div className="mt-2 space-y-2">
                   <label className="flex cursor-pointer gap-3 rounded-md border border-gray-300 p-3 hover:bg-gray-50 has-[:checked]:border-gray-900 has-[:checked]:bg-gray-50">
@@ -93,7 +93,7 @@ export default async function ContactPage({
                       className="mt-0.5"
                     />
                     <span className="text-sm font-medium text-gray-900">
-                      New here
+                      New Here
                     </span>
                   </label>
                   <label className="flex cursor-pointer gap-3 rounded-md border border-gray-300 p-3 hover:bg-gray-50 has-[:checked]:border-gray-900 has-[:checked]:bg-gray-50">
@@ -104,7 +104,7 @@ export default async function ContactPage({
                       className="mt-0.5"
                     />
                     <span className="text-sm font-medium text-gray-900">
-                      Already a customer
+                      Already A Customer
                     </span>
                   </label>
                 </div>
@@ -148,7 +148,7 @@ export default async function ContactPage({
                   htmlFor="message"
                   className="block text-sm font-medium text-gray-700"
                 >
-                  What&rsquo;s going on?
+                  What&rsquo;s Going On?
                 </label>
                 <textarea
                   id="message"

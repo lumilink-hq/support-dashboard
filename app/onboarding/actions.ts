@@ -18,6 +18,7 @@ import type { ProductKey } from "@/lib/catalog";
 import {
   type StepKey,
   WEEKDAYS,
+  industryForOption,
   readProfile,
   withStepDone,
 } from "@/lib/onboarding";
@@ -576,8 +577,10 @@ export async function addProduct(formData: FormData) {
   };
 
   if (product === "voice" && !profile.industry) {
-    const industry = String(formData.get("business_type") ?? "");
-    if (industry !== "service" && industry !== "ecommerce") {
+    // An INDUSTRY_OPTIONS key (or a legacy "service"/"ecommerce"), mapped
+    // onto the stored two-value industry.
+    const industry = industryForOption(String(formData.get("business_type") ?? ""));
+    if (!industry) {
       redirect("/onboarding/add?product=voice&error=industry");
     }
     // Written with products in ONE update, so sync_voice_agent_mode (0059)

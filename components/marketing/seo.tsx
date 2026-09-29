@@ -1,4 +1,9 @@
-// /products/seo — the Local SEO product page (plan.md, the SEO build plan).
+// /products/seo — the SEO + AI Search product page (plan.md, the SEO build plan).
+//
+// NOT JUST LOCAL (2026-09-28). The page used to read as "Local SEO, per
+// location" top to bottom, which hid the website plan and AI search visibility
+// (ChatGPT, Google AI Overviews) that two of the three plans include. The hero,
+// pillars and a dedicated AI search band now say all three.
 //
 // A different product from the phone agent: no calls involved, its own
 // subscription, its own plans (lib/seo-pricing.ts's SEO_PLANS: website,
@@ -28,12 +33,12 @@ import {
   Section,
 } from "@/components/marketing/blocks";
 import { MockupFrame } from "@/components/marketing/dashboard-mockups";
-import { SEO_EXTRA_LOCATION, SEO_PLANS, seoPlanByKey } from "@/lib/seo-pricing";
+import { SEO_EXTRA_LOCATION, SEO_PLANS, seoBundleSavings, seoPlanByKey } from "@/lib/seo-pricing";
 
 export const SEO_METADATA = {
-  title: "Local SEO for every location | LumiLink",
+  title: "SEO + AI Search For Your Website And Every Location | LumiLink",
   description:
-    "Weekly site audits, rank tracking with a map-pack geo grid, competitor and AI search visibility, and fixes you approve before anything goes live. Website SEO, Local SEO per location, or both.",
+    "Get found on Google, in the local map pack, and in AI answers from ChatGPT and Google AI Overviews. Weekly audits, rank tracking, AI search visibility, and fixes you approve before anything goes live.",
 };
 
 // Signed out: create an account for Local SEO (?product=seo).
@@ -48,56 +53,56 @@ const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
 const PILLARS = [
   {
     n: "01",
-    title: "Found where customers look",
-    body: "We track where each location shows up in Google's map pack and organic results, block by block across its service area, every week.",
+    title: "Found Wherever Customers Look",
+    body: "Google's organic results, the local map pack, and the AI answers from ChatGPT and Google AI Overviews. We track all three every week, for your website and every location.",
   },
   {
     n: "02",
-    title: "Nothing goes live without you",
+    title: "Nothing Goes Live Without You",
     body: "Every fix and every article is drafted for your approval first. Approve it and we publish it. Change your mind and we roll it back.",
   },
   {
     n: "03",
-    title: "Your core details stay yours",
+    title: "Your Core Details Stay Yours",
     body: "Your business name, address, phone number and primary category are never edited by automation. That's enforced in code, not left to a setting.",
   },
 ];
 
 const CAPABILITIES = [
   {
-    title: "Weekly site audit",
+    title: "Weekly Site Audit",
     body: "We crawl each location's site for missing titles, meta descriptions and headings, local business schema, image alt text, thin pages and a phone number that doesn't match.",
   },
   {
-    title: "Technical health checks",
+    title: "Technical Health Checks",
     body: "Core Web Vitals, indexing and canonical status from Search Console, broken redirects, robots.txt and your sitemap, checked on a schedule rather than once.",
   },
   {
-    title: "Rank tracking with a geo grid",
+    title: "Rank Tracking With A Geo Grid",
     body: "Your keywords are checked weekly in organic results and the local map pack, with a 5×5 grid around each location showing where you rank across the area.",
   },
   {
-    title: "Competitors side by side",
+    title: "Competitors Side By Side",
     body: "Name up to five competitors and see their positions next to yours for every keyword we track, with no extra setup.",
   },
   {
-    title: "AI search visibility",
+    title: "AI Search Visibility",
     body: "We check weekly whether Google's AI Overviews and ChatGPT cite your site when people ask about what you do.",
   },
   {
-    title: "Backlink monitoring",
+    title: "Backlink Monitoring",
     body: "A monthly view of who links to you: referring domains, links gained and lost, and which of your pages attract them.",
   },
   {
-    title: "Fixes drafted for you",
+    title: "Fixes Drafted For You",
     body: "Audit findings become ready-to-approve changes. On Shopify we publish them for you; on any other site you get the exact change and where to paste it.",
   },
   {
-    title: "Local articles",
+    title: "Local Articles",
     body: "Up to two articles a week, aimed at the keywords where you're furthest behind, each checked against your other posts and locations so nothing is duplicated.",
   },
   {
-    title: "A monthly report",
+    title: "A Monthly Report",
     body: "On the 1st of each month: rankings, work shipped, what's queued next, and a plain statement of the radius each location can realistically win.",
   },
 ];
@@ -110,35 +115,43 @@ const COMING_SOON = [
 
 const FAQS = [
   {
-    q: "Who is this for?",
-    a: "Businesses with one or more physical locations that need to show up when someone nearby searches for what they do: trades, clinics, salons, retailers, multi-location brands.",
+    q: "Who Is This For?",
+    a: "Any business that needs to be found online. Website SEO + AI Search suits a business whose customers find it through its website; Local SEO suits one with physical locations that need to show up when someone nearby searches: trades, clinics, salons, retailers, multi-location brands. Most businesses with both take the full bundle.",
   },
   {
-    q: "Do I need a LumiLink phone plan?",
-    a: "No. Local SEO is its own product with its own subscription. You can have it on its own or alongside a phone plan.",
+    q: "Do I Need A LumiLink Phone Plan?",
+    a: "No. SEO + AI Search is its own product with its own subscription. You can have it on its own or alongside a phone plan.",
   },
   {
-    q: "What do I need to connect?",
+    q: "What Do I Need To Connect?",
     a: "Your Google Search Console property, so we can see indexing and search data. If your site runs on Shopify, you can also connect the store so approved fixes and articles are published for you.",
   },
   {
-    q: "Will you change my site without asking?",
+    q: "Will You Change My Site Without Asking?",
     a: "No. Every change is drafted and waits for your approval. We store what was there before, so anything we publish can be rolled back from your dashboard.",
   },
   {
-    q: "My site isn't on Shopify. Does it still work?",
+    q: "My Site Isn't On Shopify. Does It Still Work?",
     a: "Yes. The audits, tracking and reports work on any site. For fixes and articles, you get the exact change and step-by-step instructions to apply it yourself.",
   },
   {
-    q: "Are the articles written by AI?",
+    q: "Are The Articles Written By AI?",
     a: "They're drafted by AI and approved by you. Drafts are held to your business's real details: they won't claim licences, guarantees, years in business or numbers we can't verify.",
   },
   {
-    q: "How is pricing calculated?",
+    q: "How Is Pricing Calculated?",
     a: `Website SEO + AI Search is ${usd(seoPlanByKey("website").monthlyUsd)} a month for one website. Local SEO is ${usd(seoPlanByKey("local").monthlyUsd)} a month per location. Full SEO + AI Search covers one website and one location for ${usd(seoPlanByKey("bundle").monthlyUsd)} a month, and each extra location is ${usd(SEO_EXTRA_LOCATION.monthlyUsd)}. Groups with many brands, sites or locations get a custom quote.`,
   },
   {
-    q: "Do you build links?",
+    q: "How Much Does The Full Bundle Save?",
+    a: `${usd(seoBundleSavings().baseMonthlyUsd)} a month against buying Website SEO + AI Search and Local SEO separately, and another ${usd(seoBundleSavings().perExtraLocationUsd)} a month on every location after the first (${usd(SEO_EXTRA_LOCATION.monthlyUsd)} instead of ${usd(seoPlanByKey("local").monthlyUsd)}). A website with five locations saves ${usd(seoBundleSavings(5).totalMonthlyUsd)} a month, or ${usd(seoBundleSavings(5).totalMonthlyUsd * 12)} a year.`,
+  },
+  {
+    q: "What Is AI Search, And Why Does It Matter?",
+    a: "More people now ask ChatGPT or read Google's AI Overview before they click a single link. If those answers don't mention you, you're invisible to that customer. We check every week whether they cite your site for the questions people ask about what you do, and the fixes we draft (clear answers, structured business data) make your pages easier for them to quote.",
+  },
+  {
+    q: "Do You Build Links?",
     a: "No. We monitor your backlink profile every month, but we don't buy or place links on other sites.",
   },
 ];
@@ -169,7 +182,7 @@ const KEYWORDS = [
   { kw: "drain cleaning near me", you: 1, them: 7 },
 ];
 
-function SeoPortalMockup({ caption }: { caption: string }) {
+export function SeoPortalMockup({ caption }: { caption: string }) {
   return (
     <MockupFrame caption={caption}>
       <div className="flex items-center justify-between">
@@ -246,6 +259,11 @@ function SeoPortalMockup({ caption }: { caption: string }) {
 /**
  * The SEO plan cards with their pitch. Shared by this page and /pricing so
  * the two can't quote the SEO product differently.
+ *
+ * SAVINGS TAGS (2026-09-28). The bundle card says what it saves against
+ * buying the other two, and the per-location card says what an extra
+ * location costs on the bundle instead. Both come from seoBundleSavings(),
+ * so they move with the prices.
  */
 export function SeoPricingSection({
   id,
@@ -259,23 +277,34 @@ export function SeoPricingSection({
   /** Set on /pricing, where the visitor hasn't seen the product page yet. */
   learnMoreHref?: string;
 }) {
+  const savings = seoBundleSavings();
+  const tags: Partial<Record<(typeof SEO_PLANS)[number]["key"], string>> = {
+    website: "AI Search Included",
+    bundle: `Save ${usd(savings.baseMonthlyUsd)}/mo`,
+  };
+  const savingNotes: Partial<Record<(typeof SEO_PLANS)[number]["key"], string>> = {
+    local: `Adding a website? The full bundle makes each extra location ${usd(SEO_EXTRA_LOCATION.monthlyUsd)}, ${usd(savings.perExtraLocationUsd)} less.`,
+    bundle: `${usd(savings.baseMonthlyUsd)} a month less than buying both, plus ${usd(savings.perExtraLocationUsd)} off every extra location.`,
+  };
+
   return (
     <Section id={id} className="border-t border-gray-200 py-20">
       <div className="max-w-2xl">
         <Eyebrow>{eyebrow}</Eyebrow>
         <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
-          Your website, your locations, or both
+          Your Website, Your Locations, Or Both
         </h2>
         <p className="mt-3 text-gray-600">
           AI search optimization is included with every website plan. Local SEO
-          grows with the number of locations you have.
+          grows with the number of locations you have, and the full bundle is
+          the cheapest way to get both.
         </p>
         {learnMoreHref ? (
           <Link
             href={learnMoreHref}
             className="mt-4 inline-block text-sm font-medium text-gray-900 underline underline-offset-4 hover:text-gray-700"
           >
-            What SEO includes
+            What SEO + AI Search Includes
           </Link>
         ) : null}
       </div>
@@ -283,20 +312,41 @@ export function SeoPricingSection({
       <div className="mt-10 grid gap-6 lg:grid-cols-3">
         {SEO_PLANS.map((plan) => {
           const featured = plan.key === "bundle";
+          const tag = tags[plan.key];
+          const note = savingNotes[plan.key];
           return (
             <div
               key={plan.key}
-              className={`flex flex-col rounded-2xl border bg-white p-8 shadow-sm ${
-                featured ? "border-gray-900" : "border-gray-200"
+              className={`relative flex flex-col rounded-2xl bg-white p-8 shadow-sm ${
+                featured ? "border-2 border-gray-900" : "border border-gray-200"
               }`}
             >
-              <p className="text-sm font-medium text-gray-500">{plan.name}</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-medium text-gray-500">{plan.name}</p>
+                {tag ? (
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      featured ? "bg-green-600 text-white" : "bg-lumi-100 text-lumi-700"
+                    }`}
+                  >
+                    {tag}
+                  </span>
+                ) : null}
+              </div>
               <p className="mt-2 text-4xl font-semibold tracking-tight text-gray-900">
                 {usd(plan.monthlyUsd)}
                 <span className="text-base font-normal text-gray-500">
                   {plan.perLocation ? " / location / month" : " / month"}
                 </span>
               </p>
+              {featured ? (
+                <p className="mt-1 text-sm text-gray-400">
+                  <span className="line-through">
+                    {usd(plan.monthlyUsd + savings.baseMonthlyUsd)}
+                  </span>{" "}
+                  if bought separately
+                </p>
+              ) : null}
               <p className="mt-3 text-sm text-gray-600">{plan.headline}</p>
               <ul className="mt-6 flex-1 space-y-2">
                 {plan.includes.map((item) => (
@@ -305,6 +355,15 @@ export function SeoPricingSection({
                   </li>
                 ))}
               </ul>
+              {note ? (
+                <p
+                  className={`mt-4 rounded-md px-3 py-2 text-xs font-medium ${
+                    featured ? "bg-green-50 text-green-800" : "bg-gray-50 text-gray-600"
+                  }`}
+                >
+                  {note}
+                </p>
+              ) : null}
               {plan.footnote ? <p className="mt-4 text-xs text-gray-400">{plan.footnote}</p> : null}
               <Link
                 href={ctaHref}
@@ -314,7 +373,7 @@ export function SeoPricingSection({
                     : "border border-gray-300 text-gray-700 hover:bg-gray-50"
                 }`}
               >
-                Get started
+                Get Started
               </Link>
             </div>
           );
@@ -324,10 +383,10 @@ export function SeoPricingSection({
       <p className="mt-8 text-sm text-gray-500">
         Many brands, sites or locations?{" "}
         <Link
-          href="/contact"
+          href="/pricing#enterprise"
           className="font-medium text-gray-900 underline underline-offset-4 hover:text-gray-700"
         >
-          Talk to us about Enterprise
+          See Enterprise
         </Link>
         . Prices exclude setup, custom development, paid media, third-party
         fees and taxes.
@@ -341,6 +400,24 @@ export async function seoCtaHref(): Promise<string> {
   return (await isSignedIn()) ? ADD_SEO : SIGNUP_SEO;
 }
 
+// What the AI search band claims. Held to the same rule as the rest of the
+// page: only what's built (AI Overviews and ChatGPT via DataForSEO's LLM
+// Mentions, schema and content fixes through the approval queue).
+const AI_SEARCH_POINTS = [
+  {
+    title: "See Whether AI Mentions You",
+    body: "Every week we ask the questions your customers ask and check whether Google's AI Overviews and ChatGPT cite your site in the answer.",
+  },
+  {
+    title: "Pages AI Can Quote",
+    body: "Audit fixes include clear answers, local business schema and clean headings: the structure AI answers pull from.",
+  },
+  {
+    title: "Included, Not Upsold",
+    body: "AI search visibility comes with every website plan at no extra charge. It's where search is going, so it isn't an add-on.",
+  },
+];
+
 export async function SeoSolution() {
   const primaryHref = await seoCtaHref();
 
@@ -349,14 +426,14 @@ export async function SeoSolution() {
       <Section className="pb-20 pt-16 md:pb-28 md:pt-24">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
-            <Eyebrow>Local SEO, per location</Eyebrow>
+            <Eyebrow>SEO + AI Search</Eyebrow>
             <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
-              Show up when customers nearby search.
+              Get Found On Google And In AI Search.
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-gray-600">
-              We audit every location&rsquo;s site each week, track where you
-              rank across your service area, and draft the fixes. You approve
-              them, we publish them.
+              Your website, every location, and the answers ChatGPT and
+              Google&rsquo;s AI Overviews give. We audit each week, track where
+              you rank, and draft the fixes. You approve them, we publish them.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -364,54 +441,83 @@ export async function SeoSolution() {
                 href={primaryHref}
                 className="rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-800"
               >
-                Get started
+                Get Started
               </Link>
               <a
                 href="#pricing"
                 className="rounded-md border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
-                See pricing
+                See Pricing
               </a>
             </div>
 
             <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-500">
               <li className="flex items-center gap-2">
-                <Check /> Weekly audits
+                <Check /> Website SEO
               </li>
               <li className="flex items-center gap-2">
-                <Check /> Map-pack geo grid
+                <Check /> Local Map Pack
               </li>
               <li className="flex items-center gap-2">
-                <Check /> You approve every change
+                <Check /> AI Search Visibility
+              </li>
+              <li className="flex items-center gap-2">
+                <Check /> You Approve Every Change
               </li>
             </ul>
           </div>
 
-          <SeoPortalMockup caption="Client portal — Local SEO" />
+          <SeoPortalMockup caption="Client portal — SEO + AI Search" />
         </div>
       </Section>
 
       <Section className="border-t border-gray-200 bg-gray-50 py-20">
-        <Eyebrow>How it works</Eyebrow>
+        <Eyebrow>How It Works</Eyebrow>
         <Pillars items={PILLARS} />
       </Section>
 
+      {/* AI search gets its own band: it's the part of the product people
+          don't expect from an SEO service, and it was one bullet before. */}
       <Section className="py-20">
+        <div className="rounded-2xl bg-gray-900 px-8 py-12 text-white md:px-12">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            AI Search
+          </p>
+          <h2 className="mt-4 max-w-2xl text-2xl font-semibold tracking-tight md:text-3xl">
+            Your Customers Ask AI First. Make Sure It Names You.
+          </h2>
+          <p className="mt-4 max-w-2xl leading-relaxed text-gray-300">
+            More searches now end in an AI answer instead of a list of links.
+            Ranking on Google still matters, and so does being the business
+            ChatGPT and Google&rsquo;s AI Overviews recommend.
+          </p>
+          <div className="mt-10 grid gap-8 md:grid-cols-3">
+            {AI_SEARCH_POINTS.map((p) => (
+              <div key={p.title}>
+                <h3 className="text-base font-semibold">{p.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-gray-300">{p.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Section>
+
+      <Section className="border-t border-gray-200 py-20">
         <div className="max-w-2xl">
-          <Eyebrow>What&rsquo;s included</Eyebrow>
+          <Eyebrow>What&rsquo;s Included</Eyebrow>
           <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
-            Audit, track, fix, report
+            Audit, Track, Fix, Report
           </h2>
           <p className="mt-3 text-gray-600">
-            Everything runs on a schedule for every location, and it all lands
-            in one portal.
+            Everything runs on a schedule for your website and every location,
+            and it all lands in one portal.
           </p>
         </div>
         <CapabilityGrid items={CAPABILITIES} />
 
         <div className="mt-14 rounded-xl border border-dashed border-gray-300 p-6">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-            Coming soon
+            Coming Soon
           </p>
           <ul className="mt-3 space-y-2">
             {COMING_SOON.map((item) => (
@@ -425,11 +531,11 @@ export async function SeoSolution() {
 
       <SeoPricingSection id="pricing" ctaHref={primaryHref} />
 
-      <FaqList items={FAQS} heading="What people ask about local SEO" />
+      <FaqList items={FAQS} heading="What People Ask About SEO + AI Search" />
 
       <ClosingCta
-        heading="Start ranking where your customers are"
-        body="Add your locations, connect Search Console, and your first audit and rankings are on the way."
+        heading="Start Ranking Where Your Customers Look"
+        body="Add your website and locations, connect Search Console, and your first audit, rankings and AI search check are on the way."
         cta="Get Started"
         href={primaryHref}
       />

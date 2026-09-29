@@ -54,8 +54,11 @@ export const PRODUCTS: Product[] = [
   },
   {
     key: "seo",
-    name: "Local SEO",
-    blurb: "Audits, rank tracking and approved fixes for every location.",
+    // "SEO + AI Search", not "Local SEO" (2026-09-28): the product covers the
+    // website and AI search (ChatGPT, Google AI Overviews) as well as each
+    // location, and the old name hid two of the three plans.
+    name: "SEO + AI Search",
+    blurb: "Get found on Google, in the map pack and in AI answers.",
     marketingHref: "/products/seo",
     pages: [
       { href: "/seo", label: "Overview" },
