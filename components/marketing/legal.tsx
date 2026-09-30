@@ -26,17 +26,14 @@ import { MarketingShell } from "@/components/marketing/shell";
 export const LEGAL_ENTITY = "LumiLink";
 export const LEGAL_ADDRESS = "Los Angeles, California, United States";
 /**
- * PARKED 2026-08-13 until the mailbox actually exists.
+ * The inbox both legal pages print. It must be one somebody reads: a privacy
+ * request sent here is one you are legally on the hook for.
  *
- * A legal page that prints an address nobody reads is worse than one that
- * doesn't: a privacy request sent there is a request you are legally on the
- * hook for and never saw. Set this to the real address the day Resend is
- * verified and support@ is being monitored — both pages pick it up
- * automatically, and the fallback copy below disappears.
- *
- *   export const LEGAL_EMAIL: string | null = "support@lumilinkhub.com";
+ * Set 2026-09-30 to the team Gmail, the only monitored inbox so far (Google
+ * OAuth verification wants a contact on the privacy policy). Swap it for
+ * support@lumilinkhub.com once that mailbox exists and is being monitored.
  */
-export const LEGAL_EMAIL: string | null = null;
+export const LEGAL_EMAIL: string | null = "lumilinkhq@gmail.com";
 
 /** Where to send someone while there is no inbox. */
 export const CONTACT_FALLBACK =
@@ -44,7 +41,7 @@ export const CONTACT_FALLBACK =
 export const GOVERNING_LAW = "the State of California, United States";
 
 /** One date for both documents, so they can't drift apart. */
-export const LEGAL_LAST_UPDATED = "13 August 2026";
+export const LEGAL_LAST_UPDATED = "23 September 2026";
 
 export function LegalPage({
   title,

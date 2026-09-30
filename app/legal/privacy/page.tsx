@@ -117,6 +117,67 @@ export default function PrivacyPage() {
         </p>
       </Clause>
 
+      {/* Google OAuth verification reads this clause. It covers only the
+          scopes the app requests today (lib/google-oauth.ts). When the
+          Business Profile flow ships (plan.md Phase 4), add what it reads and
+          writes here BEFORE requesting business.manage in production. */}
+      <Clause heading="Information From Your Google Account">
+        <p>
+          If you connect your Google account in Settings, we ask Google for two
+          things: your Google account&rsquo;s email address, so we can show you
+          which account is connected, and <strong>read-only</strong> access to
+          Google Search Console for your website.
+        </p>
+        <p>
+          We use Search Console for one purpose: checking whether Google has
+          indexed the pages on your website and, if it hasn&rsquo;t, why not.
+          Problems we find appear as findings in your dashboard. We cannot
+          change anything in your Search Console account.
+        </p>
+        <p>
+          Your Google access token is stored in a dedicated secrets vault,
+          encrypted, and used only by our own systems to run those checks.
+          Information we receive from Google is:
+        </p>
+        <ul className="ml-5 list-disc space-y-1">
+          <li>never sold, and never used for advertising;</li>
+          <li>never used to train AI models, and never sent to one;</li>
+          <li>
+            never shared with anyone else, except as needed to run the features
+            you see, to comply with the law, or as part of a merger or
+            acquisition that we would tell you about;
+          </li>
+          <li>
+            not read by our staff unless you ask us to, or unless it&rsquo;s
+            needed for security or to meet a legal obligation.
+          </li>
+        </ul>
+        <p>
+          You can disconnect Google at any time in Settings. We revoke our
+          access with Google and delete the stored token. You can also remove
+          LumiLink from your{" "}
+          <a
+            href="https://myaccount.google.com/permissions"
+            className="underline hover:text-gray-900"
+          >
+            Google account permissions
+          </a>
+          . Findings we already produced stay in your dashboard until you ask
+          us to delete them or close your account.
+        </p>
+        <p>
+          LumiLink&rsquo;s use and transfer of information received from Google
+          APIs will adhere to the{" "}
+          <a
+            href="https://developers.google.com/terms/api-services-user-data-policy"
+            className="underline hover:text-gray-900"
+          >
+            Google API Services User Data Policy
+          </a>
+          , including the Limited Use requirements.
+        </p>
+      </Clause>
+
       <Clause heading="Who Else Processes It">
         <p>
           We use these providers to run the service. Each has access only to what
