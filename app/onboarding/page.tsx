@@ -123,6 +123,7 @@ export default async function OnboardingPage({
           .from("seo_keywords")
           .select("id, location_id, keyword")
           .in("location_id", seoLocationIds)
+          .eq("is_active", true)
           .order("created_at"),
         supabase
           .from("seo_competitors")

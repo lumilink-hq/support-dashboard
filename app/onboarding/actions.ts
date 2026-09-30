@@ -14,6 +14,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentClientId } from "@/lib/entitlements";
 import { normalizeSiteUrl } from "@/lib/url";
+import { cleanKeyword, KEYWORD_MAX, KEYWORD_MIN, MAX_KEYWORDS_PER_LOCATION } from "@/lib/seo-portal";
 import type { ProductKey } from "@/lib/catalog";
 import {
   type StepKey,
@@ -419,17 +420,35 @@ export async function addSeoKeyword(formData: FormData) {
   if (!clientId) redirect("/login?next=%2Fonboarding");
 
   const locationId = String(formData.get("location_id") ?? "");
-  const keyword = String(formData.get("keyword") ?? "").trim();
-  if (!locationId || !keyword) redirect("/onboarding?step=seo_keywords");
+  // Same cleanup, length and cap rules as the Keywords card on /seo.
+  const keyword = cleanKeyword(String(formData.get("keyword") ?? ""));
+  if (!locationId || keyword.length < KEYWORD_MIN || keyword.length > KEYWORD_MAX) {
+    redirect("/onboarding?step=seo_keywords");
+  }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("seo_keywords").insert({
-    client_id: clientId,
-    location_id: locationId,
-    keyword,
-  });
-  // A duplicate (location_id, keyword) is a re-submit, not a failure worth
-  // surfacing — the unique index (0042) is what catches it.
+  const { data: existing } = await supabase
+    .from("seo_keywords")
+    .select("id, is_active")
+    .eq("location_id", locationId)
+    .eq("keyword", keyword)
+    .maybeSingle();
+  // Already tracked: a re-submit, nothing to do.
+  if (existing?.is_active) redirect("/onboarding?step=seo_keywords");
+
+  const { count } = await supabase
+    .from("seo_keywords")
+    .select("id", { count: "exact", head: true })
+    .eq("location_id", locationId)
+    .eq("is_active", true);
+  if ((count ?? 0) >= MAX_KEYWORDS_PER_LOCATION) redirect("/onboarding?step=seo_keywords");
+
+  // One stopped earlier (0060) comes back with its ranking history.
+  const { error } = existing
+    ? await supabase.from("seo_keywords").update({ is_active: true }).eq("id", existing.id)
+    : await supabase.from("seo_keywords").insert({ client_id: clientId, location_id: locationId, keyword });
+  // A duplicate (location_id, keyword) from a double submit is not a failure
+  // worth surfacing: the unique index (0042) is what catches it.
   if (error && error.code !== "23505") throw new Error(error.message);
 
   revalidatePath("/onboarding");
@@ -443,7 +462,12 @@ export async function removeSeoKeyword(formData: FormData) {
   const id = String(formData.get("keyword_id") ?? "");
   if (id) {
     const supabase = await createClient();
-    await supabase.from("seo_keywords").delete().eq("id", id).eq("client_id", clientId);
+    // Stop tracking, don't delete: rankings cascade on delete (0060).
+    await supabase
+      .from("seo_keywords")
+      .update({ is_active: false, is_geo_grid_enabled: false, enabled_by: null, enabled_at: null })
+      .eq("id", id)
+      .eq("client_id", clientId);
   }
 
   revalidatePath("/onboarding");

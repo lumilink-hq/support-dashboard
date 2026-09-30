@@ -104,7 +104,8 @@ async function submitForLocation(locationId: string): Promise<void> {
   const { data: keywords, error: kwError } = await supabase
     .from("seo_keywords")
     .select("id, keyword, is_geo_grid_enabled")
-    .eq("location_id", locationId);
+    .eq("location_id", locationId)
+    .eq("is_active", true); // 0060: a keyword the client stopped tracking is kept for history, never checked
   if (kwError) throw new Error(kwError.message);
 
   const hasCoords = loc.lat !== null && loc.lng !== null;

@@ -4,7 +4,7 @@
 //   npx tsx scripts/test-seo-portal.ts
 // =============================================================================
 
-import { aiSummary, cleanDomain, cleanQuery, compareToCompetitors, daysAgo, latestPerKeyword, trendPoints } from "../lib/seo-portal.ts";
+import { aiSummary, cleanDomain, cleanKeyword, cleanQuery, compareToCompetitors, daysAgo, latestPerKeyword, trendPoints } from "../lib/seo-portal.ts";
 
 let passed = 0;
 let failed = 0;
@@ -90,6 +90,13 @@ console.log("\ncleanDomain");
   ok("rejects an IP address", cleanDomain("http://10.0.0.1/x") === null);
   ok("rejects junk and empty", cleanDomain("not a domain!!") === null && cleanDomain("   ") === null);
   ok("rejects a scheme that is not a site", cleanDomain("javascript:alert(1)") === null);
+}
+
+console.log("\ncleanKeyword");
+{
+  ok("lowercases and collapses whitespace", cleanKeyword("  Emergency   Plumber\tTulsa ") === "emergency plumber tulsa");
+  ok("same phrase in different case is one keyword", cleanKeyword("Plumber Tulsa") === cleanKeyword("plumber tulsa"));
+  ok("empty stays empty", cleanKeyword("   ") === "");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

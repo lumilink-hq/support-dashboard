@@ -127,7 +127,8 @@ async function locationReport(clientId: string, loc: LocationRow, period: Period
   const { data: kwRows, error: kwErr } = await supabase
     .from("seo_keywords")
     .select("id, keyword, is_geo_grid_enabled")
-    .eq("location_id", loc.id);
+    .eq("location_id", loc.id)
+    .eq("is_active", true); // 0060: only keywords the client still tracks
   if (kwErr) throw new Error(`loading keywords failed: ${kwErr.message}`);
   const keywords = (kwRows ?? []) as { id: string; keyword: string; is_geo_grid_enabled: boolean }[];
 

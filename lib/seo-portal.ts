@@ -109,6 +109,24 @@ export function cleanQuery(raw: string): string {
 export const QUERY_MIN = 2;
 export const QUERY_MAX = 250; // mirrors seo_ai_queries' CHECK (0053)
 
+/**
+ * Keyword caps, per location. Every active keyword is one DataForSEO rank
+ * check a week (plus competitor positions from the same result); a map-grid
+ * keyword adds 25 more (the 5x5 grid). Without a cap one location could
+ * multiply the weekly vendor bill. No plan promises a number, so these are
+ * cost guards, not a product limit; raise them freely.
+ */
+export const MAX_KEYWORDS_PER_LOCATION = 25;
+export const MAX_GEO_GRID_KEYWORDS_PER_LOCATION = 3;
+export const KEYWORD_MIN = 2;
+export const KEYWORD_MAX = 80; // a search phrase, not a sentence
+
+/** A tracked search phrase: same cleanup as a question, and lowercased, so
+ * "Plumber Tulsa" and "plumber tulsa" are one keyword (search is case-blind). */
+export function cleanKeyword(raw: string): string {
+  return cleanQuery(raw).toLowerCase();
+}
+
 /** ISO date `days` ago (UTC), for "recent window" filters. */
 export function daysAgo(days: number, now = new Date()): string {
   const d = new Date(now.getTime() - days * 86400000);

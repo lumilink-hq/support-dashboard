@@ -7,8 +7,11 @@ import {
   aiSummary,
   compareToCompetitors,
   daysAgo,
+  KEYWORD_MAX,
   latestPerKeyword,
   MAX_COMPETITORS_PER_LOCATION,
+  MAX_GEO_GRID_KEYWORDS_PER_LOCATION,
+  MAX_KEYWORDS_PER_LOCATION,
   trendPoints,
   type ClientRank,
   type Competitor,
@@ -26,7 +29,7 @@ import {
   safeUrl,
   type GeoRadiusRow,
 } from "@/supabase/functions/seo-report/lib";
-import { addAiQuery, addCompetitor, removeAiQuery, removeCompetitor } from "./actions";
+import { addAiQuery, addCompetitor, addKeyword, removeAiQuery, removeCompetitor, removeKeyword, setKeywordGeoGrid } from "./actions";
 
 type Loc = { id: string; name: string; lat: number | null; lng: number | null };
 type Keyword = { id: string; keyword: string; is_geo_grid_enabled: boolean };
@@ -94,7 +97,7 @@ export default async function SeoPortalPage({
   const [
     kwRes, trendRes, radiusRes, connRes, compRes, backlinkRes, metricRes, shippedRes, queryRes, mentionRes, pendingRes,
   ] = await Promise.all([
-    supabase.from("seo_keywords").select("id, keyword, is_geo_grid_enabled").eq("location_id", loc.id).order("keyword"),
+    supabase.from("seo_keywords").select("id, keyword, is_geo_grid_enabled").eq("location_id", loc.id).eq("is_active", true).order("keyword"),
     supabase.from("seo_rank_trend").select("rank_type, check_date, avg_position").eq("location_id", loc.id).gte("check_date", since200).order("check_date"),
     supabase.from("seo_geo_radius").select("keywords_checked, last_check_date, winnable_radius_km, grid_spacing_km").eq("location_id", loc.id).maybeSingle(),
     supabase.from("seo_site_connections").select("status, shop_domain, last_error").eq("location_id", loc.id).maybeSingle(),
@@ -120,15 +123,22 @@ export default async function SeoPortalPage({
 
   // Rankings and competitors read the last 30 days, then collapse to the latest check.
   const since30 = daysAgo(30);
-  const [clientRankRes, compRankRes] = await Promise.all([
+  // The Keywords card wants each keyword's latest check however old, so it
+  // reads the same 200 days as the trend; "Not checked yet" must mean never.
+  const [clientRankRes, compRankRes, keywordRankRes] = await Promise.all([
     supabase.from("seo_rankings").select("keyword_id, position, check_date").eq("location_id", loc.id).eq("rank_type", "organic").gte("check_date", since30).limit(5000),
     competitors.length
       ? supabase.from("seo_competitor_rankings").select("competitor_id, keyword_id, position, check_date").eq("location_id", loc.id).eq("rank_type", "organic").gte("check_date", since30).limit(5000)
       : Promise.resolve({ data: [] as CompetitorRank[] }),
+    keywords.length
+      ? supabase.from("seo_rankings").select("keyword_id, position, check_date").in("keyword_id", keywords.map((k) => k.id)).eq("rank_type", "organic").gte("check_date", since200).limit(5000)
+      : Promise.resolve({ data: [] as ClientRank[] }),
   ]);
+  const clientRanks = (clientRankRes.data ?? []) as ClientRank[];
+  const latestRank = new Map(latestPerKeyword((keywordRankRes.data ?? []) as ClientRank[]).map((r) => [r.keyword_id, r]));
   const standings = compareToCompetitors(
     loc.name,
-    (clientRankRes.data ?? []) as ClientRank[],
+    clientRanks,
     competitors,
     (compRankRes.data ?? []) as CompetitorRank[],
   );
@@ -224,6 +234,81 @@ export default async function SeoPortalPage({
 
       <Card title="Where you can win" note="How far from this location you can realistically appear in the top 3 map results.">
         <p className="text-sm text-gray-800">{radius.statement}</p>
+      </Card>
+
+      <Card
+        title="Keywords"
+        id="keywords"
+        note={`What you want this location to be found for. Each one is checked on Google weekly. Up to ${MAX_KEYWORDS_PER_LOCATION} per location; the map grid can be on for up to ${MAX_GEO_GRID_KEYWORDS_PER_LOCATION}.`}
+      >
+        {keywords.length === 0 ? (
+          <Empty>No keywords yet. Add the searches you want this location to show up for.</Empty>
+        ) : (
+          <ul className="divide-y divide-gray-100 text-sm">
+            {keywords.map((k) => {
+              const r = latestRank.get(k.id);
+              return (
+                <li key={k.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <span className="min-w-0 break-words text-gray-800">{k.keyword}</span>
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs ${
+                        !r ? "bg-gray-100 text-gray-500" : r.position !== null && r.position <= 10 ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-700"
+                      }`}
+                    >
+                      {!r ? "Not checked yet" : r.position === null ? "Not ranking yet" : `#${r.position} on Google`}
+                      {r && r.check_date < since30 ? ` · ${r.check_date}` : ""}
+                    </span>
+                    <form action={setKeywordGeoGrid}>
+                      <input type="hidden" name="id" value={k.id} />
+                      <input type="hidden" name="location" value={loc.id} />
+                      <input type="hidden" name="on" value={k.is_geo_grid_enabled ? "false" : "true"} />
+                      <button
+                        type="submit"
+                        aria-pressed={k.is_geo_grid_enabled}
+                        className={`rounded-md border px-2 py-0.5 text-xs ${
+                          k.is_geo_grid_enabled ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 text-gray-600 hover:border-gray-500"
+                        }`}
+                      >
+                        Map grid {k.is_geo_grid_enabled ? "on" : "off"}
+                      </button>
+                    </form>
+                    <form action={removeKeyword}>
+                      <input type="hidden" name="id" value={k.id} />
+                      <input type="hidden" name="location" value={loc.id} />
+                      <button type="submit" className="text-xs text-gray-500 underline hover:text-gray-900">Stop tracking</button>
+                    </form>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {geoKeywords.length > 0 && (loc.lat === null || loc.lng === null) ? (
+          <p className="mt-2 text-xs text-amber-700">
+            This location has no map coordinates yet, so the map grid won&apos;t run until it does.
+          </p>
+        ) : null}
+        {keywords.length < MAX_KEYWORDS_PER_LOCATION ? (
+          <form action={addKeyword} className="mt-3 flex flex-wrap gap-2">
+            <input type="hidden" name="location" value={loc.id} />
+            <label className="sr-only" htmlFor="seo-keyword">Keyword to track</label>
+            <input
+              id="seo-keyword"
+              name="keyword"
+              required
+              minLength={2}
+              maxLength={KEYWORD_MAX}
+              placeholder="e.g. emergency plumber springfield"
+              className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+            />
+            <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
+              Track keyword
+            </button>
+          </form>
+        ) : (
+          <p className="mt-2 text-xs text-gray-500">You&apos;re tracking the maximum of {MAX_KEYWORDS_PER_LOCATION}. Stop tracking one to add another.</p>
+        )}
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">

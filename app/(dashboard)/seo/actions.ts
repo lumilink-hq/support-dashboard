@@ -4,7 +4,18 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentClientId } from "@/lib/entitlements";
 import { getSeoAccess } from "@/lib/seo-access";
-import { cleanDomain, cleanQuery, MAX_COMPETITORS_PER_LOCATION, QUERY_MAX, QUERY_MIN } from "@/lib/seo-portal";
+import {
+  cleanDomain,
+  cleanKeyword,
+  cleanQuery,
+  KEYWORD_MAX,
+  KEYWORD_MIN,
+  MAX_COMPETITORS_PER_LOCATION,
+  MAX_GEO_GRID_KEYWORDS_PER_LOCATION,
+  MAX_KEYWORDS_PER_LOCATION,
+  QUERY_MAX,
+  QUERY_MIN,
+} from "@/lib/seo-portal";
 import { createClient } from "@/lib/supabase/server";
 // The weekly AI-visibility job only ever checks this many active queries; more
 // would be accepted here and silently never checked, so the form stops at the cap.
@@ -158,6 +169,149 @@ export async function removeCompetitor(formData: FormData) {
 
   revalidatePath("/seo");
   redirect(competitorBack(location));
+}
+
+/**
+ * Track a keyword for one location. Same shape as competitors: the tenant
+ * policy on seo_keywords (0042) confines the row to the caller's client but
+ * not the location_id it points at, so the location is looked up under RLS
+ * first. Re-adding a keyword that was stopped turns it back on (0060), so its
+ * ranking history carries on rather than starting over.
+ */
+export async function addKeyword(formData: FormData) {
+  const location = String(formData.get("location") ?? "");
+  const keyword = cleanKeyword(String(formData.get("keyword") ?? ""));
+
+  const access = await getSeoAccess();
+  if (!access.allowed) redirect(keywordBack(location, "Local SEO isn't active on your plan."));
+  if (keyword.length < KEYWORD_MIN || keyword.length > KEYWORD_MAX) {
+    redirect(keywordBack(location, `A keyword must be between ${KEYWORD_MIN} and ${KEYWORD_MAX} characters.`));
+  }
+
+  const clientId = await getCurrentClientId();
+  if (!clientId) redirect("/login");
+  const supabase = await createClient();
+
+  const { data: loc } = await supabase.from("seo_locations").select("id").eq("id", location).maybeSingle();
+  if (!loc) redirect(keywordBack(location, "That location no longer exists."));
+
+  const { data: existing } = await supabase
+    .from("seo_keywords")
+    .select("id, is_active")
+    .eq("location_id", location)
+    .eq("keyword", keyword)
+    .maybeSingle();
+  if (existing?.is_active) redirect(keywordBack(location));
+
+  const { count } = await supabase
+    .from("seo_keywords")
+    .select("id", { count: "exact", head: true })
+    .eq("location_id", location)
+    .eq("is_active", true);
+  if ((count ?? 0) >= MAX_KEYWORDS_PER_LOCATION) {
+    redirect(keywordBack(location, `You can track up to ${MAX_KEYWORDS_PER_LOCATION} keywords per location. Stop tracking one to add another.`));
+  }
+
+  // A keyword coming back does NOT get its map grid back: the grid must be
+  // switched on by a person each time (0042's rule), and the cap re-checked.
+  const { error } = existing
+    ? await supabase.from("seo_keywords").update({ is_active: true, is_geo_grid_enabled: false, enabled_by: null, enabled_at: null }).eq("id", existing.id)
+    : await supabase.from("seo_keywords").insert({ client_id: clientId, location_id: location, keyword });
+  if (error) redirect(keywordBack(location, error.message));
+
+  revalidatePath("/seo");
+  redirect(keywordBack(location));
+}
+
+/** Stop tracking a keyword. Kept (inactive) so its rankings stay in the history. */
+export async function removeKeyword(formData: FormData) {
+  const location = String(formData.get("location") ?? "");
+  const id = String(formData.get("id") ?? "");
+  if (!id) redirect(keywordBack(location, "Missing keyword id."));
+
+  const access = await getSeoAccess();
+  if (!access.allowed) redirect(keywordBack(location, "Local SEO isn't active on your plan."));
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // RLS turns "not yours" into a zero-row update, so the count is the proof.
+  const { data, error } = await supabase
+    .from("seo_keywords")
+    .update({ is_active: false, is_geo_grid_enabled: false, enabled_by: null, enabled_at: null })
+    .eq("id", id)
+    .select("id");
+  if (error) redirect(keywordBack(location, error.message));
+  if (!data || data.length === 0) redirect(keywordBack(location, "That keyword no longer exists."));
+
+  revalidatePath("/seo");
+  redirect(keywordBack(location));
+}
+
+/**
+ * Switch the 5x5 map grid on or off for one keyword. 0042's rule: the grid is
+ * turned on by a person, and enabled_by/enabled_at record who. It costs 25
+ * extra checks a week, hence the per-location cap.
+ */
+export async function setKeywordGeoGrid(formData: FormData) {
+  const location = String(formData.get("location") ?? "");
+  const id = String(formData.get("id") ?? "");
+  const on = String(formData.get("on") ?? "") === "true";
+  if (!id) redirect(keywordBack(location, "Missing keyword id."));
+
+  const access = await getSeoAccess();
+  if (!access.allowed) redirect(keywordBack(location, "Local SEO isn't active on your plan."));
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // The cap is counted on the keyword's OWN location (read under RLS), not
+  // the one the form claims.
+  const { data: kw } = await supabase.from("seo_keywords").select("location_id, is_geo_grid_enabled").eq("id", id).eq("is_active", true).maybeSingle();
+  if (!kw) redirect(keywordBack(location, "That keyword no longer exists."));
+  if (kw.is_geo_grid_enabled === on) redirect(keywordBack(location));
+
+  if (on) {
+    const { count } = await supabase
+      .from("seo_keywords")
+      .select("id", { count: "exact", head: true })
+      .eq("location_id", kw.location_id)
+      .eq("is_active", true)
+      .eq("is_geo_grid_enabled", true);
+    if ((count ?? 0) >= MAX_GEO_GRID_KEYWORDS_PER_LOCATION) {
+      redirect(keywordBack(location, `The map grid can be on for up to ${MAX_GEO_GRID_KEYWORDS_PER_LOCATION} keywords per location. Turn it off for one first.`));
+    }
+  }
+
+  const { data, error } = await supabase
+    .from("seo_keywords")
+    .update(
+      on
+        ? { is_geo_grid_enabled: true, enabled_by: user.id, enabled_at: new Date().toISOString() }
+        : { is_geo_grid_enabled: false, enabled_by: null, enabled_at: null },
+    )
+    .eq("id", id)
+    .eq("is_active", true)
+    .select("id");
+  if (error) redirect(keywordBack(location, error.message));
+  if (!data || data.length === 0) redirect(keywordBack(location, "That keyword no longer exists."));
+
+  revalidatePath("/seo");
+  redirect(keywordBack(location));
+}
+
+function keywordBack(location: string, error?: string) {
+  const qs = new URLSearchParams();
+  if (location) qs.set("location", location);
+  if (error) qs.set("error", error);
+  const s = qs.toString();
+  return `/seo${s ? `?${s}` : ""}#keywords`;
 }
 
 function competitorBack(location: string, error?: string) {
