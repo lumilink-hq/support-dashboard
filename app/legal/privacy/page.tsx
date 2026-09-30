@@ -18,7 +18,7 @@ import {
 export const metadata: Metadata = {
   title: "Privacy Policy | LumiLink",
   description:
-    "What LumiLink collects when the agent answers a call, how long we keep it, who processes it, and what you're responsible for telling your callers.",
+    "What LumiLink collects across the AI phone agent, website chat and SEO + AI Search, including data from a connected Google account: why, how long we keep it, and who processes it.",
   alternates: { canonical: "/legal/privacy" },
 };
 
@@ -31,7 +31,9 @@ const SUBPROCESSORS = [
   ["Supabase", "Database, authentication and file storage"],
   ["ElevenLabs", "Speech recognition and the agent's voice"],
   ["Twilio", "Telephone numbers and call connectivity"],
-  ["Anthropic", "The language model that decides what the agent says"],
+  ["Anthropic", "The language model that decides what the agent says, and drafts SEO fixes"],
+  ["DataForSEO", "Search rankings, backlinks and AI search results for the keywords and locations you track"],
+  ["Replicate", "Generating images for website content you approve"],
   ["Stripe", "Payments and subscriptions"],
   ["Resend", "Transactional email, such as sign-in and confirmation messages"],
   ["Railway", "Application hosting"],
@@ -41,7 +43,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      intro={`This explains what ${LEGAL_ENTITY} collects, why, and who else is involved. There are two different relationships here and they matter: the information you give us about your business, and the information your customers give the agent when they call you.`}
+      intro={`This explains what ${LEGAL_ENTITY} collects, why, and who else is involved, across all of our products: the AI phone agent, website chat, and SEO + AI Search. There are two different relationships here and they matter: the information you give us about your business, and the information your customers give the agent when they call you.`}
     >
       <Clause heading="Two Roles, Two Sets Of Data">
         <p>
@@ -83,11 +85,45 @@ export default function PrivacyPage() {
         </p>
       </Clause>
 
+      <Clause heading="What SEO + AI Search Collects">
+        <p>
+          If you use SEO + AI Search, we hold what you give us about your
+          website and each business location: its address, phone number,
+          category, and the keywords and questions you want to be found for.
+          Using those, we collect:
+        </p>
+        <ul className="ml-5 list-disc space-y-1">
+          <li>
+            the public pages of your website, which we crawl to find technical
+            and content problems;
+          </li>
+          <li>
+            public search results: where you and your competitors rank on
+            Google and in the local map pack, links to your site from other
+            websites, and whether AI assistants mention you;
+          </li>
+          <li>
+            the fixes we draft, whether you approved or rejected each one, and
+            what we changed on your site;
+          </li>
+          <li>
+            if you connect them, information from your Google account and your
+            online store, described below.
+          </li>
+        </ul>
+        <p>
+          None of this is about your customers. It describes your business&rsquo;s
+          public presence online.
+        </p>
+      </Clause>
+
       <Clause heading="What We Use It For">
         <p>
           To operate your agent, show you your conversations, book appointments,
           look up orders, create callback tickets, meter your usage against your
-          plan, and support and improve the service.
+          plan, and support and improve the service. For SEO + AI Search: to
+          show you your rankings and problems, draft fixes for your approval,
+          publish the ones you approve, and send you a monthly report.
         </p>
         <p>
           <strong>We do not sell personal information.</strong>{" "}
@@ -131,8 +167,10 @@ export default function PrivacyPage() {
         <p>
           We use Search Console for one purpose: checking whether Google has
           indexed the pages on your website and, if it hasn&rsquo;t, why not.
-          Problems we find appear as findings in your dashboard. We cannot
-          change anything in your Search Console account.
+          For each page we check, we keep Google&rsquo;s answer: whether the
+          page is indexed, when Google last crawled it, and any reason it gave
+          for leaving it out. Problems appear as findings in your dashboard. We
+          cannot change anything in your Search Console account.
         </p>
         <p>
           Your Google access token is stored in a dedicated secrets vault,
@@ -141,7 +179,10 @@ export default function PrivacyPage() {
         </p>
         <ul className="ml-5 list-disc space-y-1">
           <li>never sold, and never used for advertising;</li>
-          <li>never used to train AI models, and never sent to one;</li>
+          <li>
+            never used to train AI models, never sent to one, and never used to
+            generate images or any other content;
+          </li>
           <li>
             never shared with anyone else, except as needed to run the features
             you see, to comply with the law, or as part of a merger or
@@ -198,8 +239,12 @@ export default function PrivacyPage() {
           </table>
         </div>
         <p>
-          If you connect your online store, we hold read-only credentials to it.
-          The agent looks orders up; it never edits, cancels or refunds them.
+          If you connect your online store, we hold credentials to it in our
+          secrets vault. The agent only looks orders up; it never edits,
+          cancels or refunds them. If you use SEO + AI Search and give us
+          permission to publish, we change only your store&rsquo;s pages and
+          product descriptions, only after you approve each change, and we
+          keep the previous version so it can be put back.
         </p>
       </Clause>
 
@@ -207,7 +252,8 @@ export default function PrivacyPage() {
         <p>
           Conversations, transcripts and the records built from them are kept for
           as long as your account is active, because they are what your dashboard
-          shows you.
+          shows you. The same goes for SEO data: rankings, findings, drafts and
+          reports.
         </p>
         <p>
           If you cancel, tell us and we will delete your business data and your

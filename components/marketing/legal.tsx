@@ -41,7 +41,7 @@ export const CONTACT_FALLBACK =
 export const GOVERNING_LAW = "the State of California, United States";
 
 /** One date for both documents, so they can't drift apart. */
-export const LEGAL_LAST_UPDATED = "23 September 2026";
+export const LEGAL_LAST_UPDATED = "30 September 2026";
 
 export function LegalPage({
   title,

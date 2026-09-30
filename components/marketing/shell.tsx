@@ -199,10 +199,10 @@ export async function isSignedIn(): Promise<boolean> {
  */
 function Wordmark({ href }: { href: string }) {
   return (
-    <Link href={href} className="flex items-center" aria-label="Lumilink — home">
+    <Link href={href} className="flex items-center" aria-label="LumiLink — home">
       <Image
         src="/lumilink-wordmark.png"
-        alt="Lumilink"
+        alt="LumiLink"
         width={1000}
         height={192}
         priority

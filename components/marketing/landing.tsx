@@ -200,6 +200,13 @@ const FAQS = [
     q: "Do I Save By Bundling SEO?",
     a: `Yes. Full SEO + AI Search is ${usd(seoPlanByKey("bundle").monthlyUsd)} a month for your website and one location, ${usd(bundle.baseMonthlyUsd)} less than buying Website SEO + AI Search and Local SEO separately. Every extra location is ${usd(SEO_EXTRA_LOCATION.monthlyUsd)} instead of ${usd(seoPlanByKey("local").monthlyUsd)}, another ${usd(bundle.perExtraLocationUsd)} a month each.`,
   },
+  // Google OAuth verification reads the homepage for what the app does with
+  // a connected Google account. Keep this in step with the privacy policy's
+  // "Information From Your Google Account" clause.
+  {
+    q: "What Does LumiLink Do With My Google Account?",
+    a: "Only what SEO + AI Search needs. When you connect Google in your dashboard, LumiLink gets read-only access to Google Search Console for your website and checks which of your pages Google has indexed, and why any aren't. The results appear as findings in your dashboard. LumiLink can't change anything in your Google account, never sells or shares the data, and never sends it to an AI model. You can disconnect at any time. Our Privacy Policy has the details.",
+  },
   {
     q: "We Have Many Locations Or Brands. Is There A Plan For Us?",
     a: "Yes: Enterprise. One account across every location and brand, white-label options, custom limits and a dedicated team, priced around what you need. Talk to us and we'll put a quote together.",
