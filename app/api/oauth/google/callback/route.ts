@@ -20,7 +20,11 @@ function redirectToSettings(origin: string, params: Record<string, string>) {
 }
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  // NOT request.url's origin: behind Railway's proxy that is the container's
+  // own address (https://localhost:8080), which sent users there after
+  // connecting (2026-09-30). The public origin comes from config.
+  const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || new URL(request.url).origin;
 
   const error = searchParams.get("error");
   if (error) {

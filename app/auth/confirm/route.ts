@@ -15,7 +15,11 @@ import { landingPathAfterAuth } from "@/lib/post-auth";
  * otherwise back to /login with an error.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  // NOT request.url's origin: behind Railway's proxy that is the container's
+  // own address (https://localhost:8080). Same fix as the Google OAuth
+  // callback (2026-09-30).
+  const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || new URL(request.url).origin;
 
   // MUST be sanitised: this value is concatenated onto `origin` below, and
   // `${origin}@evil.example` parses as userinfo + host — the browser goes to
