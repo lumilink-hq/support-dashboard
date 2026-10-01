@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar, type ProductAccess } from "@/components/sidebar";
+import { MobileNav } from "@/components/mobile-nav";
 import { signout } from "@/app/login/actions";
 import { getSeoAccess } from "@/lib/seo-access";
 import { featureGate, featureState, getEntitlements, isUsable } from "@/lib/entitlements";
@@ -66,22 +67,28 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-full flex-1">
-      <Sidebar clientName={clientName} access={access} />
+      {/* Below md the sidebar lives in MobileNav's drawer instead. */}
+      <div className="hidden md:flex">
+        <Sidebar clientName={clientName} access={access} />
+      </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
-          <div className="text-sm text-gray-500">{displayName}</div>
+        <header className="flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 md:px-6">
+          <div className="flex min-w-0 items-center gap-2">
+            <MobileNav clientName={clientName} access={access} />
+            <div className="truncate text-sm text-gray-500">{displayName}</div>
+          </div>
           <form action={signout}>
             <button
               type="submit"
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+              className="shrink-0 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
             >
               Sign out
             </button>
           </form>
         </header>
 
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-gray-50 p-4 md:p-6">{children}</main>
       </div>
     </div>
   );
