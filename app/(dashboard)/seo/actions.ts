@@ -335,6 +335,42 @@ export async function dismissKeywordSuggestion(formData: FormData) {
   redirect(suggestionBack(location));
 }
 
+/**
+ * Dismiss a competitor gap phrase (module 23) for every location of the
+ * client: it leaves the gap table and is never picked as an article topic.
+ * The gap tables are read-only to tenants; 0063's definer function records it.
+ */
+export async function dismissCompetitorGap(formData: FormData) {
+  const location = String(formData.get("location") ?? "");
+  const keyword = cleanKeyword(String(formData.get("keyword") ?? ""));
+  if (keyword.length < KEYWORD_MIN || keyword.length > KEYWORD_MAX) redirect(gapBack(location, "Missing keyword."));
+
+  const access = await getSeoAccess();
+  if (!access.allowed) redirect(gapBack(location, "Local SEO isn't active on your plan."));
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data, error } = await supabase.rpc("dismiss_seo_competitor_gap", { p_keyword: keyword });
+  if (error) redirect(gapBack(location, error.message));
+  if (!data) redirect(gapBack(location, "That keyword couldn't be dismissed."));
+
+  revalidatePath("/seo");
+  redirect(gapBack(location));
+}
+
+function gapBack(location: string, error?: string) {
+  const qs = new URLSearchParams();
+  if (location) qs.set("location", location);
+  qs.set("tab", "keywords");
+  if (error) qs.set("error", error);
+  const s = qs.toString();
+  return `/seo${s ? `?${s}` : ""}#competitor-gaps`;
+}
+
 function suggestionBack(location: string, error?: string) {
   const qs = new URLSearchParams();
   if (location) qs.set("location", location);

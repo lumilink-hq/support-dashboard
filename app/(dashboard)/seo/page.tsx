@@ -53,6 +53,7 @@ import {
   type SearchState,
   type SearchSummary,
 } from "@/supabase/functions/seo-search-console/insights";
+import { competitorGapScore, type CompetitorGapRow } from "@/supabase/functions/seo-content/lib";
 import {
   describeRadius,
   fieldLabel,
@@ -66,6 +67,7 @@ import {
   addAiQuery,
   addCompetitor,
   addKeyword,
+  dismissCompetitorGap,
   dismissKeywordSuggestion,
   removeAiQuery,
   removeCompetitor,
@@ -88,6 +90,7 @@ type Shipped = {
 type BacklinkRow = { snapshot_date: string; referring_domains_count: number | null; total_backlinks: number | null; gained_count: number | null; lost_count: number | null };
 type MetricRow = { metric_date: string; metrics: Record<string, unknown> };
 type AiQuery = { id: string; query: string };
+type CompetitorGap = CompetitorGapRow & { cpc: number | string | null; competitor_positions: string[] };
 type TopRow = { page?: string; query?: string; clicks: number; impressions: number; position: number | string | null };
 
 function Card({ title, id, children, note }: { title: string; id?: string; children: React.ReactNode; note?: string }) {
@@ -148,6 +151,41 @@ function TopTable({ rows, keyLabel, caption }: { rows: TopRow[]; keyLabel: strin
         </details>
       ) : null}
     </div>
+  );
+}
+
+function GapLine({ gap, locationId, atCap }: { gap: CompetitorGap; locationId: string; atCap: boolean }) {
+  const stats = keywordStatsLine(gap);
+  const isTopic = competitorGapScore(gap) > 0;
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-2 py-2">
+      <span className="min-w-0 break-words">
+        <span className="text-gray-800">{gap.keyword}</span>
+        {isTopic ? <span className="ml-2 rounded-full bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700">Article topic</span> : null}
+        <span className="block text-xs text-gray-500">{[gap.competitor_positions.join(", "), stats].filter(Boolean).join(" · ")}</span>
+      </span>
+      <span className="flex flex-wrap items-center gap-2">
+        <form action={addKeyword}>
+          <input type="hidden" name="location" value={locationId} />
+          <input type="hidden" name="keyword" value={gap.keyword} />
+          <button
+            type="submit"
+            disabled={atCap}
+            aria-label={`Track ${gap.keyword}`}
+            className="rounded-md border border-gray-900 px-2 py-0.5 text-xs text-gray-900 hover:bg-gray-900 hover:text-white disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent"
+          >
+            Track
+          </button>
+        </form>
+        <form action={dismissCompetitorGap}>
+          <input type="hidden" name="keyword" value={gap.keyword} />
+          <input type="hidden" name="location" value={locationId} />
+          <button type="submit" aria-label={`Dismiss ${gap.keyword}`} className="text-xs text-gray-500 underline hover:text-gray-900">
+            Dismiss
+          </button>
+        </form>
+      </span>
+    </li>
   );
 }
 
@@ -253,7 +291,7 @@ export default async function SeoPortalPage({
   const [
     kwRes, trendRes, radiusRes, connRes, compRes, backlinkRes, metricRes, shippedRes, queryRes, mentionRes, pendingRes,
     propRes, dailyRes, kwCountRes, settingsRes, milestoneRes, entRes, googleRes, publishedRes, metricLatestRes,
-    kwStatsRes, suggestionRes,
+    kwStatsRes, suggestionRes, gapRes,
   ] = await Promise.all([
     supabase.from("seo_keywords").select("id, keyword, is_geo_grid_enabled").eq("location_id", loc.id).eq("is_active", true).order("keyword"),
     supabase.from("seo_rank_trend").select("rank_type, check_date, avg_position").eq("location_id", loc.id).gte("check_date", since200).order("check_date"),
@@ -290,12 +328,20 @@ export default async function SeoPortalPage({
       .select("id, keyword, source, search_volume, cpc, keyword_difficulty, gsc_impressions, gsc_clicks, gsc_position, gsc_month")
       .eq("status", "open")
       .limit(200),
+    // Module 23: searches this location's competitors rank for that it doesn't.
+    supabase
+      .from("seo_competitor_gaps")
+      .select("location_id, keyword, competitors_ranking, best_competitor_position, competitor_positions, search_volume, cpc, keyword_difficulty, main_intent")
+      .eq("location_id", loc.id)
+      .order("search_volume", { ascending: false, nullsFirst: false })
+      .limit(100),
   ]);
 
   const keywords = (kwRes.data ?? []) as Keyword[];
   const kwStats = new Map(((kwStatsRes.data ?? []) as KeywordStats[]).map((m) => [m.keyword, m]));
   const suggestions = splitSuggestions((suggestionRes.data ?? []) as KeywordSuggestion[], new Set(keywords.map((k) => k.keyword)));
   const atKeywordCap = keywords.length >= MAX_KEYWORDS_PER_LOCATION;
+  const gaps = (gapRes.data ?? []) as CompetitorGap[];
   const trend = (trendRes.data ?? []) as TrendRow[];
   const backlinks = ((backlinkRes.data ?? []) as BacklinkRow[]).slice().reverse();
   const metrics = (metricRes.data ?? []) as MetricRow[];
@@ -879,6 +925,39 @@ export default async function SeoPortalPage({
               )}
             </Card>
           </div>
+
+          <Card
+            title="Competitor keyword gaps"
+            id="competitor-gaps"
+            note="Searches your competitors rank for in Google's top 20 that your site doesn't show up for at all. Refreshed monthly; US-wide search volumes."
+          >
+            {competitors.length === 0 ? (
+              <Empty>Track a competitor above to see the searches they win and you don&apos;t.</Empty>
+            ) : gaps.length === 0 ? (
+              <Empty>No gaps found yet. They&apos;re checked once a month, and within the hour after a competitor is added.</Empty>
+            ) : (
+              <>
+                <p className="mb-2 text-xs text-gray-500">
+                  Marked <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-blue-700">Article topic</span> when a competitor is on page one and the difficulty is 50 or less: weekly articles can be written for these, and each still waits for your approval.
+                </p>
+                <ul className="divide-y divide-gray-100 text-sm">
+                  {gaps.slice(0, 15).map((g) => (
+                    <GapLine key={g.keyword} gap={g} locationId={loc.id} atCap={atKeywordCap} />
+                  ))}
+                </ul>
+                {gaps.length > 15 ? (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-sm text-blue-700 underline">Show all {gaps.length}</summary>
+                    <ul className="mt-1 divide-y divide-gray-100 text-sm">
+                      {gaps.slice(15).map((g) => (
+                        <GapLine key={g.keyword} gap={g} locationId={loc.id} atCap={atKeywordCap} />
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+              </>
+            )}
+          </Card>
         </div>
       ) : null}
 

@@ -1,6 +1,10 @@
 // =============================================================================
 // seo-content — module 16 (plan.md): weekly, per client, choose topics from the
 // ranking gap, draft an article and an image, and queue them for approval.
+// Topics come from tracked keywords (seo_keyword_gaps, 0056) and, since module
+// 23, from competitor gaps (seo_competitor_gaps, 0063): searches a competitor
+// ranks for on page one that the client doesn't show up for. Those score
+// lower than a tracked keyword the client is losing on (lib.ts).
 //
 //   POST /seo-content
 //   header: x-voice-tool-secret: <VOICE_TOOL_SECRET>
@@ -39,12 +43,14 @@ import {
   buildImagePrompt,
   checkUniqueness,
   dropCannibalizing,
+  gapRowsFromCompetitors,
   idempotencyKey,
   normalizeKeyword,
   parseArticleOutput,
   pickCandidates,
   SYSTEM_PROMPT,
   validateArticle,
+  type CompetitorGapRow,
   type GapRow,
   type PriorPost,
 } from "./lib.ts";
@@ -210,6 +216,16 @@ async function runClient(clientId: string): Promise<Record<string, unknown>> {
   const { data: gapRows, error: gErr } = await supabase.from("seo_keyword_gaps").select("*").eq("client_id", clientId);
   if (gErr) throw new Error(`loading keyword gaps failed: ${gErr.message}`);
 
+  // Module 23: searches a competitor ranks for that the client doesn't show up
+  // for at all. Only locations this run can write for (an active, connected
+  // website) are kept below, via `locations`.
+  const { data: compGapRows, error: cgErr } = await supabase
+    .from("seo_competitor_gaps")
+    .select("location_id, keyword, competitors_ranking, best_competitor_position, search_volume, keyword_difficulty, main_intent")
+    .eq("client_id", clientId);
+  if (cgErr) throw new Error(`loading competitor gaps failed: ${cgErr.message}`);
+  const competitorCandidates = gapRowsFromCompetitors((compGapRows ?? []) as CompetitorGapRow[]).filter((r) => locations.has(r.location_id));
+
   const { data: postRows, error: pErr } = await supabase
     .from("seo_content_posts")
     .select("id, location_id, topic_key, title, body_text, topic_embedding, content_embedding")
@@ -222,7 +238,7 @@ async function runClient(clientId: string): Promise<Record<string, unknown>> {
   const postsByLocation: Record<string, number> = {};
   for (const p of posts) postsByLocation[p.location_id] = (postsByLocation[p.location_id] ?? 0) + 1;
 
-  const picked = pickCandidates((gapRows ?? []) as GapRow[], activeKeys, postsByLocation, want * ATTEMPT_MULTIPLIER);
+  const picked = pickCandidates([...((gapRows ?? []) as GapRow[]), ...competitorCandidates], activeKeys, postsByLocation, want * ATTEMPT_MULTIPLIER);
   if (picked.length === 0) {
     await settle(clientId, true, null, BASE_INTERVAL_MINUTES);
     return { status: "no_gap", drafted: 0 };

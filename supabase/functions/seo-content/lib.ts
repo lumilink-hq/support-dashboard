@@ -34,7 +34,26 @@ export type GapRow = {
   has_rank_data: boolean;
   best_competitor_position: number | null;
   competitors_ranking: number;
+  // Set for a module 23 competitor gap: the phrase isn't tracked, so its
+  // priority comes from competitorGapScore, not gapScore.
+  score?: number;
+  source?: "tracked" | "competitor_gap";
 };
+
+/** A row of 0063's seo_competitor_gaps view. */
+export type CompetitorGapRow = {
+  location_id: string;
+  keyword: string;
+  competitors_ranking: number;
+  best_competitor_position: number | null;
+  search_volume: number | null;
+  keyword_difficulty: number | null;
+  main_intent: string | null;
+};
+
+export const GAP_MAX_COMPETITOR_POSITION = 10;
+export const GAP_MIN_SEARCH_VOLUME = 20;
+export const GAP_MAX_DIFFICULTY = 50;
 
 export function normalizeKeyword(k: string): string {
   return k.toLowerCase().replace(/\s+/g, " ").trim();
@@ -67,6 +86,46 @@ export function gapScore(r: Pick<GapRow, "own_position" | "has_rank_data" | "bes
   return base + pressure;
 }
 
+/**
+ * Priority of a competitor gap (module 23): a search a competitor ranks for
+ * and the client doesn't show up for at all. Stricter than a tracked keyword,
+ * because nobody chose it: the competitor must be on page one, the phrase
+ * must be searched, not too hard for one new article (difficulty 50 or less,
+ * unknown allowed), and not navigational. Scores 30 to 70, so a tracked
+ * keyword the client is losing on (55 to 100) still comes first.
+ */
+export function competitorGapScore(r: CompetitorGapRow): number {
+  const pos = r.best_competitor_position;
+  if (pos === null || pos < 1 || pos > GAP_MAX_COMPETITOR_POSITION) return 0;
+  if ((r.search_volume ?? 0) < GAP_MIN_SEARCH_VOLUME) return 0;
+  if (r.keyword_difficulty !== null && r.keyword_difficulty > GAP_MAX_DIFFICULTY) return 0;
+  if (r.main_intent === "navigational") return 0;
+  const volumeBonus = Math.min(5, Math.floor(Math.log10(r.search_volume ?? 1)));
+  return 30 + (11 - pos) * 2 + Math.min(r.competitors_ranking, 5) * 3 + volumeBonus;
+}
+
+/** Competitor gaps as topic candidates, scored; ineligible ones dropped. */
+export function gapRowsFromCompetitors(rows: CompetitorGapRow[]): GapRow[] {
+  return rows
+    .map((r): GapRow => ({
+      keyword_id: `gap:${r.location_id}:${normalizeKeyword(r.keyword)}`,
+      location_id: r.location_id,
+      keyword: r.keyword,
+      own_position: null,
+      has_rank_data: true,
+      best_competitor_position: r.best_competitor_position,
+      competitors_ranking: r.competitors_ranking,
+      score: competitorGapScore(r),
+      source: "competitor_gap",
+    }))
+    .filter((r) => (r.score ?? 0) > 0);
+}
+
+/** A tracked keyword's priority, or a competitor gap's precomputed one. */
+export function candidateScore(r: GapRow): number {
+  return r.score ?? gapScore(r);
+}
+
 const SPREAD_PENALTY = 15;
 
 /**
@@ -85,11 +144,11 @@ export function pickCandidates(
 ): GapRow[] {
   const seen = new Set<string>();
   const pool = rows
-    .filter((r) => gapScore(r) > 0)
+    .filter((r) => candidateScore(r) > 0)
     .filter((r) => !activeTopicKeys.has(normalizeKeyword(r.keyword)))
     // One candidate per keyword phrase across the client: siblings tracking the
     // same phrase must not both write about it.
-    .sort((a, b) => gapScore(b) - gapScore(a) || a.keyword.localeCompare(b.keyword))
+    .sort((a, b) => candidateScore(b) - candidateScore(a) || a.keyword.localeCompare(b.keyword))
     .filter((r) => {
       const k = normalizeKeyword(r.keyword);
       if (seen.has(k)) return false;
@@ -103,7 +162,7 @@ export function pickCandidates(
     let bestIdx = 0;
     let bestVal = -Infinity;
     pool.forEach((r, i) => {
-      const v = gapScore(r) - SPREAD_PENALTY * (taken[r.location_id] ?? 0);
+      const v = candidateScore(r) - SPREAD_PENALTY * (taken[r.location_id] ?? 0);
       if (v > bestVal) {
         bestVal = v;
         bestIdx = i;
