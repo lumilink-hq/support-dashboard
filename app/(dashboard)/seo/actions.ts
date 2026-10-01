@@ -24,6 +24,7 @@ import { MAX_QUERIES_PER_CLIENT } from "@/supabase/functions/seo-ai-visibility/l
 function backTo(location: string, error?: string) {
   const qs = new URLSearchParams();
   if (location) qs.set("location", location);
+  qs.set("tab", "ai");
   if (error) qs.set("error", error);
   const s = qs.toString();
   return `/seo${s ? `?${s}` : ""}#ai`;
@@ -309,6 +310,7 @@ export async function setKeywordGeoGrid(formData: FormData) {
 function keywordBack(location: string, error?: string) {
   const qs = new URLSearchParams();
   if (location) qs.set("location", location);
+  qs.set("tab", "keywords");
   if (error) qs.set("error", error);
   const s = qs.toString();
   return `/seo${s ? `?${s}` : ""}#keywords`;
@@ -317,6 +319,7 @@ function keywordBack(location: string, error?: string) {
 function competitorBack(location: string, error?: string) {
   const qs = new URLSearchParams();
   if (location) qs.set("location", location);
+  qs.set("tab", "keywords");
   if (error) qs.set("error", error);
   const s = qs.toString();
   return `/seo${s ? `?${s}` : ""}#competitors`;

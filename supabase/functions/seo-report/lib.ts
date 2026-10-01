@@ -2,6 +2,8 @@
 // the function fetches rows and hands them here, so all of this is unit-tested
 // with scripts/test-seo-report.ts.
 
+import type { SearchState, SearchSummary } from "../seo-search-console/insights.ts";
+
 // -----------------------------------------------------------------------------
 // Period
 // -----------------------------------------------------------------------------
@@ -211,9 +213,29 @@ export function fieldLabel(field: string | null): string {
   return FIELD_LABELS[field] ?? field.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 }
 
+// One plain sentence per kind of change, shown under it on the work-shipped log
+// and in the report (module 21). Fixed copy, no model call.
+const WHY_IT_MATTERS: Record<string, string> = {
+  title_tag:
+    "The title is the blue link people click in Google. A clear one that names what the page offers and where earns more clicks from the same position.",
+  meta_description:
+    "The grey text under the link in Google. It doesn't move rankings by itself, but a specific one persuades more searchers to click.",
+  h1: "The main heading tells Google and visitors what the page is about, which helps it rank for the right searches.",
+  local_business_schema:
+    "Structured data states your business name, address, hours and phone in a form Google reads directly, which supports map results and rich listings.",
+  article:
+    "Each article answers a question your customers search for. Over time it brings in new visitors and gives Google more reasons to rank the whole site.",
+};
+
+export function whyItMatters(field: string | null): string | null {
+  return field ? WHY_IT_MATTERS[field] ?? null : null;
+}
+
 export type ShippedItem = {
   label: string;
   detail: string | null;
+  /** Optional: reports made before module 21 don't have it. */
+  why?: string | null;
   url: string | null;
   published_at: string;
   /** true only when LumiLink applied it and confirmed it landed. A change the
@@ -237,6 +259,7 @@ export function shippedItems(rows: ActionRow[], period: Period): ShippedItem[] {
     .map((a) => ({
       label: fieldLabel(a.target_field),
       detail: a.action_type === "content_publish" ? a.proposed_value?.title ?? null : null,
+      why: whyItMatters(a.target_field),
       url: safeUrl(a.target_url),
       published_at: a.published_at as string,
       verified: a.apply_mode === "api" && a.publish_result?.verified === true,
@@ -274,9 +297,19 @@ export type GridData = {
   cells: { row: number; col: number; position: number | null }[];
 };
 
+/**
+ * Search Console traffic for the location's website (module 21). Several
+ * locations can share one site, in which case `shared_with` counts the others
+ * and the numbers are the whole site's. Optional: older reports don't have it.
+ */
+export type LocationSearch =
+  | { state: "ok"; summary: SearchSummary; shared_with: number; hero: { headline: string; summary: string } }
+  | { state: Exclude<SearchState, "ok"> | "no_data"; site_url: string | null; message: string };
+
 export type LocationReport = {
   id: string;
   name: string;
+  search?: LocationSearch;
   rankings: { keywords: KeywordRank[]; organic: RankSummary; local_pack: RankSummary };
   /** Optional: reports made before charts existed don't have these. */
   trend?: TrendData;

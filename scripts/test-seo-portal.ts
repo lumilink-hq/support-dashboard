@@ -4,7 +4,20 @@
 //   npx tsx scripts/test-seo-portal.ts
 // =============================================================================
 
-import { aiSummary, cleanDomain, cleanKeyword, cleanQuery, compareToCompetitors, daysAgo, latestPerKeyword, trendPoints } from "../lib/seo-portal.ts";
+import {
+  aiSummary,
+  articleResults,
+  cleanDomain,
+  cleanKeyword,
+  cleanQuery,
+  compareToCompetitors,
+  contentByMonth,
+  daysAgo,
+  latestPerKeyword,
+  parseCompare,
+  parseTab,
+  trendPoints,
+} from "../lib/seo-portal.ts";
 
 let passed = 0;
 let failed = 0;
@@ -97,6 +110,39 @@ console.log("\ncleanKeyword");
   ok("lowercases and collapses whitespace", cleanKeyword("  Emergency   Plumber\tTulsa ") === "emergency plumber tulsa");
   ok("same phrase in different case is one keyword", cleanKeyword("Plumber Tulsa") === cleanKeyword("plumber tulsa"));
   ok("empty stays empty", cleanKeyword("   ") === "");
+}
+
+console.log("\nmodule 21: tabs, content output, article results");
+{
+  ok("unknown tab is the overview", parseTab("nope") === "overview" && parseTab(undefined) === "overview");
+  ok("a real tab is kept", parseTab("links") === "links");
+  ok("compare defaults to yoy", parseCompare(undefined) === "yoy" && parseCompare("x") === "yoy" && parseCompare("mom") === "mom");
+
+  const counts = contentByMonth(
+    [
+      { action_type: "content_publish", target_url: null, published_at: "2026-08-03T10:00:00Z" },
+      { action_type: "content_publish", target_url: null, published_at: "2026-08-20T10:00:00Z" },
+      { action_type: "onpage_update", target_url: null, published_at: "2026-08-21T10:00:00Z" },
+      { action_type: "onpage_update", target_url: null, published_at: "2026-09-01T00:00:00Z" },
+    ],
+    ["2026-07-01", "2026-08-01", "2026-09-01"],
+  );
+  ok("content: per month", JSON.stringify(counts.map((c) => [c.articles, c.changes])) === "[[0,0],[2,1],[0,1]]", counts);
+
+  const res = articleResults(
+    [
+      { title: "A", url: "https://x.com/a", normalised: "x.com/a", published_at: "2026-08-15T00:00:00Z" },
+      { title: "B", url: "https://x.com/b", normalised: "x.com/b", published_at: "2026-08-15T00:00:00Z" },
+    ],
+    [
+      { page: "x.com/a", month: "2026-07-01", clicks: 99, impressions: 999, position: 1 }, // before it was published
+      { page: "x.com/a", month: "2026-08-01", clicks: 10, impressions: 100, position: 4 },
+      { page: "x.com/a", month: "2026-09-01", clicks: 20, impressions: 300, position: 8 },
+    ],
+  );
+  ok("article: sums from its publish month on", res[0].clicks === 30 && res[0].impressions === 400, res[0]);
+  ok("article: position impression-weighted", res[0].position === 7, res[0].position);
+  ok("article: never in the top pages is null, not zero", res[1].clicks === null && res[1].impressions === null);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

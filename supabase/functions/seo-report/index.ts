@@ -35,6 +35,15 @@
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { renderReportPdf } from "./pdf.ts";
 import {
+  heroSentence,
+  searchStateMessage,
+  searchSummary,
+  type DayTotal,
+  type KeywordCountRow,
+  type SearchState,
+} from "../seo-search-console/insights.ts";
+import { addMonths } from "../seo-search-console/lib.ts";
+import {
   dayAfter,
   describeRadius,
   keywordRanks,
@@ -49,6 +58,7 @@ import {
   type GridData,
   type GeoRadiusRow,
   type LocationReport,
+  type LocationSearch,
   type Period,
   type RankRow,
   type ReportContent,
@@ -116,9 +126,93 @@ type LocationRow = {
   name: string;
   lat: number | null;
   lng: number | null;
+  search_console_site_url: string | null;
 };
 
-async function locationReport(clientId: string, loc: LocationRow, period: Period): Promise<LocationReport> {
+/**
+ * Search Console traffic for one property for the report month (module 21).
+ * Read once per property per run; locations sharing a site share the result.
+ */
+async function propertySearch(
+  clientId: string,
+  siteUrl: string,
+  period: Period,
+  centsPerClick: number,
+  sharedWith: number,
+): Promise<LocationSearch> {
+  const { data: prop, error: pErr } = await supabase
+    .from("seo_search_properties")
+    .select("status, data_through")
+    .eq("client_id", clientId)
+    .eq("site_url", siteUrl)
+    .maybeSingle();
+  if (pErr) throw new Error(`loading Search Console state failed: ${pErr.message}`);
+  const state = ((prop?.status as SearchState | undefined) ?? "pending");
+  const dataThrough = (prop?.data_through as string | null) ?? null;
+  if (state !== "ok" || !dataThrough) {
+    return { state: state === "ok" ? "pending" : state, site_url: siteUrl, message: searchStateMessage(state === "ok" ? "pending" : state, siteUrl, dataThrough) };
+  }
+
+  // 16 months back covers the year-over-year comparison and the rolling year.
+  const from = addMonths(period.start, -15);
+  const days = await fetchAll<DayTotal>((a, b) =>
+    supabase
+      .from("seo_search_daily")
+      .select("date, clicks, impressions, position")
+      .eq("client_id", clientId)
+      .eq("site_url", siteUrl)
+      .eq("device", "all")
+      .gte("date", from)
+      .lte("date", period.end)
+      .order("date", { ascending: true })
+      .range(a, b),
+  );
+  const { data: kwRows, error: kErr } = await supabase
+    .from("seo_search_keyword_counts")
+    .select("month, total, page_one, top_three, is_complete")
+    .eq("client_id", clientId)
+    .eq("site_url", siteUrl)
+    .gte("month", from)
+    .lte("month", period.start);
+  if (kErr) throw new Error(`loading keyword counts failed: ${kErr.message}`);
+  const { data: pages, error: pgErr } = await supabase
+    .from("seo_search_monthly_pages")
+    .select("page, clicks, impressions, position")
+    .eq("client_id", clientId)
+    .eq("site_url", siteUrl)
+    .eq("month", period.start)
+    .order("clicks", { ascending: false })
+    .order("impressions", { ascending: false })
+    .order("page")
+    .limit(10);
+  if (pgErr) throw new Error(`loading top pages failed: ${pgErr.message}`);
+
+  const summary = searchSummary({
+    siteUrl,
+    days: days.map((d) => ({ ...d, position: d.position === null ? null : Number(d.position) })),
+    keywordRows: ((kwRows ?? []) as KeywordCountRow[]),
+    topPages: ((pages ?? []) as { page: string; clicks: number; impressions: number; position: number | string | null }[]).map((p) => ({
+      key: p.page,
+      clicks: p.clicks,
+      impressions: p.impressions,
+      position: p.position === null ? null : Number(p.position),
+    })),
+    dataThrough,
+    month: period.start,
+    centsPerClick,
+  });
+  if (!summary) {
+    return { state: "no_data", site_url: siteUrl, message: `Search Console has no data for ${period.label} yet. ${searchStateMessage("ok", siteUrl, dataThrough)}` };
+  }
+  return { state: "ok", summary, shared_with: sharedWith, hero: heroSentence(summary, "yoy") };
+}
+
+async function locationReport(
+  clientId: string,
+  loc: LocationRow,
+  period: Period,
+  search: LocationSearch,
+): Promise<LocationReport> {
   const lookbackFrom = new Date(`${period.start}T00:00:00Z`);
   lookbackFrom.setUTCDate(lookbackFrom.getUTCDate() - RANK_LOOKBACK_DAYS);
   const from = lookbackFrom.toISOString().slice(0, 10);
@@ -238,6 +332,7 @@ async function locationReport(clientId: string, loc: LocationRow, period: Period
   return {
     id: loc.id,
     name: loc.name,
+    search,
     rankings: {
       keywords: ranks,
       organic: summarise(ranks.map((k) => k.organic)),
@@ -338,7 +433,7 @@ async function runClient(clientId: string, period: Period): Promise<Record<strin
 
   const { data: locRows, error: lErr } = await supabase
     .from("seo_locations")
-    .select("id, name, lat, lng")
+    .select("id, name, lat, lng, search_console_site_url")
     .eq("client_id", clientId)
     .eq("is_active", true)
     .order("name", { ascending: true });
@@ -361,7 +456,28 @@ async function runClient(clientId: string, period: Period): Promise<Record<strin
     ai_visibility: await aiVisibility(clientId, period),
     locations: [],
   };
-  for (const loc of locations) content.locations.push(await locationReport(clientId, loc, period));
+  const { data: settings } = await supabase
+    .from("seo_client_settings")
+    .select("value_per_click_cents")
+    .eq("client_id", clientId)
+    .maybeSingle();
+  const centsPerClick = (settings?.value_per_click_cents as number | undefined) ?? 200;
+  const siteOf = (l: LocationRow) => (l.search_console_site_url ?? "").trim();
+  const searchBySite = new Map<string, LocationSearch>();
+  for (const loc of locations) {
+    const site = siteOf(loc);
+    let search: LocationSearch;
+    if (!site) {
+      search = { state: "not_set", site_url: null, message: searchStateMessage("not_set", null, null) };
+    } else {
+      if (!searchBySite.has(site)) {
+        const sharing = locations.filter((l) => siteOf(l) === site).length - 1;
+        searchBySite.set(site, await propertySearch(clientId, site, period, centsPerClick, sharing));
+      }
+      search = searchBySite.get(site)!;
+    }
+    content.locations.push(await locationReport(clientId, loc, period, search));
+  }
 
   const pdf = await renderReportPdf(content);
   const path = `${clientId}/${period.start.slice(0, 7)}.pdf`;

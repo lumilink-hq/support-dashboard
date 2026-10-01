@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { HeatGrid, Legend, LineChart, SERIES_COLORS } from "@/components/seo/charts";
+import { BarChart, HeatGrid, Legend, LineChart, MonthTrend, SERIES_COLORS } from "@/components/seo/charts";
 import { SeoLocked } from "@/components/seo/locked";
+import { Story, TileGrid } from "@/components/seo/search-tiles";
+import { dayLabel, fmtInt, fmtMoney, monthLabel, perClickLabel } from "@/supabase/functions/seo-search-console/insights";
 import { getSeoAccess } from "@/lib/seo-access";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -28,13 +30,101 @@ function Muted({ children }: { children: React.ReactNode }) {
   return <p className="text-gray-500">{children}</p>;
 }
 
-function LocationBlock({ loc }: { loc: LocationReport }) {
+/** Module 21: the same hero, tiles and stories as the portal's Overview, for the report month. */
+function SearchBlock({ loc, sameAs }: { loc: LocationReport; sameAs: string | null }) {
+  const s = loc.search;
+  if (!s) return null; // a report made before module 21
+  if (s.state === "ok" && sameAs) {
+    return (
+      <Section title="Search traffic">
+        <Muted>
+          Same website as {sameAs} ({s.summary.site_url}); its search traffic is shown there.
+        </Muted>
+      </Section>
+    );
+  }
+  if (s.state !== "ok") {
+    return (
+      <Section title="Search traffic">
+        <Muted>{s.message}</Muted>
+      </Section>
+    );
+  }
+  const sum = s.summary;
+  return (
+    <div className="mt-4 space-y-6">
+      <div className="rounded-xl bg-gray-900 p-5 text-white">
+        <h3 className="text-xl font-semibold leading-tight sm:text-2xl">{s.hero.headline}</h3>
+        <p className="mt-2 max-w-3xl text-sm text-gray-300">{s.hero.summary}</p>
+        {s.shared_with > 0 ? (
+          <p className="mt-2 text-xs text-gray-400">
+            Figures for the whole website ({sum.site_url}), which {s.shared_with} other location{s.shared_with === 1 ? " shares" : "s share"}.
+          </p>
+        ) : null}
+      </div>
+      <TileGrid tiles={sum.tiles} compare="yoy" />
+      <Story
+        eyebrow="Growth"
+        headline="Clicks from Google search, every month"
+        source={`Search Console · ${sum.site_url} · final data through ${dayLabel(sum.data_through)}.`}
+      >
+        <MonthTrend
+          label={`Monthly clicks from Google search to ${sum.period.label}`}
+          points={sum.months.map((m) => ({ month: m.month, value: m.clicks, partial: !m.complete }))}
+        />
+      </Story>
+      <Story
+        eyebrow="Return on investment"
+        headline={`Estimated traffic value: ${fmtMoney(sum.value.year.cents)} over the last year`}
+        lead={`${fmtInt(sum.value.year.clicks)} clicks from ${dayLabel(sum.value.year.start)} to ${dayLabel(sum.value.year.end)} at ${perClickLabel(sum.value.centsPerClick)} a click. ${sum.period.range}: ${fmtMoney(sum.value.period.cents)}.`}
+        source="A replacement value for the traffic, not revenue or profit."
+      >
+        <BarChart
+          label="Traffic value per month"
+          series={[{ name: "Traffic value", color: SERIES_COLORS[3] }]}
+          format={(n) => `$${Math.round(n).toLocaleString("en-US")}`}
+          categories={sum.value.months.map((m) => ({ label: `${monthLabel(m.month)}${m.partial ? "*" : ""}`, values: [m.cents / 100] }))}
+        />
+      </Story>
+      {sum.top_pages.length > 0 ? (
+        <Story eyebrow="Top pages" headline={`Where the clicks landed, ${sum.period.range}`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="text-gray-500">
+                <tr>
+                  <th className="py-1 pr-3">Page</th>
+                  <th className="pr-3 text-right">Clicks</th>
+                  <th className="pr-3 text-right">Impressions</th>
+                  <th className="text-right">Position</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {sum.top_pages.map((p) => (
+                  <tr key={p.key}>
+                    <td className="max-w-xs break-words py-1 pr-3 text-gray-900">{p.key}</td>
+                    <td className="pr-3 text-right tabular-nums">{fmtInt(p.clicks)}</td>
+                    <td className="pr-3 text-right tabular-nums">{fmtInt(p.impressions)}</td>
+                    <td className="text-right tabular-nums">{p.position === null ? "–" : p.position.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Story>
+      ) : null}
+    </div>
+  );
+}
+
+function LocationBlock({ loc, sameAs }: { loc: LocationReport; sameAs: string | null }) {
   const o = loc.rankings.organic;
   const l = loc.rankings.local_pack;
   const pm = loc.profile_metrics;
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-5">
       <h2 className="text-base font-semibold text-gray-900">{loc.name}</h2>
+
+      <SearchBlock loc={loc} sameAs={sameAs} />
 
       <Section title="Where you can win">
         <p>{loc.radius.statement}</p>
@@ -139,6 +229,7 @@ function LocationBlock({ loc }: { loc: LocationReport }) {
               <span className={`rounded-full px-2 py-0.5 text-xs ${s.verified ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
                 {s.verified ? "Confirmed live" : "Applied by you, not yet confirmed"}
               </span>
+              {s.why ? <span className="block text-xs text-gray-500">Why it matters: {s.why}</span> : null}
               {href ? (
                 <a href={href} target="_blank" rel="noopener noreferrer" className="block break-all text-xs text-blue-700 underline">
                   {s.url}
@@ -211,9 +302,14 @@ export default async function SeoReportPage({ params }: PageProps<"/seo/reports/
         </section>
       ) : null}
 
-      {content.locations.map((loc) => (
-        <LocationBlock key={loc.id} loc={loc} />
-      ))}
+      {content.locations.map((loc, i) => {
+        // Locations sharing one website share its search numbers: show them once.
+        const site = loc.search?.state === "ok" ? loc.search.summary.site_url : null;
+        const first = site
+          ? content.locations.slice(0, i).find((l) => l.search?.state === "ok" && l.search.summary.site_url === site)
+          : undefined;
+        return <LocationBlock key={loc.id} loc={loc} sameAs={first?.name ?? null} />;
+      })}
     </div>
   );
 }

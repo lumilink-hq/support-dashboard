@@ -107,12 +107,14 @@ export function BarChart({
   categories,
   series,
   label,
+  format = (n) => String(Math.round(n)),
 }: {
   categories: { label: string; values: number[] }[];
   series: { name: string; color: string }[];
   label: string;
+  format?: (n: number) => string;
 }) {
-  const W = 640, H = 200, L = 36, R = 8, T = 10, B = 28;
+  const W = 640, H = 200, L = 52, R = 8, T = 10, B = 28;
   const max = Math.max(1, ...categories.flatMap((c) => c.values));
   if (categories.length === 0) return null;
   const band = (W - L - R) / categories.length;
@@ -124,7 +126,7 @@ export function BarChart({
       {[0, max / 2, max].map((t) => (
         <g key={t}>
           <line x1={L} x2={W - R} y1={py(t)} y2={py(t)} stroke={GRID} />
-          <text x={L - 6} y={py(t) + 4} textAnchor="end" fontSize="11" fill={TEXT}>{Math.round(t)}</text>
+          <text x={L - 6} y={py(t) + 4} textAnchor="end" fontSize="11" fill={TEXT}>{format(t)}</text>
         </g>
       ))}
       {categories.map((c, ci) => {
@@ -133,7 +135,7 @@ export function BarChart({
           <g key={c.label}>
             {c.values.map((v, vi) => (
               <rect key={vi} x={x0 + vi * bar} y={py(v)} width={bar - 2} height={H - B - py(v)} fill={series[vi].color} rx="2">
-                <title>{`${series[vi].name}, ${c.label}: ${v}`}</title>
+                <title>{`${series[vi].name}, ${c.label}: ${format(v)}`}</title>
               </rect>
             ))}
             <text x={L + ci * band + band / 2} y={H - 8} textAnchor="middle" fontSize="11" fill={TEXT}>{c.label}</text>
@@ -219,6 +221,101 @@ export function HeatGrid({ cells, label }: { cells: { row: number; col: number; 
         ]}
       />
     </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// 6. Sparkline: the shape of a tile's last 12 months. Decorative next to the
+//    number it sits under, so it is hidden from screen readers.
+// -----------------------------------------------------------------------------
+export function Sparkline({ values, color = SERIES_COLORS[1] }: { values: number[]; color?: string }) {
+  if (values.length < 2) return null;
+  const W = 120, H = 28;
+  const lo = Math.min(...values);
+  const hi = Math.max(...values, lo + 1e-9);
+  const pts = values.map((v, i) => `${(i / (values.length - 1)) * W},${H - 2 - ((v - lo) / (hi - lo)) * (H - 4)}`);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} aria-hidden className="h-7 w-full" preserveAspectRatio="none">
+      <polyline fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" points={pts.join(" ")} />
+    </svg>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// 7. Monthly trend: one value per month as a line, with labelled vertical
+//    markers for events ("LumiLink starts"). A month still in progress is drawn
+//    hollow on a dashed segment and labelled "so far", never extrapolated.
+// -----------------------------------------------------------------------------
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function monthTick(month: string): string {
+  return `${MONTHS_SHORT[Number(month.slice(5, 7)) - 1]} '${month.slice(2, 4)}`;
+}
+
+export function MonthTrend({
+  points,
+  markers = [],
+  label,
+  format = (n) => Math.round(n).toLocaleString("en-US"),
+  color = SERIES_COLORS[1],
+}: {
+  points: { month: string; value: number; partial?: boolean }[];
+  markers?: { month: string; label: string }[];
+  label: string;
+  format?: (n: number) => string;
+  color?: string;
+}) {
+  if (points.length < 2) return null;
+  const W = 640, H = 230, L = 52, R = 16, T = 34, B = 28;
+  const max = Math.max(...points.map((p) => p.value), 1);
+  const px = (i: number) => L + (i / (points.length - 1)) * (W - L - R);
+  const py = (v: number) => T + (1 - v / max) * (H - T - B);
+  const step = Math.max(1, Math.ceil(points.length / 8));
+  const done = points.filter((p) => !p.partial);
+  const last = points[points.length - 1];
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} className="w-full">
+      {[0, max / 2, max].map((t) => (
+        <g key={t}>
+          <line x1={L} x2={W - R} y1={py(t)} y2={py(t)} stroke={GRID} />
+          <text x={L - 6} y={py(t) + 4} textAnchor="end" fontSize="11" fill={TEXT}>{format(t)}</text>
+        </g>
+      ))}
+      <line x1={L} x2={W - R} y1={H - B} y2={H - B} stroke={AXIS} />
+      {points.map((p, i) =>
+        i % step === 0 || i === points.length - 1 ? (
+          <text key={p.month} x={px(i)} y={H - 8} textAnchor={i === points.length - 1 ? "end" : "middle"} fontSize="11" fill={TEXT}>{monthTick(p.month)}</text>
+        ) : null,
+      )}
+      {markers.map((m, mi) => {
+        const i = points.findIndex((p) => p.month === m.month);
+        if (i < 0) return null;
+        const x = px(i);
+        // Alternate the label rows so neighbouring markers don't overprint.
+        const y = mi % 2 === 0 ? 11 : 24;
+        const anchor = i > points.length * 0.7 ? "end" : "start";
+        return (
+          <g key={`${m.month}-${m.label}`}>
+            <line x1={x} x2={x} y1={y + 3} y2={H - B} stroke="#6b7280" strokeDasharray="3 3" />
+            <text x={anchor === "start" ? x + 4 : x - 4} y={y} textAnchor={anchor} fontSize="10" fill="#374151">{m.label}</text>
+          </g>
+        );
+      })}
+      <polyline fill="none" stroke={color} strokeWidth="2" points={done.map((p) => `${px(points.indexOf(p))},${py(p.value)}`).join(" ")} />
+      {last.partial && done.length > 0 ? (
+        <line
+          x1={px(points.indexOf(done[done.length - 1]))} y1={py(done[done.length - 1].value)}
+          x2={px(points.length - 1)} y2={py(last.value)}
+          stroke={color} strokeWidth="2" strokeDasharray="5 4"
+        />
+      ) : null}
+      {points.map((p, i) => (
+        <circle key={p.month} cx={px(i)} cy={py(p.value)} r="3.5" fill={p.partial ? "#fff" : color} stroke={color} strokeWidth="1.5">
+          <title>{`${monthTick(p.month)}${p.partial ? " (so far)" : ""}: ${format(p.value)}`}</title>
+        </circle>
+      ))}
+    </svg>
   );
 }
 

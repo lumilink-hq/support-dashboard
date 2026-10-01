@@ -153,3 +153,79 @@ export function cleanDomain(raw: string): string | null {
     return null;
   }
 }
+
+// -----------------------------------------------------------------------------
+// Module 21: the tabbed layout, content output and article results
+// -----------------------------------------------------------------------------
+
+export const SEO_TABS = ["overview", "keywords", "ai", "map", "links", "work"] as const;
+export type SeoTab = (typeof SEO_TABS)[number];
+
+export const SEO_TAB_LABELS: Record<SeoTab, string> = {
+  overview: "Overview",
+  keywords: "Keywords",
+  ai: "AI answers",
+  map: "Map & locations",
+  links: "Links",
+  work: "Work & next",
+};
+
+/** An unknown or missing ?tab= is the Overview, never an error page. */
+export function parseTab(raw: string | undefined): SeoTab {
+  return (SEO_TABS as readonly string[]).includes(raw ?? "") ? (raw as SeoTab) : "overview";
+}
+
+/** ?compare=mom switches every tile to month over month; anything else is year over year. */
+export function parseCompare(raw: string | undefined): "yoy" | "mom" {
+  return raw === "mom" ? "mom" : "yoy";
+}
+
+export type PublishedAction = { action_type: string; target_url: string | null; published_at: string; title?: string | null };
+
+/** Articles and other changes that went live, per month, for the months given (first days, oldest first). */
+export function contentByMonth(actions: PublishedAction[], months: string[]): { month: string; articles: number; changes: number }[] {
+  return months.map((m) => {
+    const inMonth = actions.filter((a) => a.published_at.slice(0, 7) === m.slice(0, 7));
+    const articles = inMonth.filter((a) => a.action_type === "content_publish").length;
+    return { month: m, articles, changes: inMonth.length - articles };
+  });
+}
+
+export type PageMonth = { page: string; month: string; clicks: number; impressions: number; position: number | null };
+
+export type ArticleResult = {
+  title: string;
+  url: string;
+  published_at: string;
+  /** null = the page hasn't appeared in the top pages Search Console reported for any month since. */
+  clicks: number | null;
+  impressions: number | null;
+  position: number | null;
+};
+
+/**
+ * Each published article against its search results since the month it went
+ * live, by normalised URL. Only the top 500 pages a month are stored, so an
+ * article that never made that cut shows "no search data yet", not zero.
+ */
+export function articleResults(
+  articles: { title: string; url: string; normalised: string; published_at: string }[],
+  pages: PageMonth[],
+): ArticleResult[] {
+  return articles.map((a) => {
+    const from = `${a.published_at.slice(0, 7)}-01`;
+    const rows = pages.filter((p) => p.page === a.normalised && p.month >= from);
+    if (rows.length === 0) return { title: a.title, url: a.url, published_at: a.published_at, clicks: null, impressions: null, position: null };
+    const clicks = rows.reduce((s, r) => s + r.clicks, 0);
+    const impressions = rows.reduce((s, r) => s + r.impressions, 0);
+    const posW = rows.reduce((s, r) => s + (r.position === null ? 0 : Number(r.position) * r.impressions), 0);
+    return {
+      title: a.title,
+      url: a.url,
+      published_at: a.published_at,
+      clicks,
+      impressions,
+      position: impressions > 0 ? Math.round((posW / impressions) * 10) / 10 : null,
+    };
+  });
+}

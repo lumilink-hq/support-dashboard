@@ -4,6 +4,7 @@
 // name with an emoji becomes "?" instead of throwing and losing the report.
 
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
+import { fmtInt, monthLabel, perClickLabel, type Delta, type Tile } from "../seo-search-console/insights.ts";
 import {
   METRIC_LABELS,
   movement,
@@ -108,7 +109,11 @@ class Writer {
    * Average rank over time, lower (better) at the top. Needs two or more dated
    * points in total to mean anything; the caller checks.
    */
-  lineChart(series: { name: string; color: ReturnType<typeof rgb>; dashed?: boolean; points: TrendPoint[] }[]) {
+  lineChart(
+    series: { name: string; color: ReturnType<typeof rgb>; dashed?: boolean; points: TrendPoint[] }[],
+    opts: { invert?: boolean; xLabel?: (x: string) => string; yLabel?: (v: number) => string } = {},
+  ) {
+    const invert = opts.invert ?? true;
     const H = 100;
     const LEFT = 30;
     const W = CONTENT_W - LEFT - 6;
@@ -119,18 +124,19 @@ class Writer {
     this.ensure(H + 46);
     const top = this.y - 6;
     const bottom = top - H;
-    const lo = Math.min(1, ...ys);
+    const lo = invert ? Math.min(1, ...ys) : 0;
     const hi = Math.max(...ys, lo + 1);
     const px = (x: string) => MARGIN + LEFT + (xs.indexOf(x) / (xs.length - 1)) * W;
-    const py = (v: number) => top - ((v - lo) / (hi - lo)) * H;
+    // Ranks: lower (better) at the top. Counts: higher at the top.
+    const py = (v: number) => (invert ? top - ((v - lo) / (hi - lo)) * H : bottom + ((v - lo) / (hi - lo)) * H);
 
     const grid = rgb(0.9, 0.91, 0.93);
     for (const t of [lo, (lo + hi) / 2, hi]) {
       this.page.drawLine({ start: { x: MARGIN + LEFT, y: py(t) }, end: { x: MARGIN + LEFT + W, y: py(t) }, thickness: 0.4, color: grid });
-      this.page.drawText(String(Math.round(t * 10) / 10), { x: MARGIN, y: py(t) - 3, size: 7, font: this.font, color: MUTED });
+      this.page.drawText(latin1(opts.yLabel ? opts.yLabel(t) : String(Math.round(t * 10) / 10)), { x: MARGIN, y: py(t) - 3, size: 7, font: this.font, color: MUTED });
     }
     for (const x of [xs[0], xs[xs.length - 1]]) {
-      const label = latin1(x.slice(5));
+      const label = latin1(opts.xLabel ? opts.xLabel(x) : x.slice(5));
       this.page.drawText(label, { x: px(x) - (x === xs[0] ? 0 : 20), y: bottom - 10, size: 7, font: this.font, color: MUTED });
     }
     for (const s of series) {
@@ -209,11 +215,77 @@ class Writer {
   }
 }
 
-function locationSection(w: Writer, loc: LocationReport) {
+function deltaText(d: Delta | null): string {
+  if (!d) return "-";
+  const sign = d.change > 0 ? "+" : "";
+  return `${sign}${d.change.toFixed(1)}${d.unit === "pp" ? " pts" : "%"} (was ${d.before})`;
+}
+
+function searchSection(w: Writer, loc: LocationReport, shownFor: Map<string, string>) {
+  const s = loc.search;
+  if (!s) return; // a report made before module 21
+  w.text("Search traffic", { size: 11, bold: true });
+  // Locations sharing one website share these numbers: print them once.
+  if (s.state === "ok" && shownFor.has(s.summary.site_url)) {
+    w.text(`Same website as ${shownFor.get(s.summary.site_url)} (${s.summary.site_url}); its search traffic is shown there.`, { size: 10, color: MUTED });
+    w.gap(6);
+    return;
+  }
+  if (s.state === "ok") shownFor.set(s.summary.site_url, loc.name);
+  if (s.state !== "ok") {
+    w.text(s.message, { size: 10, color: MUTED });
+    w.gap(6);
+    return;
+  }
+  const sum = s.summary;
+  w.text(s.hero.headline, { size: 12, bold: true });
+  w.text(s.hero.summary, { size: 10 });
+  if (s.shared_with > 0) {
+    w.text(`These are figures for the whole website (${sum.site_url}), which ${s.shared_with} other location${s.shared_with === 1 ? " shares" : "s share"}.`, { size: 8, color: MUTED });
+  }
+  w.gap(4);
+  // Label, a short period, the value, then both comparisons. Long periods
+  // ("August 2026 · complete month", the 12-month range) are shortened here.
+  const shortPeriod = (tile: Tile) =>
+    tile.key === "value_year" ? "12 months" : tile.period.replace(" · complete month", "").replace(/^([A-Z][a-z]{2})[a-z]+ (\d{4})$/, "$1 $2");
+  const xs = [0, 130, 200, 268, 390];
+  w.row(["", "Period", "Value", "vs last year", "vs last month"], xs, { bold: true, color: MUTED });
+  for (const tile of sum.tiles as Tile[]) {
+    w.row([tile.label, shortPeriod(tile), tile.value, tile.noCompare ? "" : deltaText(tile.yoy), tile.noCompare ? "" : deltaText(tile.mom)], xs);
+  }
+  w.text("Keyword counts compare complete months only. Comparisons use the same days of the other period.", { size: 8, color: MUTED });
+  w.text(
+    `Traffic value counts each click at ${perClickLabel(sum.value.centsPerClick)}. It is a replacement value for the visits, not revenue.`,
+    { size: 8, color: MUTED },
+  );
+  const pts = sum.months.map((m) => ({ x: m.month, y: m.clicks }));
+  if (pts.length >= 2) {
+    w.gap(4);
+    w.text("Clicks from Google search per month" + (sum.months[sum.months.length - 1]?.complete ? "" : " (the last month is so far)"), { size: 8, color: MUTED });
+    w.lineChart([{ name: "Clicks", color: rgb(0.15, 0.39, 0.92), points: pts }], {
+      invert: false,
+      xLabel: (x) => monthLabel(x),
+      yLabel: (v) => fmtInt(v),
+    });
+  }
+  if (sum.top_pages.length > 0) {
+    w.gap(2);
+    const px = [0, 300, 365, 440];
+    w.row([`Top pages, ${sum.period.range}`, "Clicks", "Impressions", "Position"], px, { bold: true, color: MUTED });
+    for (const p of sum.top_pages) {
+      w.row([p.key, fmtInt(p.clicks), fmtInt(p.impressions), p.position === null ? "-" : String(p.position)], px);
+    }
+  }
+  w.gap(6);
+}
+
+function locationSection(w: Writer, loc: LocationReport, shownFor: Map<string, string>) {
   w.ensure(60);
   w.gap(10);
   w.text(loc.name, { size: 14, bold: true });
   w.rule();
+
+  searchSection(w, loc, shownFor);
 
   w.text("Where you can win", { size: 11, bold: true });
   w.text(loc.radius.statement, { size: 10 });
@@ -299,6 +371,7 @@ function locationSection(w: Writer, loc: LocationReport) {
   for (const s of loc.shipped) {
     const tag = s.verified ? "confirmed live" : "applied by you, not yet confirmed by us";
     w.text(`- ${s.label}${s.detail ? `: ${s.detail}` : ""} (${tag})`, { size: 10, indent: 6 });
+    if (s.why) w.text(`Why it matters: ${s.why}`, { size: 8, color: MUTED, indent: 14 });
     if (s.url) w.text(s.url, { size: 8, color: MUTED, indent: 14 });
   }
 
@@ -345,7 +418,8 @@ export async function renderReportPdf(content: ReportContent): Promise<Uint8Arra
     );
   }
 
-  for (const loc of content.locations) locationSection(w, loc);
+  const shownFor = new Map<string, string>();
+  for (const loc of content.locations) locationSection(w, loc, shownFor);
 
   w.gap(14);
   w.text("Nothing on your website or Google profile changes without your approval.", { size: 8, color: MUTED });
