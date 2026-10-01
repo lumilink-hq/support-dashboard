@@ -12,6 +12,7 @@ import {
   contentByMonth,
   daysAgo,
   KEYWORD_MAX,
+  keywordStatsLine,
   latestPerKeyword,
   MAX_COMPETITORS_PER_LOCATION,
   MAX_GEO_GRID_KEYWORDS_PER_LOCATION,
@@ -20,10 +21,13 @@ import {
   parseTab,
   SEO_TAB_LABELS,
   SEO_TABS,
+  splitSuggestions,
   trendPoints,
   type ClientRank,
   type Competitor,
   type CompetitorRank,
+  type KeywordStats,
+  type KeywordSuggestion,
   type Mention,
   type PageMonth,
   type SeoTab,
@@ -58,7 +62,16 @@ import {
   whyItMatters,
   type GeoRadiusRow,
 } from "@/supabase/functions/seo-report/lib";
-import { addAiQuery, addCompetitor, addKeyword, removeAiQuery, removeCompetitor, removeKeyword, setKeywordGeoGrid } from "./actions";
+import {
+  addAiQuery,
+  addCompetitor,
+  addKeyword,
+  dismissKeywordSuggestion,
+  removeAiQuery,
+  removeCompetitor,
+  removeKeyword,
+  setKeywordGeoGrid,
+} from "./actions";
 
 type Loc = { id: string; name: string; lat: number | null; lng: number | null; search_console_site_url: string | null };
 type Keyword = { id: string; keyword: string; is_geo_grid_enabled: boolean };
@@ -138,6 +151,67 @@ function TopTable({ rows, keyLabel, caption }: { rows: TopRow[]; keyLabel: strin
   );
 }
 
+function SuggestionList({
+  heading,
+  lead,
+  rows,
+  locationId,
+  atCap,
+}: {
+  heading: string;
+  lead: string;
+  rows: KeywordSuggestion[];
+  locationId: string;
+  atCap: boolean;
+}) {
+  return (
+    <div>
+      <h3 className="text-sm font-medium text-gray-900">{heading}</h3>
+      <p className="text-xs text-gray-500">{lead}</p>
+      <ul className="mt-1 divide-y divide-gray-100 text-sm">
+        {rows.map((r) => {
+          const stats = keywordStatsLine(r);
+          const evidence =
+            r.source === "search_console" && r.gsc_impressions !== null && r.gsc_position !== null
+              ? `Seen ${fmtInt(r.gsc_impressions)} times at position ${Number(r.gsc_position).toFixed(1)}${r.gsc_month ? ` in ${monthLabel(r.gsc_month)}` : ""}`
+              : null;
+          return (
+            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <span className="min-w-0 break-words">
+                <span className="text-gray-800">{r.keyword}</span>
+                {evidence || stats ? (
+                  <span className="block text-xs text-gray-500">{[evidence, stats].filter(Boolean).join(" · ")}</span>
+                ) : null}
+              </span>
+              <span className="flex flex-wrap items-center gap-2">
+                <form action={addKeyword}>
+                  <input type="hidden" name="location" value={locationId} />
+                  <input type="hidden" name="keyword" value={r.keyword} />
+                  <button
+                    type="submit"
+                    disabled={atCap}
+                    aria-label={`Track ${r.keyword}`}
+                    className="rounded-md border border-gray-900 px-2 py-0.5 text-xs text-gray-900 hover:bg-gray-900 hover:text-white disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent"
+                  >
+                    Track
+                  </button>
+                </form>
+                <form action={dismissKeywordSuggestion}>
+                  <input type="hidden" name="id" value={r.id} />
+                  <input type="hidden" name="location" value={locationId} />
+                  <button type="submit" aria-label={`Dismiss ${r.keyword}`} className="text-xs text-gray-500 underline hover:text-gray-900">
+                    Dismiss
+                  </button>
+                </form>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export default async function SeoPortalPage({
   searchParams,
 }: {
@@ -179,6 +253,7 @@ export default async function SeoPortalPage({
   const [
     kwRes, trendRes, radiusRes, connRes, compRes, backlinkRes, metricRes, shippedRes, queryRes, mentionRes, pendingRes,
     propRes, dailyRes, kwCountRes, settingsRes, milestoneRes, entRes, googleRes, publishedRes, metricLatestRes,
+    kwStatsRes, suggestionRes,
   ] = await Promise.all([
     supabase.from("seo_keywords").select("id, keyword, is_geo_grid_enabled").eq("location_id", loc.id).eq("is_active", true).order("keyword"),
     supabase.from("seo_rank_trend").select("rank_type, check_date, avg_position").eq("location_id", loc.id).gte("check_date", since200).order("check_date"),
@@ -207,9 +282,20 @@ export default async function SeoPortalPage({
     supabase.from("google_oauth_connections").select("connected_at, status").maybeSingle(),
     supabase.from("seo_actions").select("action_type, target_url, apply_mode, publish_result, proposed_value, published_at").eq("location_id", loc.id).eq("status", "published").gte("published_at", since16m).order("published_at").limit(1000),
     supabase.from("seo_metrics_daily").select("metric_date").eq("location_id", loc.id).order("metric_date", { ascending: false }).limit(1).maybeSingle(),
+    // Module 22: volume and difficulty per phrase (per client, so every
+    // location's keywords are in here), and the open suggestions.
+    supabase.from("seo_keyword_metrics").select("keyword, search_volume, cpc, keyword_difficulty").limit(5000),
+    supabase
+      .from("seo_keyword_suggestions")
+      .select("id, keyword, source, search_volume, cpc, keyword_difficulty, gsc_impressions, gsc_clicks, gsc_position, gsc_month")
+      .eq("status", "open")
+      .limit(200),
   ]);
 
   const keywords = (kwRes.data ?? []) as Keyword[];
+  const kwStats = new Map(((kwStatsRes.data ?? []) as KeywordStats[]).map((m) => [m.keyword, m]));
+  const suggestions = splitSuggestions((suggestionRes.data ?? []) as KeywordSuggestion[], new Set(keywords.map((k) => k.keyword)));
+  const atKeywordCap = keywords.length >= MAX_KEYWORDS_PER_LOCATION;
   const trend = (trendRes.data ?? []) as TrendRow[];
   const backlinks = ((backlinkRes.data ?? []) as BacklinkRow[]).slice().reverse();
   const metrics = (metricRes.data ?? []) as MetricRow[];
@@ -612,7 +698,12 @@ export default async function SeoPortalPage({
                   const r = latestRank.get(k.id);
                   return (
                     <li key={k.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                      <span className="min-w-0 break-words text-gray-800">{k.keyword}</span>
+                      <span className="min-w-0 break-words">
+                        <span className="text-gray-800">{k.keyword}</span>
+                        {keywordStatsLine(kwStats.get(k.keyword)) ? (
+                          <span className="block text-xs text-gray-500">{keywordStatsLine(kwStats.get(k.keyword))}</span>
+                        ) : null}
+                      </span>
                       <span className="flex flex-wrap items-center gap-2">
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs ${
@@ -671,6 +762,44 @@ export default async function SeoPortalPage({
               </form>
             ) : (
               <p className="mt-2 text-xs text-gray-500">You&apos;re tracking the maximum of {MAX_KEYWORDS_PER_LOCATION}. Stop tracking one to add another.</p>
+            )}
+          </Card>
+
+          <Card
+            title="Suggested keywords"
+            id="suggested-keywords"
+            note="Searches worth tracking, refreshed monthly. Search volumes are US-wide monthly averages from DataForSEO."
+          >
+            {suggestions.searchConsole.length === 0 && suggestions.related.length === 0 ? (
+              <Empty>
+                {site || keywords.length
+                  ? "No suggestions yet. They're worked out once a month from your tracked keywords and Search Console, and refreshed within the hour after you add a keyword."
+                  : "Add a keyword or connect Search Console, and suggestions will appear here."}
+              </Empty>
+            ) : (
+              <div className="space-y-4">
+                {suggestions.searchConsole.length > 0 ? (
+                  <SuggestionList
+                    heading="Already showing up, just off the top"
+                    lead="Searches your site already appears for at an average position of 8 to 20. A small push here moves the most traffic."
+                    rows={suggestions.searchConsole.slice(0, 15)}
+                    locationId={loc.id}
+                    atCap={atKeywordCap}
+                  />
+                ) : null}
+                {suggestions.related.length > 0 ? (
+                  <SuggestionList
+                    heading="Related searches"
+                    lead="Searches related to the keywords you track, most searched first."
+                    rows={suggestions.related.slice(0, 15)}
+                    locationId={loc.id}
+                    atCap={atKeywordCap}
+                  />
+                ) : null}
+                {atKeywordCap ? (
+                  <p className="text-xs text-gray-500">You&apos;re tracking the maximum of {MAX_KEYWORDS_PER_LOCATION}. Stop tracking one to add a suggestion.</p>
+                ) : null}
+              </div>
             )}
           </Card>
 

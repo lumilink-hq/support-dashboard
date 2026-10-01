@@ -423,6 +423,9 @@ verify_jwt = false
 [functions.seo-search-console]
 verify_jwt = false
 
+[functions.seo-keyword-research]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

@@ -307,6 +307,43 @@ export async function setKeywordGeoGrid(formData: FormData) {
   redirect(keywordBack(location));
 }
 
+/**
+ * Dismiss a keyword suggestion (module 22) so the monthly run doesn't offer it
+ * again. The table is read-only to tenants; 0062's definer function checks
+ * the suggestion belongs to the caller's client. Tracking a suggestion goes
+ * through addKeyword, like any other keyword.
+ */
+export async function dismissKeywordSuggestion(formData: FormData) {
+  const location = String(formData.get("location") ?? "");
+  const id = String(formData.get("id") ?? "");
+  if (!id) redirect(suggestionBack(location, "Missing suggestion id."));
+
+  const access = await getSeoAccess();
+  if (!access.allowed) redirect(suggestionBack(location, "Local SEO isn't active on your plan."));
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data, error } = await supabase.rpc("dismiss_seo_keyword_suggestion", { p_id: id });
+  if (error) redirect(suggestionBack(location, error.message));
+  if (!data) redirect(suggestionBack(location, "That suggestion no longer exists."));
+
+  revalidatePath("/seo");
+  redirect(suggestionBack(location));
+}
+
+function suggestionBack(location: string, error?: string) {
+  const qs = new URLSearchParams();
+  if (location) qs.set("location", location);
+  qs.set("tab", "keywords");
+  if (error) qs.set("error", error);
+  const s = qs.toString();
+  return `/seo${s ? `?${s}` : ""}#suggested-keywords`;
+}
+
 function keywordBack(location: string, error?: string) {
   const qs = new URLSearchParams();
   if (location) qs.set("location", location);

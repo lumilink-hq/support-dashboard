@@ -229,3 +229,63 @@ export function articleResults(
     };
   });
 }
+
+// -----------------------------------------------------------------------------
+// Keyword research (module 22)
+// -----------------------------------------------------------------------------
+
+export type KeywordStats = {
+  keyword: string;
+  search_volume: number | null;
+  cpc: number | string | null;
+  keyword_difficulty: number | null;
+};
+
+export type KeywordSuggestion = KeywordStats & {
+  id: string;
+  source: "search_console" | "related";
+  gsc_impressions: number | null;
+  gsc_clicks: number | null;
+  gsc_position: number | string | null;
+  gsc_month: string | null;
+};
+
+/** DataForSEO's 0–100 keyword difficulty in words. The bands follow the
+ * usual reading of the scale (under 30 a new page can rank, 60+ needs links). */
+export function difficultyLabel(kd: number | null): string | null {
+  if (kd === null) return null;
+  if (kd < 30) return "Easy";
+  if (kd < 60) return "Medium";
+  return "Hard";
+}
+
+/** "880 searches a month · difficulty 34 (medium) · $21.37 a click", leaving
+ * out whatever is unknown. Null when nothing is known. */
+export function keywordStatsLine(s: KeywordStats | undefined): string | null {
+  if (!s) return null;
+  const parts: string[] = [];
+  if (s.search_volume !== null) parts.push(`${s.search_volume.toLocaleString("en-US")} searches a month`);
+  const label = difficultyLabel(s.keyword_difficulty);
+  if (label) parts.push(`difficulty ${s.keyword_difficulty} (${label.toLowerCase()})`);
+  const cpc = s.cpc === null ? null : Number(s.cpc);
+  if (cpc !== null && Number.isFinite(cpc) && cpc > 0) parts.push(`$${cpc.toFixed(2)} a click`);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/** Open suggestions for the location on screen: drops what's already tracked
+ * there, Search Console evidence first (most impressions), then related ideas
+ * (most searched). */
+export function splitSuggestions(
+  rows: KeywordSuggestion[],
+  trackedHere: Set<string>,
+): { searchConsole: KeywordSuggestion[]; related: KeywordSuggestion[] } {
+  const open = rows.filter((r) => !trackedHere.has(r.keyword));
+  return {
+    searchConsole: open
+      .filter((r) => r.source === "search_console")
+      .sort((a, b) => (b.gsc_impressions ?? 0) - (a.gsc_impressions ?? 0) || a.keyword.localeCompare(b.keyword)),
+    related: open
+      .filter((r) => r.source === "related")
+      .sort((a, b) => (b.search_volume ?? 0) - (a.search_volume ?? 0) || a.keyword.localeCompare(b.keyword)),
+  };
+}
