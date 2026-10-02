@@ -82,6 +82,8 @@ console.log("\nlive answers: platforms and request bodies");
   ok("Perplexity (always searches): no web_search flag", !("web_search" in p) && p.model_name === "sonar");
   const g = buildResponseBody("gemini", "gemini-2.5-flash", "q");
   ok("Gemini: web_search on, not forced", g.web_search === true && !("force_web_search" in g));
+  ok("Gemini: no web_search_country_iso_code (it rejects the field)", !("web_search_country_iso_code" in g));
+  ok("Perplexity keeps the country", p.web_search_country_iso_code === "US");
   const c = buildResponseBody("claude", "claude-haiku-4-5", "q");
   ok("Claude: web_search forced on", c.web_search === true && c.force_web_search === true && c.web_search_country_iso_code === "US");
 }

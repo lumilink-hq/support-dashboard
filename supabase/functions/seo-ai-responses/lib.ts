@@ -7,7 +7,7 @@
 //   POST /v3/ai_optimization/{perplexity|gemini|claude}/llm_responses/live
 //   body: user_prompt (≤500 chars), model_name, web_search (Gemini, Claude;
 //         Perplexity's Sonar models always search), force_web_search (Claude),
-//         web_search_country_iso_code, max_output_tokens.
+//         web_search_country_iso_code (not Gemini: it rejects it), max_output_tokens.
 //   citations: result[0].items[].sections[].annotations[] {title, url} —
 //         Claude's are documented under items[].message.sections[] instead,
 //         and Gemini's carry direct_url (url is a Google redirect).
@@ -43,8 +43,10 @@ export function buildResponseBody(platform: ResponsePlatform, model: string, que
     user_prompt: question.slice(0, PROMPT_MAX),
     model_name: model,
     max_output_tokens: 1024,
-    web_search_country_iso_code: "US",
   };
+  // Gemini rejects this field (40501 "Invalid Field", seen in production
+  // 2026-10-02); Perplexity and Claude accept it.
+  if (platform !== "gemini") body.web_search_country_iso_code = "US";
   if (platform !== "perplexity") body.web_search = true;
   if (platform === "claude") body.force_web_search = true;
   return body;
