@@ -13,6 +13,7 @@ import {
   auditSite,
   extractCanonicals,
   extractLinks,
+  isCheckableOutbound,
   isCrawlable,
   isNoindex,
   type LinkCheck,
@@ -76,6 +77,30 @@ console.log("\nhosts and crawlable URLs");
   ok("another port is another site", !sameSite("http://localhost:8796/x", "localhost:8795") && sameSite("http://localhost:8795/x", "localhost:8795"));
   ok("pages are crawlable", isCrawlable(`${S}/services/drains`));
   ok("files and carts are not", !isCrawlable(`${S}/menu.pdf`) && !isCrawlable(`${S}/cart`) && !isCrawlable("ftp://acme.com/x"));
+}
+
+console.log("\nlinks that aren't worth checking (from the packsclub.com run, 2026-10-02)");
+{
+  ok("Cloudflare email protection isn't crawled or checked", !isCrawlable("https://www.packsclub.com/cdn-cgi/l/email-protection"));
+  for (const u of [
+    "https://twitter.com/intent/tweet?text=x&url=y",
+    "https://x.com/intent/post?text=x",
+    "https://www.facebook.com/sharer/sharer.php?u=x",
+    "https://www.google.com/maps/search?api=1&query=2211+S+Hunts+Ln",
+    "https://maps.app.goo.gl/4XSMRduXJ7T8JWhY8",
+    "https://www.pinterest.com/pin/create/button/?url=x",
+    "https://wa.me/15555550100",
+  ]) {
+    ok(`not checked: ${u.slice(0, 40)}`, !isCheckableOutbound(u));
+  }
+  ok("a real dead page on another site is still checked", isCheckableOutbound("https://packsclub.myshopify.com/pages"));
+  ok("an ordinary profile link is still checked", isCheckableOutbound("https://www.facebook.com/packsclub") && isCheckableOutbound("https://twitter.com/packsclub"));
+  const links = extractLinks(
+    `<a href="https://twitter.com/intent/tweet?text=x">t</a><a href="https://packsclub.myshopify.com/pages">p</a><a href="/cdn-cgi/l/email-protection">e</a>`,
+    "https://www.packsclub.com/",
+    "www.packsclub.com",
+  );
+  ok("extractLinks drops them from both lists", JSON.stringify(links.outbound) === '["https://packsclub.myshopify.com/pages"]' && links.internal.length === 0, links);
 }
 
 console.log("\nsitemaps");

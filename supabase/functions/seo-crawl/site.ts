@@ -22,7 +22,22 @@ export const SAMPLE = 20; // URLs listed in a finding's details
 
 const NON_PAGE = /\.(pdf|jpe?g|png|gif|webp|svg|ico|css|js|mjs|json|xml|zip|gz|mp[34]|mov|avi|woff2?|ttf|eot)(\?|#|$)/i;
 const SKIP_PATH =
-  /\/(wp-admin|wp-login|wp-json|cart|checkout|basket|my-account|account|login|signin|sign-in|register|signup|search|feed|rss|tag|tags|author|page\/\d)/i;
+  /\/(wp-admin|wp-login|wp-json|cart|checkout|basket|my-account|account|login|signin|sign-in|register|signup|search|feed|rss|tag|tags|author|page\/\d|cdn-cgi\/)/i;
+// cdn-cgi/: Cloudflare's own paths (email protection, challenge pages). They
+// answer a crawler with a 404 and aren't pages; seen on packsclub.com 2026-10-02.
+
+/**
+ * Outbound links not worth a status check: share / "tweet this" / map and
+ * chat-app links. They need a browser (or a signed-in session) and answer a
+ * crawler with 404 or a bot wall, so checking them only produces false
+ * "dead link" findings (seen on packsclub.com 2026-10-02).
+ */
+const UNCHECKABLE_OUTBOUND =
+  /^https?:\/\/(www\.)?((twitter|x)\.com\/(intent|share)|facebook\.com\/(sharer|dialog|share)|linkedin\.com\/(share|sharing|shareArticle)|pinterest\.[a-z.]+\/pin\/create|reddit\.com\/submit|(api\.)?whatsapp\.com\/send|wa\.me\/|t\.me\/share|google\.[a-z.]+\/maps|maps\.google\.|maps\.app\.goo\.gl\/|goo\.gl\/maps)/i;
+
+export function isCheckableOutbound(url: string): boolean {
+  return !UNCHECKABLE_OUTBOUND.test(url);
+}
 
 // -----------------------------------------------------------------------------
 // Hosts
@@ -128,7 +143,7 @@ export function extractLinks(html: string, pageUrl: string, siteHost: string): {
     const n = normalizeUrl(abs.href);
     if (sameSite(n, siteHost)) {
       if (n !== self && isCrawlable(n) && internal.size < MAX_INTERNAL_LINKS_PER_PAGE) internal.add(n);
-    } else if (outbound.size < MAX_OUTBOUND_LINKS_PER_PAGE) {
+    } else if (outbound.size < MAX_OUTBOUND_LINKS_PER_PAGE && isCheckableOutbound(n)) {
       outbound.add(n);
     }
   }
