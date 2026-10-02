@@ -340,6 +340,7 @@ export const ISSUE_LABELS: Record<string, string> = {
   crawl_fetch_failed: "Site couldn't be fetched",
   javascript_rendered_site: "Site needs JavaScript to show content",
   javascript_rendered_site_audited_via_render: "Site needed a headless browser to audit",
+  backlinks_to_broken_page: "Broken pages other sites still link to",
 };
 
 export type FindingRow = { finding_type: string; severity: string; title: string; target_url: string | null };

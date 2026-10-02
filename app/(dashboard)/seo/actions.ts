@@ -362,6 +362,42 @@ export async function dismissCompetitorGap(formData: FormData) {
   redirect(gapBack(location));
 }
 
+/**
+ * Dismiss a referring site from the link opportunities (module 26), for every
+ * location of the client. The tables are read-only to tenants; 0066's definer
+ * function records it.
+ */
+export async function dismissLinkOpportunity(formData: FormData) {
+  const location = String(formData.get("location") ?? "");
+  const domain = cleanDomain(String(formData.get("domain") ?? ""));
+  if (!domain) redirect(linksBack(location, "Missing site."));
+
+  const access = await getSeoAccess();
+  if (!access.allowed) redirect(linksBack(location, "Local SEO isn't active on your plan."));
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data, error } = await supabase.rpc("dismiss_seo_link_opportunity", { p_domain: domain });
+  if (error) redirect(linksBack(location, error.message));
+  if (!data) redirect(linksBack(location, "That site couldn't be dismissed."));
+
+  revalidatePath("/seo");
+  redirect(linksBack(location));
+}
+
+function linksBack(location: string, error?: string) {
+  const qs = new URLSearchParams();
+  if (location) qs.set("location", location);
+  qs.set("tab", "links");
+  if (error) qs.set("error", error);
+  const s = qs.toString();
+  return `/seo${s ? `?${s}` : ""}#link-opportunities`;
+}
+
 function gapBack(location: string, error?: string) {
   const qs = new URLSearchParams();
   if (location) qs.set("location", location);

@@ -77,6 +77,7 @@ import {
   addKeyword,
   dismissCompetitorGap,
   dismissKeywordSuggestion,
+  dismissLinkOpportunity,
   removeAiQuery,
   removeCompetitor,
   removeKeyword,
@@ -99,6 +100,18 @@ type BacklinkRow = { snapshot_date: string; referring_domains_count: number | nu
 type MetricRow = { metric_date: string; metrics: Record<string, unknown> };
 type AiQuery = { id: string; query: string };
 type CompetitorGap = CompetitorGapRow & { cpc: number | string | null; competitor_positions: string[] };
+type LinkOpportunity = {
+  kind: "gap" | "lost";
+  referring_domain: string;
+  url_from: string;
+  url_to: string | null;
+  competitors: string[];
+  domain_rank: number | null;
+  backlinks: number | null;
+  anchor: string | null;
+  dofollow: boolean | null;
+  lost_date: string | null;
+};
 type TopRow = { page?: string; query?: string; clicks: number; impressions: number; position: number | string | null };
 
 function Card({ title, id, children, note }: { title: string; id?: string; children: React.ReactNode; note?: string }) {
@@ -159,6 +172,29 @@ function TopTable({ rows, keyLabel, caption }: { rows: TopRow[]; keyLabel: strin
         </details>
       ) : null}
     </div>
+  );
+}
+
+function LinkLine({ domain, detail, href, locationId }: { domain: string; detail: string; href?: string | null; locationId: string }) {
+  const link = href ? safeUrl(href) : null;
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-2 py-2">
+      <span className="min-w-0 break-words">
+        {link ? (
+          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">{domain}</a>
+        ) : (
+          <span className="text-gray-800">{domain}</span>
+        )}
+        {detail ? <span className="block break-all text-xs text-gray-500">{detail}</span> : null}
+      </span>
+      <form action={dismissLinkOpportunity}>
+        <input type="hidden" name="domain" value={domain} />
+        <input type="hidden" name="location" value={locationId} />
+        <button type="submit" aria-label={`Dismiss ${domain}`} className="text-xs text-gray-500 underline hover:text-gray-900">
+          Dismiss
+        </button>
+      </form>
+    </li>
   );
 }
 
@@ -299,7 +335,7 @@ export default async function SeoPortalPage({
   const [
     kwRes, trendRes, radiusRes, connRes, compRes, backlinkRes, metricRes, shippedRes, queryRes, mentionRes, pendingRes,
     propRes, dailyRes, kwCountRes, settingsRes, milestoneRes, entRes, googleRes, publishedRes, metricLatestRes,
-    kwStatsRes, suggestionRes, gapRes, crawlRunRes, findingRes, sovRes,
+    kwStatsRes, suggestionRes, gapRes, crawlRunRes, findingRes, sovRes, linkRes,
   ] = await Promise.all([
     supabase.from("seo_keywords").select("id, keyword, is_geo_grid_enabled").eq("location_id", loc.id).eq("is_active", true).order("keyword"),
     supabase.from("seo_rank_trend").select("rank_type, check_date, avg_position").eq("location_id", loc.id).gte("check_date", since200).order("check_date"),
@@ -350,10 +386,17 @@ export default async function SeoPortalPage({
       .select("finding_type, severity, title, target_url")
       .eq("location_id", loc.id)
       .eq("status", "open")
-      .in("module", ["crawl", "technical"])
+      .in("module", ["crawl", "technical", "backlinks"])
       .limit(3000),
     // Module 25: AI share of voice against competitors, last 30 days.
     supabase.from("seo_ai_share_of_voice").select("query_id, platform, domain, is_client, cited_count, check_date").gte("check_date", daysAgo(30)).limit(5000),
+    // Module 26: link gap and lost links for this location (dismissed sites left out).
+    supabase
+      .from("seo_link_opportunities_open")
+      .select("kind, referring_domain, url_from, url_to, competitors, domain_rank, backlinks, anchor, dofollow, lost_date")
+      .eq("location_id", loc.id)
+      .order("domain_rank", { ascending: false, nullsFirst: false })
+      .limit(300),
   ]);
 
   const keywords = (kwRes.data ?? []) as Keyword[];
@@ -365,6 +408,12 @@ export default async function SeoPortalPage({
     | { phase: "pages" | "links" | "done"; pages_crawled: number; page_limit: number; truncated: boolean; started_at: string; finished_at: string | null }
     | null;
   const issues = summarizeFindings((findingRes.data ?? []) as FindingRow[]);
+  const linkOps = (linkRes.data ?? []) as LinkOpportunity[];
+  const linkGaps = linkOps
+    .filter((o) => o.kind === "gap")
+    .sort((a, b) => b.competitors.length - a.competitors.length || (b.domain_rank ?? -1) - (a.domain_rank ?? -1));
+  const lostLinks = linkOps.filter((o) => o.kind === "lost");
+  const brokenPages = ((findingRes.data ?? []) as FindingRow[]).filter((f) => f.finding_type === "backlinks_to_broken_page");
   const trend = (trendRes.data ?? []) as TrendRow[];
   const backlinks = ((backlinkRes.data ?? []) as BacklinkRow[]).slice().reverse();
   const metrics = (metricRes.data ?? []) as MetricRow[];
@@ -1165,27 +1214,103 @@ export default async function SeoPortalPage({
 
       {/* ================================================================== */}
       {tab === "links" ? (
-        <Card title="Links to your site" note="Sites that link to yours, and links gained and lost each month.">
-          {backlinks.length === 0 ? (
-            <Empty>No backlink data yet. It is pulled monthly.</Empty>
-          ) : (
-            <>
-              <p className="text-sm text-gray-700">
-                <strong>{latestBacklink?.referring_domains_count != null ? fmtInt(latestBacklink.referring_domains_count) : "–"}</strong> sites link to you
-                ({latestBacklink?.total_backlinks != null ? fmtInt(latestBacklink.total_backlinks) : "–"} links in total).
-              </p>
-              <BarChart
-                label="Backlinks gained and lost per month"
-                series={[{ name: "Gained", color: SERIES_COLORS[3] }, { name: "Lost", color: SERIES_COLORS[4] }]}
-                categories={backlinks.map((b) => ({
-                  label: new Date(`${b.snapshot_date}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }),
-                  values: [b.gained_count ?? 0, b.lost_count ?? 0],
-                }))}
-              />
-              <Legend items={[{ label: "Gained", color: SERIES_COLORS[3] }, { label: "Lost", color: SERIES_COLORS[4] }]} />
-            </>
-          )}
-        </Card>
+        <div className="space-y-4">
+          <Card title="Links to your site" note="Sites that link to yours, and links gained and lost each month.">
+            {backlinks.length === 0 ? (
+              <Empty>No backlink data yet. It is pulled monthly.</Empty>
+            ) : (
+              <>
+                <p className="text-sm text-gray-700">
+                  <strong>{latestBacklink?.referring_domains_count != null ? fmtInt(latestBacklink.referring_domains_count) : "–"}</strong> sites link to you
+                  ({latestBacklink?.total_backlinks != null ? fmtInt(latestBacklink.total_backlinks) : "–"} links in total).
+                </p>
+                <BarChart
+                  label="Backlinks gained and lost per month"
+                  series={[{ name: "Gained", color: SERIES_COLORS[3] }, { name: "Lost", color: SERIES_COLORS[4] }]}
+                  categories={backlinks.map((b) => ({
+                    label: new Date(`${b.snapshot_date}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }),
+                    values: [b.gained_count ?? 0, b.lost_count ?? 0],
+                  }))}
+                />
+                <Legend items={[{ label: "Gained", color: SERIES_COLORS[3] }, { label: "Lost", color: SERIES_COLORS[4] }]} />
+              </>
+            )}
+          </Card>
+
+          <Card
+            title="Link opportunities"
+            id="link-opportunities"
+            note="Sites worth contacting, refreshed monthly. LumiLink doesn't buy or place links; these are for you (or your team) to reach out to. Rank is DataForSEO's 0 to 1,000 site authority."
+          >
+            <div className="space-y-5">
+              <div>
+                <h3 className="text-sm font-medium text-gray-900">Linking to your competitors, not to you</h3>
+                <p className="text-xs text-gray-500">Sites that link to at least two of the competitors you track. If they link to them, they may link to you.</p>
+                {competitors.length < 2 ? (
+                  <p className="mt-1 text-sm text-gray-500">Track at least two competitors under Keywords to see these.</p>
+                ) : linkGaps.length === 0 ? (
+                  <p className="mt-1 text-sm text-gray-500">None found yet. This is checked once a month.</p>
+                ) : (
+                  <ul className="mt-1 divide-y divide-gray-100 text-sm">
+                    {linkGaps.slice(0, 15).map((o) => (
+                      <LinkLine
+                        key={o.referring_domain}
+                        domain={o.referring_domain}
+                        detail={`Links to ${o.competitors.join(", ")}${o.domain_rank !== null ? ` · rank ${o.domain_rank}` : ""}`}
+                        locationId={loc.id}
+                      />
+                    ))}
+                    {linkGaps.length > 15 ? <li className="py-2 text-xs text-gray-500">and {linkGaps.length - 15} more</li> : null}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-gray-900">Links pointing at pages that no longer work</h3>
+                <p className="text-xs text-gray-500">Other sites still link to these pages on your site, but the pages are broken. A redirect to the closest live page wins those links back.</p>
+                {brokenPages.length === 0 ? (
+                  <p className="mt-1 text-sm text-gray-500">None found. This is checked once a month.</p>
+                ) : (
+                  <ul className="mt-1 divide-y divide-gray-100 text-sm">
+                    {brokenPages.slice(0, 15).map((f) => (
+                      <li key={f.target_url ?? f.title} className="py-2">
+                        <span className="break-all text-gray-800">{f.target_url ? pagePath(f.target_url) : "–"}</span>
+                        <span className="block text-xs text-gray-500">{f.title}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-gray-900">Links you lost recently</h3>
+                <p className="text-xs text-gray-500">Sites that linked to you in the last 90 days and stopped. Often a page was rewritten; a friendly note can bring the link back.</p>
+                {lostLinks.length === 0 ? (
+                  <p className="mt-1 text-sm text-gray-500">None in the last 90 days.</p>
+                ) : (
+                  <ul className="mt-1 divide-y divide-gray-100 text-sm">
+                    {lostLinks.slice(0, 15).map((o) => (
+                      <LinkLine
+                        key={`${o.referring_domain}|${o.url_from}`}
+                        domain={o.referring_domain}
+                        detail={[
+                          o.url_to ? `Linked to ${pagePath(o.url_to)}` : null,
+                          o.anchor ? `"${o.anchor}"` : null,
+                          o.lost_date ? `lost ${o.lost_date}` : null,
+                          o.domain_rank !== null ? `rank ${o.domain_rank}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                        href={o.url_from || null}
+                        locationId={loc.id}
+                      />
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </Card>
+        </div>
       ) : null}
 
       {/* ================================================================== */}
