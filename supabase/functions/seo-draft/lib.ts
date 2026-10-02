@@ -35,6 +35,10 @@ export const DRAFTABLE: Record<string, DraftField> = {
   meta_description_length: "meta_description",
   missing_h1: "h1",
   missing_local_business_schema: "local_business_schema",
+  // Module 24: the same copy on several pages. Every page but one gets a
+  // finding, and the draft is written for that page specifically.
+  duplicate_title: "title_tag",
+  duplicate_meta_description: "meta_description",
 };
 
 // Title and meta bounds are seo-crawl's own (TITLE_MIN/MAX, META_DESC_MIN/MAX in
@@ -70,7 +74,7 @@ export type LocationFacts = {
 // Planning: which field a finding drafts, and what it currently says
 // -----------------------------------------------------------------------------
 
-export type DraftPlan = { field: DraftField; previous: string | null };
+export type DraftPlan = { field: DraftField; previous: string | null; duplicate?: boolean };
 
 /** null = not draftable (or the finding has nothing usable to draft against). */
 export function planDraft(finding: Pick<FindingRow, "finding_type" | "details">): DraftPlan | null {
@@ -82,6 +86,10 @@ export function planDraft(finding: Pick<FindingRow, "finding_type" | "details">)
       return { field, previous: typeof d.title === "string" ? d.title : null };
     case "meta_description_length":
       return { field, previous: typeof d.meta_description === "string" ? d.meta_description : null };
+    case "duplicate_title":
+      return { field, previous: typeof d.title === "string" ? d.title : null, duplicate: true };
+    case "duplicate_meta_description":
+      return { field, previous: typeof d.meta_description === "string" ? d.meta_description : null, duplicate: true };
     default:
       return { field, previous: null };
   }
@@ -121,6 +129,7 @@ export const SYSTEM_PROMPT = [
   "- field 'meta_description': one or two plain sentences saying what the business does and where, ending with a light call to action.",
   "- field 'h1': the page's main heading, what the business does and where, without repeating the title tag word for word.",
   "- If current_text is present, improve it and keep its meaning; do not change what the business claims to do.",
+  "- If same_text_on_other_pages is true, current_text is shared with other pages of the site: write copy specific to this page, using page_path to tell what the page is about, so it no longer matches the others.",
   "- If the facts are too thin to write honest copy, reply with exactly: INSUFFICIENT_FACTS",
 ].join("\n");
 
@@ -132,6 +141,7 @@ export function buildUserPayload(
   facts: LocationFacts,
   previous: string | null,
   pageUrl: string | null,
+  duplicate = false,
 ): string {
   let pagePath: string | null = null;
   if (pageUrl) {
@@ -153,6 +163,7 @@ export function buildUserPayload(
       region: facts.region,
       page_path: pagePath,
       current_text: previous,
+      ...(duplicate ? { same_text_on_other_pages: true } : {}),
     },
     null,
     2,

@@ -14,6 +14,7 @@ import {
   KEYWORD_MAX,
   keywordStatsLine,
   latestPerKeyword,
+  pagePath,
   MAX_COMPETITORS_PER_LOCATION,
   MAX_GEO_GRID_KEYWORDS_PER_LOCATION,
   MAX_KEYWORDS_PER_LOCATION,
@@ -22,10 +23,12 @@ import {
   SEO_TAB_LABELS,
   SEO_TABS,
   splitSuggestions,
+  summarizeFindings,
   trendPoints,
   type ClientRank,
   type Competitor,
   type CompetitorRank,
+  type FindingRow,
   type KeywordStats,
   type KeywordSuggestion,
   type Mention,
@@ -291,7 +294,7 @@ export default async function SeoPortalPage({
   const [
     kwRes, trendRes, radiusRes, connRes, compRes, backlinkRes, metricRes, shippedRes, queryRes, mentionRes, pendingRes,
     propRes, dailyRes, kwCountRes, settingsRes, milestoneRes, entRes, googleRes, publishedRes, metricLatestRes,
-    kwStatsRes, suggestionRes, gapRes,
+    kwStatsRes, suggestionRes, gapRes, crawlRunRes, findingRes,
   ] = await Promise.all([
     supabase.from("seo_keywords").select("id, keyword, is_geo_grid_enabled").eq("location_id", loc.id).eq("is_active", true).order("keyword"),
     supabase.from("seo_rank_trend").select("rank_type, check_date, avg_position").eq("location_id", loc.id).gte("check_date", since200).order("check_date"),
@@ -335,6 +338,15 @@ export default async function SeoPortalPage({
       .eq("location_id", loc.id)
       .order("search_volume", { ascending: false, nullsFirst: false })
       .limit(100),
+    // Module 24: the site audit (crawl run state and open findings).
+    supabase.from("seo_crawl_runs").select("phase, pages_crawled, page_limit, truncated, started_at, finished_at").eq("location_id", loc.id).maybeSingle(),
+    supabase
+      .from("seo_findings")
+      .select("finding_type, severity, title, target_url")
+      .eq("location_id", loc.id)
+      .eq("status", "open")
+      .in("module", ["crawl", "technical"])
+      .limit(3000),
   ]);
 
   const keywords = (kwRes.data ?? []) as Keyword[];
@@ -342,6 +354,10 @@ export default async function SeoPortalPage({
   const suggestions = splitSuggestions((suggestionRes.data ?? []) as KeywordSuggestion[], new Set(keywords.map((k) => k.keyword)));
   const atKeywordCap = keywords.length >= MAX_KEYWORDS_PER_LOCATION;
   const gaps = (gapRes.data ?? []) as CompetitorGap[];
+  const crawlRun = crawlRunRes.data as
+    | { phase: "pages" | "links" | "done"; pages_crawled: number; page_limit: number; truncated: boolean; started_at: string; finished_at: string | null }
+    | null;
+  const issues = summarizeFindings((findingRes.data ?? []) as FindingRow[]);
   const trend = (trendRes.data ?? []) as TrendRow[];
   const backlinks = ((backlinkRes.data ?? []) as BacklinkRow[]).slice().reverse();
   const metrics = (metricRes.data ?? []) as MetricRow[];
@@ -1166,6 +1182,51 @@ export default async function SeoPortalPage({
                 {queued} more {queued === 1 ? "change is" : "changes are"} queued. <Link href="/seo-approvals" className="text-blue-700 underline">Review them</Link>.
               </p>
             ) : null}
+          </Card>
+
+          <Card
+            title="Site health"
+            id="site-health"
+            note="What the weekly audit of your website found, grouped by issue. Fixes to titles and descriptions are drafted for you under Approvals."
+          >
+            {crawlRun ? (
+              <p className="mb-3 text-sm text-gray-700">
+                {crawlRun.phase === "done"
+                  ? `Audited ${crawlRun.pages_crawled} page${crawlRun.pages_crawled === 1 ? "" : "s"} on ${formatDateTime(crawlRun.finished_at ?? crawlRun.started_at)}${crawlRun.truncated ? ` (the first ${crawlRun.page_limit}; the site has more)` : ""}.`
+                  : `An audit is in progress: ${crawlRun.pages_crawled} of up to ${crawlRun.page_limit} pages so far.`}
+              </p>
+            ) : null}
+            {issues.length === 0 ? (
+              <Empty>{crawlRun ? "No open issues. Nice work." : "The first audit hasn't run yet. It runs weekly."}</Empty>
+            ) : (
+              <ul className="divide-y divide-gray-100 text-sm">
+                {issues.map((g) => (
+                  <li key={g.type} className="py-2">
+                    <details>
+                      <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2">
+                        <span className="min-w-0 text-gray-900">{g.label}</span>
+                        <span className="flex items-center gap-2 text-xs">
+                          <span
+                            className={`rounded-full px-2 py-0.5 ${
+                              g.severity === "critical" ? "bg-red-50 text-red-700" : g.severity === "warning" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {g.severity === "critical" ? "Fix first" : g.severity === "warning" ? "Worth fixing" : "Good to know"}
+                          </span>
+                          <span className="tabular-nums text-gray-500">{g.count}</span>
+                        </span>
+                      </summary>
+                      <ul className="mt-1 space-y-0.5 pl-3 text-xs text-gray-600">
+                        {g.pages.slice(0, 10).map((u) => (
+                          <li key={u} className="break-all">{pagePath(u)}</li>
+                        ))}
+                        {g.pages.length > 10 ? <li className="text-gray-400">and {g.pages.length - 10} more</li> : null}
+                      </ul>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
 
           <Story

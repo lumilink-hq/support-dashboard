@@ -70,9 +70,9 @@ for (const t of ["multiple_h1", "images_missing_alt", "thin_content", "phone_not
 }
 ok("a title_length finding with malformed details still plans", planDraft({ finding_type: "title_length", details: { title: 5 } })?.previous === null);
 
-console.log("DRAFTABLE stays in step with migration 0054");
+console.log("DRAFTABLE stays in step with the latest seo_draft_targets (migration 0064)");
 {
-  const sql = readFileSync(new URL("../supabase/migrations/0054_seo_action_queue.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../supabase/migrations/0064_seo_site_audit.sql", import.meta.url), "utf8");
   const view = sql.slice(sql.indexOf("create or replace view seo_draft_targets"));
   const inList = view.slice(view.indexOf("finding_type in ("), view.indexOf(")", view.indexOf("finding_type in (")));
   const sqlTypes = [...inList.matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1]).sort();

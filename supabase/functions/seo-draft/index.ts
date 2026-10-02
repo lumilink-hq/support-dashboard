@@ -193,7 +193,7 @@ async function draftLocation(loc: LocationFacts & { id: string; client_id: strin
 
     let text: string;
     try {
-      text = await callModel(buildUserPayload(plan.field, loc, plan.previous, finding.target_url));
+      text = await callModel(buildUserPayload(plan.field, loc, plan.previous, finding.target_url, plan.duplicate));
     } catch (e) {
       console.error(`seo-draft ${loc.id} finding ${finding.id}: model call failed: ${e instanceof Error ? e.message : e}`);
       out.failed++;

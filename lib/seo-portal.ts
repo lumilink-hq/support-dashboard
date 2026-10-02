@@ -289,3 +289,70 @@ export function splitSuggestions(
       .sort((a, b) => (b.search_volume ?? 0) - (a.search_volume ?? 0) || a.keyword.localeCompare(b.keyword)),
   };
 }
+
+// -----------------------------------------------------------------------------
+// Site audit summary (module 24)
+// -----------------------------------------------------------------------------
+
+/** Plain names for finding types, as an issue across pages. A type not listed
+ * falls back to the finding's own title. */
+export const ISSUE_LABELS: Record<string, string> = {
+  missing_title: "Pages with no title",
+  title_length: "Titles too short or too long",
+  duplicate_title: "Titles shared with other pages",
+  missing_meta_description: "Pages with no meta description",
+  meta_description_length: "Meta descriptions too short or too long",
+  duplicate_meta_description: "Meta descriptions shared with other pages",
+  missing_h1: "Pages with no main heading (H1)",
+  multiple_h1: "Pages with more than one H1",
+  missing_local_business_schema: "Homepage has no LocalBusiness structured data",
+  images_missing_alt: "Pages with images missing alt text",
+  thin_content: "Pages with very little text",
+  phone_not_on_page: "Phone number not on the homepage",
+  broken_internal_links: "Pages linking to broken pages on your site",
+  internal_links_redirect: "Pages linking through redirects",
+  broken_outbound_links: "Pages linking to dead pages on other sites",
+  multiple_canonicals: "Pages with more than one canonical URL",
+  canonical_other_site: "Canonical URL points to another website",
+  canonical_target_not_ok: "Canonical URL is broken or redirects",
+  pages_missing_canonical: "Pages with no canonical tag",
+  noindex_in_sitemap: "Sitemap pages hidden from Google (noindex)",
+  sitemap_url_not_ok: "Sitemap lists broken or redirecting URLs",
+  orphan_page: "Pages nothing links to",
+  weakly_linked_pages: "Pages linked from only one other page",
+  crawl_page_limit_reached: "Site is bigger than the audit's page limit",
+  robots_disallowed: "robots.txt blocks the audit",
+  crawl_fetch_failed: "Site couldn't be fetched",
+  javascript_rendered_site: "Site needs JavaScript to show content",
+  javascript_rendered_site_audited_via_render: "Site needed a headless browser to audit",
+};
+
+export type FindingRow = { finding_type: string; severity: string; title: string; target_url: string | null };
+
+export type IssueGroup = { type: string; label: string; severity: "critical" | "warning" | "info"; count: number; pages: string[] };
+
+const SEVERITY_RANK: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+
+/** Open findings grouped by type: worst severity first, then most pages. */
+export function summarizeFindings(rows: FindingRow[]): IssueGroup[] {
+  const groups = new Map<string, IssueGroup>();
+  for (const r of rows) {
+    const sev = (r.severity in SEVERITY_RANK ? r.severity : "info") as IssueGroup["severity"];
+    const g = groups.get(r.finding_type) ?? { type: r.finding_type, label: ISSUE_LABELS[r.finding_type] ?? r.title, severity: sev, count: 0, pages: [] };
+    g.count++;
+    if (SEVERITY_RANK[sev] < SEVERITY_RANK[g.severity]) g.severity = sev;
+    if (r.target_url && !g.pages.includes(r.target_url)) g.pages.push(r.target_url);
+    groups.set(r.finding_type, g);
+  }
+  return [...groups.values()].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || b.count - a.count || a.label.localeCompare(b.label));
+}
+
+/** "/services/drains" for a URL on the site, the full URL otherwise. */
+export function pagePath(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.pathname}${u.search}` || "/";
+  } catch {
+    return url;
+  }
+}

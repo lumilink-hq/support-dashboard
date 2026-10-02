@@ -23,7 +23,10 @@
 // exactly the kind of thing an SEO audit needs to see, not discard.
 // =============================================================================
 
-export const CRAWL_PAGE_LIMIT = 20; // root + 19, matching plan.md's module 6 spec exactly
+// Module 6's original limit (root + 19). Since module 24 the page limit is per
+// location (seo_locations.crawl_page_limit, default 100); this stays as the
+// smallest allowed value.
+export const CRAWL_PAGE_LIMIT = 20;
 
 // -----------------------------------------------------------------------------
 // Link discovery / robots / URL normalization — copied from kb-ingest/lib.ts.
@@ -328,7 +331,15 @@ const META_DESC_MIN = 50;
 const META_DESC_MAX = 160;
 const THIN_CONTENT_WORDS = 300;
 
-export function auditPage(html: string, location: LocationNap): CrawlFinding[] {
+/**
+ * `isRoot` (module 24): the LocalBusiness schema and phone-number rules are
+ * about the business, not the page, so they run on the homepage only. With a
+ * 100-page crawl they would otherwise repeat on every page (seo-draft already
+ * drafts one site-wide schema per location). Defaults to true, so a caller
+ * auditing a single page gets every rule.
+ */
+export function auditPage(html: string, location: LocationNap, opts: { isRoot?: boolean } = {}): CrawlFinding[] {
+  const isRoot = opts.isRoot ?? true;
   const findings: CrawlFinding[] = [];
 
   const title = extractTitle(html);
@@ -382,7 +393,7 @@ export function auditPage(html: string, location: LocationNap): CrawlFinding[] {
     });
   }
 
-  if (!hasLocalBusinessSchema(html)) {
+  if (isRoot && !hasLocalBusinessSchema(html)) {
     findings.push({
       finding_type: "missing_local_business_schema",
       severity: "warning",
@@ -412,7 +423,7 @@ export function auditPage(html: string, location: LocationNap): CrawlFinding[] {
     });
   }
 
-  if (location.phone_number && !pageContainsPhone(html, location.phone_number)) {
+  if (isRoot && location.phone_number && !pageContainsPhone(html, location.phone_number)) {
     findings.push({
       finding_type: "phone_not_on_page",
       severity: "info",
