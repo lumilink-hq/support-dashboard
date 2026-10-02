@@ -328,7 +328,10 @@ export type ReportContent = {
   period: Period;
   generated_at: string;
   is_first_report: boolean;
-  ai_visibility: null | { queries: number; checks: number; cited: number };
+  // platforms (module 25): which AI platforms the month's checks covered, so
+  // the report names them instead of assuming Google and ChatGPT. Optional so
+  // reports stored before it still render.
+  ai_visibility: null | { queries: number; checks: number; cited: number; platforms?: string[] };
   locations: LocationReport[];
 };
 
@@ -381,4 +384,27 @@ export function trendData(rows: { rank_type: string; check_date: string; avg_pos
       .sort((a, b) => a.check_date.localeCompare(b.check_date))
       .map((r) => ({ x: r.check_date, y: r.avg_position === null ? null : Number(r.avg_position) }));
   return { organic: pick("organic"), local_pack: pick("local_pack") };
+}
+
+// -----------------------------------------------------------------------------
+// AI platforms (module 25)
+// -----------------------------------------------------------------------------
+
+const AI_PLATFORM_NAMES: [string, string][] = [
+  ["google", "Google AI Overviews"],
+  ["chat_gpt", "ChatGPT"],
+  ["perplexity", "Perplexity"],
+  ["gemini", "Gemini"],
+  ["claude", "Claude"],
+];
+
+/** "Google AI Overviews, ChatGPT and Perplexity", in a fixed order; unknown
+ * keys last, as they are. Older reports have no list: Google and ChatGPT were
+ * the only platforms then. */
+export function aiPlatformsPhrase(platforms: string[] | undefined): string {
+  const keys = platforms && platforms.length ? platforms : ["google", "chat_gpt"];
+  const known = AI_PLATFORM_NAMES.filter(([k]) => keys.includes(k)).map(([, n]) => n);
+  const names = [...known, ...keys.filter((k) => !AI_PLATFORM_NAMES.some(([x]) => x === k))];
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }

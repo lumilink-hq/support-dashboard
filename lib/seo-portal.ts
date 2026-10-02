@@ -77,7 +77,22 @@ export function trendPoints(rows: TrendRow[], type: "organic" | "local_pack") {
 
 export type Mention = { query_id: string; platform: string; cited_count: number; check_date: string };
 
-export const PLATFORM_LABELS: Record<string, string> = { google: "Google AI Overviews", chat_gpt: "ChatGPT" };
+export const PLATFORM_LABELS: Record<string, string> = {
+  google: "Google AI Overviews",
+  chat_gpt: "ChatGPT",
+  perplexity: "Perplexity",
+  gemini: "Gemini",
+  claude: "Claude",
+};
+
+/** Short names for per-question badges, in display order. */
+export const PLATFORM_SHORT: [string, string][] = [
+  ["google", "Google"],
+  ["chat_gpt", "ChatGPT"],
+  ["perplexity", "Perplexity"],
+  ["gemini", "Gemini"],
+  ["claude", "Claude"],
+];
 
 /** Cited / checked over the rows given, overall and per platform. Zero checks is not zero visibility. */
 export function aiSummary(mentions: Mention[]) {
@@ -355,4 +370,42 @@ export function pagePath(url: string): string {
   } catch {
     return url;
   }
+}
+
+// -----------------------------------------------------------------------------
+// AI share of voice (module 25)
+// -----------------------------------------------------------------------------
+
+export type SovRow = { query_id: string; platform: string; domain: string; is_client: boolean; cited_count: number; check_date: string };
+
+export type SovSite = { domain: string; is_client: boolean; cited: number; checked: number };
+
+/**
+ * For each site, on the latest check of every (question, platform): how many
+ * of those checks cited it. Counting "checks that cited" rather than raw
+ * mention counts puts both methods (a count of answers on Google/ChatGPT, one
+ * live answer on the others) on the same footing. Client first on ties.
+ */
+export function shareOfVoice(rows: SovRow[]): SovSite[] {
+  const latest = new Map<string, SovRow>();
+  for (const r of rows) {
+    const k = `${r.query_id}|${r.platform}|${r.domain}`;
+    const prev = latest.get(k);
+    if (!prev || r.check_date > prev.check_date) latest.set(k, r);
+  }
+  const sites = new Map<string, SovSite>();
+  for (const r of latest.values()) {
+    const s = sites.get(r.domain) ?? { domain: r.domain, is_client: r.is_client, cited: 0, checked: 0 };
+    s.checked++;
+    if (r.cited_count > 0) s.cited++;
+    s.is_client = s.is_client || r.is_client;
+    sites.set(r.domain, s);
+  }
+  return [...sites.values()].sort((a, b) => b.cited - a.cited || Number(b.is_client) - Number(a.is_client) || a.domain.localeCompare(b.domain));
+}
+
+/** "A", "A and B", "A, B and C". */
+export function listJoin(items: string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }

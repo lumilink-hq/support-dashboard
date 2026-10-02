@@ -20,8 +20,12 @@ import {
   MAX_KEYWORDS_PER_LOCATION,
   parseCompare,
   parseTab,
+  PLATFORM_LABELS,
+  PLATFORM_SHORT,
+  listJoin,
   SEO_TAB_LABELS,
   SEO_TABS,
+  shareOfVoice,
   splitSuggestions,
   summarizeFindings,
   trendPoints,
@@ -34,6 +38,7 @@ import {
   type Mention,
   type PageMonth,
   type SeoTab,
+  type SovRow,
   type TrendRow,
 } from "@/lib/seo-portal";
 import { createClient } from "@/lib/supabase/server";
@@ -294,7 +299,7 @@ export default async function SeoPortalPage({
   const [
     kwRes, trendRes, radiusRes, connRes, compRes, backlinkRes, metricRes, shippedRes, queryRes, mentionRes, pendingRes,
     propRes, dailyRes, kwCountRes, settingsRes, milestoneRes, entRes, googleRes, publishedRes, metricLatestRes,
-    kwStatsRes, suggestionRes, gapRes, crawlRunRes, findingRes,
+    kwStatsRes, suggestionRes, gapRes, crawlRunRes, findingRes, sovRes,
   ] = await Promise.all([
     supabase.from("seo_keywords").select("id, keyword, is_geo_grid_enabled").eq("location_id", loc.id).eq("is_active", true).order("keyword"),
     supabase.from("seo_rank_trend").select("rank_type, check_date, avg_position").eq("location_id", loc.id).gte("check_date", since200).order("check_date"),
@@ -347,6 +352,8 @@ export default async function SeoPortalPage({
       .eq("status", "open")
       .in("module", ["crawl", "technical"])
       .limit(3000),
+    // Module 25: AI share of voice against competitors, last 30 days.
+    supabase.from("seo_ai_share_of_voice").select("query_id, platform, domain, is_client, cited_count, check_date").gte("check_date", daysAgo(30)).limit(5000),
   ]);
 
   const keywords = (kwRes.data ?? []) as Keyword[];
@@ -475,6 +482,8 @@ export default async function SeoPortalPage({
   const radius = describeRadius(loc, geoKeywords.length, (radiusRes.data as GeoRadiusRow | null) ?? null);
   const gbp = profileMetrics(metrics);
   const ai = aiSummary(mentions);
+  const sov = shareOfVoice((sovRes.data ?? []) as SovRow[]);
+  const respondingPlatforms = new Set(mentions.map((m) => m.platform).filter((p) => p !== "google" && p !== "chat_gpt"));
   const latestMention = new Map<string, Mention>();
   for (const m of latestPerKeyword(mentions.map((m) => ({ ...m, keyword_id: `${m.query_id}|${m.platform}` })))) {
     latestMention.set(m.keyword_id, m);
@@ -979,75 +988,110 @@ export default async function SeoPortalPage({
 
       {/* ================================================================== */}
       {tab === "ai" ? (
-        <Card title="Appearing in AI answers" id="ai" note={`Whether AI answers cite your site for the questions you care about (last 30 days). Up to ${MAX_QUERIES_PER_CLIENT} questions are checked weekly.`}>
-          <div className="grid gap-4 md:grid-cols-[auto_1fr]">
-            <div className="flex flex-col items-center">
-              {ai.checks === 0 ? (
-                <p className="max-w-[10rem] text-center text-sm text-gray-500">
-                  {aiQueries.length === 0 ? "Add a question to start tracking." : "The first check hasn't run yet."}
-                </p>
-              ) : (
-                <>
-                  <Donut value={ai.cited} total={ai.checks} label={`Your site was cited in ${ai.cited} of ${ai.checks} AI answer checks`} />
-                  <p className="mt-1 text-center text-sm text-gray-700">Cited in <strong>{ai.cited}</strong> of {ai.checks} checks</p>
-                  <ul className="mt-1 text-xs text-gray-500">
-                    {ai.platforms.map((p) => (
-                      <li key={p.platform}>{p.label}: {p.cited} of {p.checks}</li>
-                    ))}
+        <div className="space-y-4">
+          <Card title="Appearing in AI answers" id="ai" note={`Whether AI answers cite your site for the questions you care about (last 30 days). Up to ${MAX_QUERIES_PER_CLIENT} questions are checked weekly.`}>
+            <div className="grid gap-4 md:grid-cols-[auto_1fr]">
+              <div className="flex flex-col items-center">
+                {ai.checks === 0 ? (
+                  <p className="max-w-[10rem] text-center text-sm text-gray-500">
+                    {aiQueries.length === 0 ? "Add a question to start tracking." : "The first check hasn't run yet."}
+                  </p>
+                ) : (
+                  <>
+                    <Donut value={ai.cited} total={ai.checks} label={`Your site was cited in ${ai.cited} of ${ai.checks} AI answer checks`} />
+                    <p className="mt-1 text-center text-sm text-gray-700">Cited in <strong>{ai.cited}</strong> of {ai.checks} checks</p>
+                    <ul className="mt-1 text-xs text-gray-500">
+                      {ai.platforms.map((p) => (
+                        <li key={p.platform}>{p.label}: {p.cited} of {p.checks}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+
+              <div>
+                {aiQueries.length > 0 ? (
+                  <ul className="divide-y divide-gray-100 text-sm">
+                    {aiQueries.map((q) => {
+                      const badge = (m: Mention | undefined, name: string) =>
+                        m ? (
+                          <span className={`rounded-full px-2 py-0.5 text-xs ${m.cited_count > 0 ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                            {name}: {m.cited_count > 0 ? "cited" : "not cited"}
+                          </span>
+                        ) : null;
+                      return (
+                        <li key={q.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                          <span className="min-w-0 break-words text-gray-800">{q.query}</span>
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            {PLATFORM_SHORT.map(([key, name]) => (
+                              <span key={key}>{badge(latestMention.get(`${q.id}|${key}`), name)}</span>
+                            ))}
+                            <form action={removeAiQuery}>
+                              <input type="hidden" name="id" value={q.id} />
+                              <input type="hidden" name="location" value={loc.id} />
+                              <button type="submit" className="text-xs text-gray-500 underline hover:text-gray-900">Stop tracking</button>
+                            </form>
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
-                </>
-              )}
-            </div>
+                ) : null}
 
-            <div>
-              {aiQueries.length > 0 ? (
-                <ul className="divide-y divide-gray-100 text-sm">
-                  {aiQueries.map((q) => {
-                    const g = latestMention.get(`${q.id}|google`);
-                    const c = latestMention.get(`${q.id}|chat_gpt`);
-                    const badge = (m: Mention | undefined, name: string) =>
-                      m ? (
-                        <span className={`rounded-full px-2 py-0.5 text-xs ${m.cited_count > 0 ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                          {name}: {m.cited_count > 0 ? "cited" : "not cited"}
-                        </span>
-                      ) : null;
-                    return (
-                      <li key={q.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                        <span className="min-w-0 break-words text-gray-800">{q.query}</span>
-                        <span className="flex flex-wrap items-center gap-1.5">
-                          {badge(g, "Google")}
-                          {badge(c, "ChatGPT")}
-                          <form action={removeAiQuery}>
-                            <input type="hidden" name="id" value={q.id} />
-                            <input type="hidden" name="location" value={loc.id} />
-                            <button type="submit" className="text-xs text-gray-500 underline hover:text-gray-900">Stop tracking</button>
-                          </form>
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
-
-              <form action={addAiQuery} className="mt-3 flex flex-wrap gap-2">
-                <input type="hidden" name="location" value={loc.id} />
-                <label className="sr-only" htmlFor="ai-query">A question customers ask AI</label>
-                <input
-                  id="ai-query"
-                  name="query"
-                  required
-                  minLength={2}
-                  maxLength={250}
-                  placeholder="e.g. Who is the best emergency plumber in Springfield?"
-                  className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-                />
-                <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
-                  Track this question
-                </button>
-              </form>
+                <form action={addAiQuery} className="mt-3 flex flex-wrap gap-2">
+                  <input type="hidden" name="location" value={loc.id} />
+                  <label className="sr-only" htmlFor="ai-query">A question customers ask AI</label>
+                  <input
+                    id="ai-query"
+                    name="query"
+                    required
+                    minLength={2}
+                    maxLength={250}
+                    placeholder="e.g. Who is the best emergency plumber in Springfield?"
+                    className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+                  />
+                  <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
+                    Track this question
+                  </button>
+                </form>
+              </div>
             </div>
-          </div>
-        </Card>
+            {respondingPlatforms.size > 0 ? (
+              <p className="mt-3 text-xs text-gray-500">
+                Google AI Overviews and ChatGPT are counted across many answers. {listJoin([...respondingPlatforms].map((p) => PLATFORM_LABELS[p] ?? p))}{" "}
+                {respondingPlatforms.size === 1 ? "is" : "are"} asked each question once a week, so a single answer can come and go between weeks.
+              </p>
+            ) : null}
+          </Card>
+
+          <Card
+            title="Share of voice in AI answers"
+            id="ai-share-of-voice"
+            note="For your questions, how often AI answers cited you versus the competitors you track, on the latest check of each question and platform (last 30 days)."
+          >
+            {sov.length === 0 ? (
+              <Empty>
+                {competitors.length === 0 && aiQueries.length > 0
+                  ? "Track competitors under Keywords to compare how often AI answers cite you and them."
+                  : aiQueries.length === 0
+                    ? "Add a question above to start tracking."
+                    : "The first comparison hasn't run yet. It runs weekly."}
+              </Empty>
+            ) : (
+              <HBars
+                label="Question checks where AI answers cited each site"
+                max={Math.max(1, ...sov.map((x) => x.checked))}
+                rows={sov.map((x, i) => ({
+                  label: x.is_client ? `You (${x.domain})` : x.domain,
+                  value: x.cited,
+                  color: x.is_client ? SERIES_COLORS[0] : SERIES_COLORS[(i % (SERIES_COLORS.length - 1)) + 1],
+                  highlight: x.is_client,
+                  note: `${x.cited} of ${x.checked}`,
+                }))}
+              />
+            )}
+          </Card>
+        </div>
       ) : null}
 
       {/* ================================================================== */}
@@ -1309,7 +1353,9 @@ export default async function SeoPortalPage({
                 <li><strong className="text-gray-900">Google Business Profile actions.</strong> Calls, direction requests and website clicks from your profile, once Google grants profile access.</li>
               ) : null}
               <li><strong className="text-gray-900">Google Analytics.</strong> Visits, engagement and sales from search traffic. Search clicks alone don&apos;t measure customers.</li>
-              <li><strong className="text-gray-900">More AI platforms.</strong> AI answers are checked on Google AI Overviews and ChatGPT today; Gemini, Perplexity and others come later.</li>
+              {respondingPlatforms.size === 0 ? (
+                <li><strong className="text-gray-900">More AI platforms.</strong> AI answers are checked on Google AI Overviews and ChatGPT today; Gemini, Perplexity and Claude come next.</li>
+              ) : null}
             </ul>
           </Story>
         </div>

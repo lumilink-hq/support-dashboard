@@ -18,6 +18,13 @@
 // and store how many there are. See 0053's header for what that does and does
 // not measure, and for the cost (per request, not just per row).
 //
+// SHARE OF VOICE (module 25, 0065). When the client tracks competitors, each
+// (query, platform) also gets ONE llm_mentions/multi_target_metrics call
+// counting answers that cite the client and each of up to 9 competitors,
+// written to seo_ai_share_of_voice (method 'mentions'). About $0.11 a call,
+// so roughly doubling this job's spend for a client with competitors. A
+// share-of-voice failure is reported but never fails the run.
+//
 // PARTIAL FAILURE. Each call is independent: one platform rejecting a value or
 // one query failing writes nothing for that pair and is reported in the
 // response, without failing the others. Only when EVERY call fails does the
@@ -25,15 +32,19 @@
 // "success".
 //
 // Env: SUPABASE_URL, SUPABASE_SECRET_KEYS (["default"] = service role),
-//      VOICE_TOOL_SECRET, DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD.
+//      VOICE_TOOL_SECRET, DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD,
+//      DATAFORSEO_HOST (optional; tests point it at a mock).
 // =============================================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import {
+  buildMultiTargetBody,
   buildSearchBody,
+  competitorDomains,
   DEFAULT_PLATFORMS,
   MAX_QUERIES_PER_CLIENT,
   parseMentions,
+  parseMultiTarget,
   pickQueries,
   primaryDomain,
 } from "./lib.ts";
@@ -50,6 +61,7 @@ const SERVICE_ROLE_SECRET = (JSON.parse(rawSecrets) as Record<string, string>)["
 if (!SERVICE_ROLE_SECRET) throw new Error("Missing SUPABASE_SECRET_KEYS['default']");
 
 const LLM_MENTIONS_PATH = "/v3/ai_optimization/llm_mentions/search/live";
+const MULTI_TARGET_PATH = "/v3/ai_optimization/llm_mentions/multi_target_metrics/live";
 // DataForSEO's Sandbox: same credentials and request shapes, free, dummy data.
 // Only ever reached by an explicit { "sandbox": true } in the request body —
 // the scheduled job never sends it — so tests cost nothing.
@@ -87,14 +99,18 @@ async function reserveBudget(): Promise<void> {
 }
 
 async function searchMentions(query: string, domain: string, platform: string, sandbox: boolean): Promise<unknown> {
+  return await callMentions(LLM_MENTIONS_PATH, buildSearchBody(query, domain, platform), sandbox);
+}
+
+async function callMentions(path: string, body: Record<string, unknown>, sandbox: boolean): Promise<unknown> {
   await reserveBudget();
-  const res = await fetch(`${sandbox ? SANDBOX_HOST : LIVE_HOST}${LLM_MENTIONS_PATH}`, {
+  const res = await fetch(`${Deno.env.get("DATAFORSEO_HOST") ?? (sandbox ? SANDBOX_HOST : LIVE_HOST)}${path}`, {
     method: "POST",
     headers: {
       Authorization: "Basic " + btoa(`${DATAFORSEO_LOGIN}:${DATAFORSEO_PASSWORD}`),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify([buildSearchBody(query, domain, platform)]),
+    body: JSON.stringify([body]),
   });
   const payload = await res.json().catch(() => null);
   const task = payload?.tasks?.[0];
@@ -177,9 +193,67 @@ async function pullClient(clientId: string, platforms: string[], sandbox: boolea
     .upsert(rows, { onConflict: "query_id,platform,check_date" });
   if (upsertError) throw new Error(`writing seo_ai_mentions failed: ${upsertError.message}`);
 
+  // Share of voice (module 25): the client and its competitors in one call
+  // per (query, platform). Best-effort.
+  const sov = await shareOfVoice(clientId, domain, queries, platforms, sandbox);
+
   await settle(clientId, true, null);
   console.log(`seo-ai-visibility ${clientId}: ${domain} wrote=${rows.length}/${pairs.length} errors=${errors.length}`);
-  return { status: "pulled" as const, domain, written: rows.length, attempted: pairs.length, errors };
+  return { status: "pulled" as const, domain, written: rows.length, attempted: pairs.length, errors, share_of_voice: sov };
+}
+
+async function shareOfVoice(
+  clientId: string,
+  domain: string,
+  queries: { id: string; query: string }[],
+  platforms: string[],
+  sandbox: boolean,
+): Promise<Record<string, unknown>> {
+  const { data: locs, error: lErr } = await supabase.from("seo_locations").select("id").eq("client_id", clientId).eq("is_active", true);
+  if (lErr) return { status: "error", error: lErr.message };
+  const { data: comps, error } = await supabase
+    .from("seo_competitors")
+    .select("domain")
+    .eq("is_active", true)
+    .in("location_id", (locs ?? []).map((l) => l.id));
+  if (error) return { status: "error", error: error.message };
+  const competitors = competitorDomains((comps ?? []) as { domain: string }[], domain);
+  if (competitors.length === 0) return { status: "no_competitors" };
+
+  const domains = [domain, ...competitors];
+  const rows: Record<string, unknown>[] = [];
+  const errors: string[] = [];
+  const pairs = queries.flatMap((q) => platforms.map((platform) => ({ q, platform })));
+  for (let i = 0; i < pairs.length; i += CONCURRENCY) {
+    await Promise.all(
+      pairs.slice(i, i + CONCURRENCY).map(async ({ q, platform }) => {
+        try {
+          const counts = parseMultiTarget(await callMentions(MULTI_TARGET_PATH, buildMultiTargetBody(q.query, domains, platform), sandbox));
+          // A call that came back with no readable count for anyone wrote
+          // nothing; once any site has a count, a site with no item has none.
+          if (counts.size === 0) throw new Error("no readable mention counts in the response");
+          for (const d of domains) {
+            rows.push({
+              client_id: clientId,
+              query_id: q.id,
+              platform,
+              domain: d,
+              is_client: d === domain,
+              cited_count: counts.get(d) ?? 0,
+              method: "mentions",
+            });
+          }
+        } catch (e) {
+          errors.push(`${platform} "${q.query}": ${e instanceof Error ? e.message : "failed"}`);
+        }
+      }),
+    );
+  }
+  if (rows.length) {
+    const { error: upErr } = await supabase.from("seo_ai_share_of_voice").upsert(rows, { onConflict: "query_id,platform,domain,check_date" });
+    if (upErr) return { status: "error", error: `writing seo_ai_share_of_voice failed: ${upErr.message}`, errors };
+  }
+  return { status: "ok", competitors, written: rows.length, errors };
 }
 
 Deno.serve(async (req) => {

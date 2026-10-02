@@ -6,6 +6,7 @@
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
 import { fmtInt, monthLabel, perClickLabel, type Delta, type Tile } from "../seo-search-console/insights.ts";
 import {
+  aiPlatformsPhrase,
   METRIC_LABELS,
   movement,
   positionText,
@@ -413,7 +414,7 @@ export async function renderReportPdf(content: ReportContent): Promise<Uint8Arra
     w.text(
       a.checks === 0
         ? `You're tracking ${a.queries} question${a.queries === 1 ? "" : "s"}; the first check hasn't run yet.`
-        : `Your site was cited in ${a.cited} of ${a.checks} checks this month across ${a.queries} tracked question${a.queries === 1 ? "" : "s"} (Google AI Overviews and ChatGPT).`,
+        : `Your site was cited in ${a.cited} of ${a.checks} checks this month across ${a.queries} tracked question${a.queries === 1 ? "" : "s"} (${aiPlatformsPhrase(a.platforms)}).`,
       { size: 10 },
     );
   }

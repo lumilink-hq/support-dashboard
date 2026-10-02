@@ -429,6 +429,9 @@ verify_jwt = false
 [functions.seo-competitor-gaps]
 verify_jwt = false
 
+[functions.seo-ai-responses]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

@@ -133,3 +133,81 @@ export function shareOfVisibility(rows: { query_id: string; cited_count: number 
   const cited = new Set(rows.filter((r) => r.cited_count > 0).map((r) => r.query_id));
   return cited.size / totalQueries;
 }
+
+// -----------------------------------------------------------------------------
+// Share of voice (module 25)
+// -----------------------------------------------------------------------------
+
+/** multi_target_metrics takes 2 to 10 target sets: the client plus up to 9. */
+export const MAX_COMPETITORS = 9;
+
+/** Is this host the domain or one of its subdomains? */
+export function domainMatches(host: string | null, domain: string): boolean {
+  if (!host) return false;
+  const h = host.toLowerCase().replace(/^www\./, "");
+  return h === domain || h.endsWith(`.${domain}`);
+}
+
+/** The client's competitors as bare domains: every active competitor across
+ * its locations, the most-tracked first (ties alphabetical), never the
+ * client's own domain, capped. */
+export function competitorDomains(rows: { domain: string | null }[], clientDomain: string, cap = MAX_COMPETITORS): string[] {
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    const d = targetDomain(r.domain);
+    if (d && d !== clientDomain) counts.set(d, (counts.get(d) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, cap)
+    .map(([d]) => d);
+}
+
+/** One llm_mentions/multi_target_metrics request: for each domain, answers
+ * whose question contains the query and whose sources include that domain.
+ * The same filter module 20's search uses, so the numbers are comparable.
+ * Each target set's `key` is the domain, which is how results come back. */
+export function buildMultiTargetBody(query: string, domains: string[], platform: string): Record<string, unknown> {
+  return {
+    targets: domains.map((domain) => ({
+      key: domain,
+      target: [
+        { keyword: query, search_scope: ["question"], match_type: "partial_match" },
+        { domain, search_scope: ["sources"] },
+      ],
+    })),
+    platform,
+    location_code: 2840,
+    language_code: "en",
+  };
+}
+
+function mentionsOf(node: unknown): number | null {
+  if (!node || typeof node !== "object") return null;
+  const n = node as Record<string, unknown>;
+  if (typeof n.mentions === "number") return n.mentions;
+  // A grouping array, e.g. platform: [{ key: "google", mentions: 3 }].
+  for (const k of ["platform", "location", "language"]) {
+    if (Array.isArray(n[k])) {
+      const vals = (n[k] as Record<string, unknown>[]).map((g) => (typeof g?.mentions === "number" ? g.mentions : 0));
+      if (vals.length) return vals.reduce((a, b) => a + b, 0);
+    }
+  }
+  return null;
+}
+
+/** Mentions per target key. Reads items[].total.mentions, else sums the
+ * platform/location grouping, else items[].mentions. A key with no item, or
+ * no number, is absent rather than a guessed zero. */
+export function parseMultiTarget(result: unknown): Map<string, number> {
+  const out = new Map<string, number>();
+  const first = Array.isArray(result) ? (result as Record<string, unknown>[])[0] : null;
+  const items = (Array.isArray(first?.items) ? first!.items : []) as Record<string, unknown>[];
+  for (const item of items) {
+    const key = typeof item.key === "string" ? item.key : null;
+    if (!key) continue;
+    const n = mentionsOf(item.total) ?? mentionsOf(item);
+    if (n !== null) out.set(key, n);
+  }
+  return out;
+}

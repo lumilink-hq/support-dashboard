@@ -368,14 +368,19 @@ async function aiVisibility(clientId: string, period: Period): Promise<ReportCon
 
   const { data, error } = await supabase
     .from("seo_ai_mentions")
-    .select("cited_count")
+    .select("cited_count, platform")
     .eq("client_id", clientId)
     .gte("check_date", period.start)
     .lte("check_date", period.end)
     .limit(5000);
   if (error) throw new Error(`loading AI mentions failed: ${error.message}`);
-  const rows = (data ?? []) as { cited_count: number }[];
-  return { queries, checks: rows.length, cited: rows.filter((r) => r.cited_count > 0).length };
+  const rows = (data ?? []) as { cited_count: number; platform: string }[];
+  return {
+    queries,
+    checks: rows.length,
+    cited: rows.filter((r) => r.cited_count > 0).length,
+    platforms: [...new Set(rows.map((r) => r.platform))].sort(),
+  };
 }
 
 function escapeHtml(s: string): string {
