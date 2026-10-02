@@ -20,7 +20,81 @@
 // invented specifics. That keeps the articles true, at the price of being more
 // generic than a human-written local article; getting real local detail in needs
 // an intake step that collects it (plan.md, module 16 notes).
+//
+// MODULE 28 is that intake (details.ts): service areas, landmarks, services
+// and facts the client vouches for. They go in the payload, and a RISKY_CLAIMS
+// match is let through only when its `allow` hook finds the exact vouched
+// fact behind it ("since 2004" needs year_founded 2004).
 // =============================================================================
+
+import type { LocationDetails } from "./details.ts";
+
+/** Whatever the intake holds, as the JSON the model sees (empty parts left
+ * out, so a location with no intake gets exactly the old payload). */
+export function payloadDetails(d: LocationDetails | null | undefined): Record<string, unknown> {
+  if (!d) return {};
+  const out: Record<string, unknown> = {};
+  if (d.service_areas.length) out.service_areas = d.service_areas;
+  if (d.landmarks.length) out.nearby_landmarks = d.landmarks;
+  if (d.services.length) out.services = d.services;
+  const facts: Record<string, unknown> = {};
+  if (d.year_founded) facts.year_founded = d.year_founded;
+  if (d.licensed) facts.licensed = true;
+  if (d.insured) facts.insured = true;
+  if (d.bonded) facts.bonded = true;
+  if (d.certifications.length) facts.certifications = d.certifications;
+  if (d.family_owned) facts.family_owned = true;
+  if (d.locally_owned) facts.locally_owned = true;
+  if (d.free_estimates) facts.free_estimates = true;
+  if (d.guarantee) facts.guarantee = d.guarantee;
+  if (d.awards.length) facts.awards = d.awards;
+  if (Object.keys(facts).length) out.vouched_facts = facts;
+  return out;
+}
+
+// -----------------------------------------------------------------------------
+// Which otherwise-blocked claims the intake backs. Each takes ONE matched
+// phrase (from seo-content/lib.ts RISKY_CLAIMS) and says whether a vouched
+// fact covers exactly that phrase.
+// -----------------------------------------------------------------------------
+
+export function allowsGuarantee(_m: string, d: LocationDetails): boolean {
+  return !!d.guarantee;
+}
+
+export function allowsCredential(m: string, d: LocationDetails): boolean {
+  const w = m.toLowerCase();
+  if (w === "licensed") return d.licensed;
+  if (w === "insured") return d.insured;
+  if (w === "bonded") return d.bonded;
+  if (w === "certified" || w === "accredited") return d.certifications.length > 0;
+  if (/^award[- ]winning$/.test(w)) return d.awards.length > 0;
+  return false;
+}
+
+/** "since 2004" only when founded in 2004; "over / more than / N+ years" only
+ * when N fits since the founding year; "nearly / almost N" allows one more. */
+export function allowsYears(m: string, d: LocationDetails, thisYear: number): boolean {
+  if (!d.year_founded) return false;
+  const since = /since\s+((19|20)\d\d)/i.exec(m);
+  if (since) return Number(since[1]) === d.year_founded;
+  const n = /(\d+)/.exec(m);
+  if (!n) return false;
+  const years = thisYear - d.year_founded;
+  const slack = /nearly|almost/i.test(m) ? 1 : 0;
+  return Number(n[1]) <= years + slack;
+}
+
+export function allowsOwnership(m: string, d: LocationDetails): boolean {
+  if (/^family/i.test(m)) return d.family_owned;
+  if (/^locally/i.test(m)) return d.locally_owned;
+  return false;
+}
+
+/** Free estimates/quotes only; "affordable", "cheapest", "lowest price" never. */
+export function allowsFreeEstimate(m: string, d: LocationDetails): boolean {
+  return /^free\s/i.test(m) && d.free_estimates;
+}
 
 // -----------------------------------------------------------------------------
 // Gap analysis: which keyword to write about
@@ -323,6 +397,7 @@ export type LocationFacts = {
   city: string | null;
   region: string | null;
   primary_category: string | null;
+  details?: LocationDetails | null; // module 28's intake, when there is one
 };
 
 /** Fixed. Nothing from a client is ever interpolated into this (rule 5). */
@@ -346,6 +421,7 @@ export const SYSTEM_PROMPT = [
   "",
   "Honesty rules (the article is published under the business's name):",
   "- The only facts you have about the business are those in the JSON. General, widely true how-to and educational knowledge is fine.",
+  "- Where they fit naturally, name places from service_areas and nearby_landmarks and services from services. State an item from vouched_facts only as given: the year in year_founded, the guarantee in its own words, only the credentials marked true.",
   "- Do not invent anything about the business: years in business, licences, insurance, certifications, awards, reviews, prices, guarantees, staff, neighbourhoods it serves, or anything else you were not given.",
   "- No statistics or percentages, no superlatives such as 'best' or '#1', no URLs, no phone numbers.",
   "- If the facts are too thin to write an honest article, reply with exactly: INSUFFICIENT_FACTS",
@@ -362,6 +438,7 @@ export function buildArticlePayload(facts: LocationFacts, keyword: string): stri
       category: facts.primary_category,
       city: facts.city,
       region: facts.region,
+      ...payloadDetails(facts.details),
       keyword,
       target_words: TARGET_WORDS,
     },
@@ -406,16 +483,21 @@ const PHONE_LIKE = /\d[\d\s().+-]{5,}\d/;
 /** Invented specifics. Each is a claim we cannot back, made in the business's
  * voice. Deliberately blunt: a false positive costs one redraft, a false claim
  * goes out under a client's name. */
-export const RISKY_CLAIMS: { name: string; re: RegExp }[] = [
+export const RISKY_CLAIMS: {
+  name: string;
+  re: RegExp;
+  // Module 28: true when the location's intake vouches for this exact phrase.
+  allow?: (match: string, d: LocationDetails, thisYear: number) => boolean;
+}[] = [
   { name: "a percentage or statistic", re: /\b\d+(\.\d+)?\s?(%|percent)/i },
-  { name: "a guarantee", re: /\bguarantee[sd]?\b/i },
+  { name: "a guarantee", re: /\bguarantee[sd]?\b/i, allow: allowsGuarantee },
   // "best" alone is ordinary advice ("the best time to...", "best practices"); it
   // is only a claim when it ranks the business or its service.
   { name: "a superlative (best / #1 / top-rated / leading)", re: /(\bbest\b(?!\s+(practices?|ways?|time|options?|choices?|results?|fit|known|suited|for you))|#\s?1\b|\bnumber one\b|\btop[- ]rated\b|\bleading\b|\bpremier\b)/i },
-  { name: "a licence / insurance / certification claim", re: /\b(licensed|insured|bonded|certified|accredited|award[- ]winning)\b/i },
-  { name: "a years-in-business claim", re: /\b(since (19|20)\d\d|(for )?(over|more than|nearly|almost)\s+\d+\s+years|\d+\+?\s+years of (experience|service))\b/i },
-  { name: "a family-owned / locally-owned claim", re: /\b(family[- ]owned|locally[- ]owned|family[- ]run|locally[- ]operated)\b/i },
-  { name: "a free-estimate / pricing claim", re: /\b(free (estimate|quote|consultation|inspection)|affordable|lowest price|cheapest)\b/i },
+  { name: "a licence / insurance / certification claim", re: /\b(licensed|insured|bonded|certified|accredited|award[- ]winning)\b/i, allow: allowsCredential },
+  { name: "a years-in-business claim", re: /\b(since (19|20)\d\d|(for )?(over|more than|nearly|almost)\s+\d+\s+years|\d+\+?\s+years of (experience|service))\b/i, allow: allowsYears },
+  { name: "a family-owned / locally-owned claim", re: /\b(family[- ]owned|locally[- ]owned|family[- ]run|locally[- ]operated)\b/i, allow: allowsOwnership },
+  { name: "a free-estimate / pricing claim", re: /\b(free (estimate|quote|consultation|inspection)s?|affordable|lowest price|cheapest)\b/i, allow: allowsFreeEstimate },
 ];
 
 const ALLOWED_TAG = /^<(\/?)(h2|h3|p|ul|ol|li|strong|em)>$/i;
@@ -490,7 +572,10 @@ export function plainText(html: string): string {
 
 export type ArticleVerdict = { ok: true; article: Article; image_brief: string; alt: string } | { ok: false; reason: string };
 
-export function validateArticle(parsed: ParsedOutput, ctx: { keyword: string; city: string | null }): ArticleVerdict {
+export function validateArticle(
+  parsed: ParsedOutput,
+  ctx: { keyword: string; city: string | null; details?: LocationDetails | null; thisYear?: number },
+): ArticleVerdict {
   const bad = (reason: string): ArticleVerdict => ({ ok: false, reason });
   const { title, meta, alt, image_brief, html } = parsed;
 
@@ -512,8 +597,14 @@ export function validateArticle(parsed: ParsedOutput, ctx: { keyword: string; ci
   if (PHONE_LIKE.test(text) && (text.match(/\d/g) ?? []).length >= 7) return bad("the body contains a phone-number-like string");
 
   const everything = `${title}\n${meta}\n${text}`;
+  const thisYear = ctx.thisYear ?? new Date().getUTCFullYear();
   for (const c of RISKY_CLAIMS) {
-    if (c.re.test(everything)) return bad(`it makes ${c.name}, which we can't back`);
+    // Every occurrence must be backed, not just the first.
+    const all = new RegExp(c.re.source, c.re.flags.includes("g") ? c.re.flags : `${c.re.flags}g`);
+    for (const m of everything.matchAll(all)) {
+      const backed = c.allow && ctx.details ? c.allow(m[0], ctx.details, thisYear) : false;
+      if (!backed) return bad(`it makes ${c.name} ("${m[0]}"), which we can't back`);
+    }
   }
 
   const wordCount = words(text).length;

@@ -5,6 +5,9 @@
 // 23, from competitor gaps (seo_competitor_gaps, 0063): searches a competitor
 // ranks for on page one that the client doesn't show up for. Those score
 // lower than a tracked keyword the client is losing on (lib.ts).
+// Since module 28 each location's local-detail intake (seo_location_details,
+// 0067) goes into the payload, and the validator lets a claim through only
+// when the matching vouched fact is there.
 //
 //   POST /seo-content
 //   header: x-voice-tool-secret: <VOICE_TOOL_SECRET>
@@ -54,6 +57,7 @@ import {
   type GapRow,
   type PriorPost,
 } from "./lib.ts";
+import { detailsUsed, type LocationDetails } from "./details.ts";
 import { downloadImage, extensionFor, generateImage, ReplicateError, type ImageTier } from "./replicate.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -172,7 +176,14 @@ async function makeImage(clientId: string, brief: string, alt: string): Promise<
 
 // ---- The run ----------------------------------------------------------------
 
-type Loc = { id: string; name: string | null; city: string | null; region: string | null; primary_category: string | null };
+type Loc = {
+  id: string;
+  name: string | null;
+  city: string | null;
+  region: string | null;
+  primary_category: string | null;
+  details?: LocationDetails | null; // module 28's intake
+};
 type PostRow = { id: string; location_id: string; topic_key: string; title: string; body_text: string; topic_embedding: unknown; content_embedding: unknown };
 
 async function settle(clientId: string, success: boolean, error: string | null, interval: number) {
@@ -197,6 +208,17 @@ async function runClient(clientId: string): Promise<Record<string, unknown>> {
     .not("website_url", "is", null);
   if (lErr) throw new Error(`loading locations failed: ${lErr.message}`);
   const locations = new Map((locRows as Loc[]).map((l) => [l.id, l]));
+
+  // Module 28: each location's local-detail intake, when the client filled it in.
+  const { data: detailRows, error: dtErr } = await supabase
+    .from("seo_location_details")
+    .select("location_id, service_areas, landmarks, services, year_founded, licensed, insured, bonded, certifications, family_owned, locally_owned, free_estimates, guarantee, awards")
+    .eq("client_id", clientId);
+  if (dtErr) throw new Error(`loading location details failed: ${dtErr.message}`);
+  for (const d of (detailRows ?? []) as (LocationDetails & { location_id: string })[]) {
+    const loc = locations.get(d.location_id);
+    if (loc) loc.details = d;
+  }
 
   const { count: backlog, error: bErr } = await supabase
     .from("seo_actions")
@@ -284,7 +306,7 @@ async function runClient(clientId: string): Promise<Record<string, unknown>> {
       out.rejected++;
       continue;
     }
-    const verdict = validateArticle(parsed.value, { keyword: g.keyword, city: loc.city });
+    const verdict = validateArticle(parsed.value, { keyword: g.keyword, city: loc.city, details: loc.details });
     if (!verdict.ok) {
       console.log(`seo-content ${clientId} "${g.keyword}": rejected by validator: ${verdict.reason}`);
       out.rejected++;
@@ -314,6 +336,8 @@ async function runClient(clientId: string): Promise<Record<string, unknown>> {
       blocks: article.blocks,
       word_count: article.word_count,
       keyword: g.keyword,
+      // Module 28: which intake items the article used, for the reviewer.
+      local_details_used: detailsUsed(loc.details, article.text),
       image: img.image,
       image_error: img.image_error,
       uniqueness,

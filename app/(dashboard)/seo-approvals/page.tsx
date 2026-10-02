@@ -78,6 +78,7 @@ type ArticleProposal = {
   meta_description?: string;
   keyword?: string;
   word_count?: number;
+  local_details_used?: string[]; // module 28; absent on drafts made before it
   blocks?: Block[];
   image?: { url: string; alt: string } | null;
   image_error?: string | null;
@@ -150,6 +151,13 @@ function ArticleBlock({ a }: { a: ArticleProposal }) {
             {a.word_count ? `${a.word_count} words` : null}
             {a.keyword ? ` · targets “${a.keyword}”` : null}
           </p>
+          {a.local_details_used !== undefined ? (
+            <p className="mt-1 text-xs text-gray-500">
+              {a.local_details_used.length
+                ? `Local details used: ${a.local_details_used.join(", ")}`
+                : "Uses no local details. Add them under SEO, Map & locations, for more specific articles."}
+            </p>
+          ) : null}
         </div>
         <div>
           {a.image ? (

@@ -62,6 +62,7 @@ import {
   type SearchState,
   type SearchSummary,
 } from "@/supabase/functions/seo-search-console/insights";
+import { DETAIL_LIMITS, type LocationDetails } from "@/supabase/functions/seo-content/details";
 import { competitorGapScore, type CompetitorGapRow } from "@/supabase/functions/seo-content/lib";
 import {
   describeRadius,
@@ -79,6 +80,7 @@ import {
   dismissCompetitorGap,
   dismissKeywordSuggestion,
   dismissLinkOpportunity,
+  saveLocationDetails,
   removeAiQuery,
   removeCompetitor,
   removeKeyword,
@@ -173,6 +175,23 @@ function TopTable({ rows, keyLabel, caption }: { rows: TopRow[]; keyLabel: strin
         </details>
       ) : null}
     </div>
+  );
+}
+
+function DetailList({ name, label, hint, values }: { name: string; label: string; hint: string; values?: string[] }) {
+  const id = `detail-${name}`;
+  return (
+    <label htmlFor={id} className="block">
+      <span className="text-gray-700">{label}</span>
+      <span className="block text-xs text-gray-500">One per line, {hint}.</span>
+      <textarea
+        id={id}
+        name={name}
+        rows={4}
+        defaultValue={(values ?? []).join("\n")}
+        className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1"
+      />
+    </label>
   );
 }
 
@@ -336,7 +355,7 @@ export default async function SeoPortalPage({
   const [
     kwRes, trendRes, radiusRes, connRes, compRes, backlinkRes, metricRes, shippedRes, queryRes, mentionRes, pendingRes,
     propRes, dailyRes, kwCountRes, settingsRes, milestoneRes, entRes, googleRes, publishedRes, metricLatestRes,
-    kwStatsRes, suggestionRes, gapRes, crawlRunRes, findingRes, sovRes, linkRes,
+    kwStatsRes, suggestionRes, gapRes, crawlRunRes, findingRes, sovRes, linkRes, detailsRes,
   ] = await Promise.all([
     supabase.from("seo_keywords").select("id, keyword, is_geo_grid_enabled").eq("location_id", loc.id).eq("is_active", true).order("keyword"),
     supabase.from("seo_rank_trend").select("rank_type, check_date, avg_position").eq("location_id", loc.id).gte("check_date", since200).order("check_date"),
@@ -398,6 +417,8 @@ export default async function SeoPortalPage({
       .eq("location_id", loc.id)
       .order("domain_rank", { ascending: false, nullsFirst: false })
       .limit(300),
+    // Module 28: this location's local-detail intake.
+    supabase.from("seo_location_details").select("*").eq("location_id", loc.id).maybeSingle(),
   ]);
 
   const keywords = (kwRes.data ?? []) as Keyword[];
@@ -410,6 +431,7 @@ export default async function SeoPortalPage({
     | null;
   const issues = summarizeFindings((findingRes.data ?? []) as FindingRow[]);
   const linkOps = (linkRes.data ?? []) as LinkOpportunity[];
+  const details = detailsRes.data as (LocationDetails & { confirmed_at: string | null }) | null;
   const linkGaps = linkOps
     .filter((o) => o.kind === "gap")
     .sort((a, b) => b.competitors.length - a.competitors.length || (b.domain_rank ?? -1) - (a.domain_rank ?? -1));
@@ -1196,6 +1218,77 @@ export default async function SeoPortalPage({
                 <HeatGrid cells={gridCells} label={`Map grid for ${geoKw?.keyword}: your position in the local results at each point around the location`} />
               </>
             )}
+          </Card>
+
+          <Card
+            title="About this location, for articles"
+            id="location-details"
+            note="Weekly articles can only say what's true about this location. Without these details they stay general; with them they can name the places you serve and the facts you confirm here."
+          >
+            <form action={saveLocationDetails} className="space-y-4 text-sm">
+              <input type="hidden" name="location" value={loc.id} />
+              <div className="grid gap-4 md:grid-cols-3">
+                <DetailList name="service_areas" label="Neighbourhoods and towns you serve" hint="e.g. Midtown" values={details?.service_areas} />
+                <DetailList name="landmarks" label="Nearby landmarks" hint="e.g. the County Fairgrounds" values={details?.landmarks} />
+                <DetailList name="services" label="Services you offer" hint="e.g. tankless water heater installation" values={details?.services} />
+              </div>
+              <fieldset className="rounded-md border border-gray-200 p-3">
+                <legend className="px-1 text-xs font-medium text-gray-700">Facts you vouch for (only tick what is true; articles may say it)</legend>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="block">
+                      <span className="text-gray-700">Year founded</span>
+                      <input
+                        name="year_founded"
+                        inputMode="numeric"
+                        defaultValue={details?.year_founded ?? ""}
+                        placeholder="e.g. 2004"
+                        className="mt-1 block w-28 rounded-md border border-gray-300 px-2 py-1"
+                      />
+                    </label>
+                    {(
+                      [
+                        ["licensed", "Licensed"],
+                        ["insured", "Insured"],
+                        ["bonded", "Bonded"],
+                        ["family_owned", "Family-owned"],
+                        ["locally_owned", "Locally owned"],
+                        ["free_estimates", "Free estimates"],
+                      ] as const
+                    ).map(([name, label]) => (
+                      <label key={name} className="flex items-center gap-2">
+                        <input type="checkbox" name={name} defaultChecked={!!details?.[name]} />
+                        <span className="text-gray-700">{label}</span>
+                      </label>
+                    ))}
+                    <label className="block">
+                      <span className="text-gray-700">Guarantee, in your words</span>
+                      <input
+                        name="guarantee"
+                        maxLength={DETAIL_LIMITS.guarantee}
+                        defaultValue={details?.guarantee ?? ""}
+                        placeholder="e.g. a one-year warranty on all labour"
+                        className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1"
+                      />
+                    </label>
+                  </div>
+                  <div className="space-y-4">
+                    <DetailList name="certifications" label="Certifications" hint="e.g. NATE-certified technicians" values={details?.certifications} />
+                    <DetailList name="awards" label="Awards" hint="e.g. Springfield Business Journal Best of 2025" values={details?.awards} />
+                  </div>
+                </div>
+              </fieldset>
+              <label className="flex items-start gap-2">
+                <input type="checkbox" name="confirm" value="yes" required className="mt-0.5" />
+                <span className="text-gray-700">These details are true, and articles about {loc.name} may say them.</span>
+              </label>
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
+                  Save details
+                </button>
+                {details?.confirmed_at ? <span className="text-xs text-gray-500">Last confirmed {formatDateTime(details.confirmed_at)}.</span> : null}
+              </div>
+            </form>
           </Card>
 
           <Card title="Google Business Profile" note="Views, calls and direction requests from your profile, last 60 days.">

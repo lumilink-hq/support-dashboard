@@ -17,6 +17,7 @@ import {
   QUERY_MIN,
 } from "@/lib/seo-portal";
 import { createClient } from "@/lib/supabase/server";
+import { cleanItem, cleanList, cleanYear, DETAIL_LIMITS, type ListField } from "@/supabase/functions/seo-content/details";
 // The weekly AI-visibility job only ever checks this many active queries; more
 // would be accepted here and silently never checked, so the form stops at the cap.
 import { MAX_QUERIES_PER_CLIENT } from "@/supabase/functions/seo-ai-visibility/lib";
@@ -360,6 +361,72 @@ export async function dismissCompetitorGap(formData: FormData) {
 
   revalidatePath("/seo");
   redirect(gapBack(location));
+}
+
+/**
+ * Save a location's local-detail intake (module 28): what weekly articles may
+ * say about it. Saving is the client confirming the facts are true; 0067's
+ * trigger records who and when. Every list is cleaned with the same rules the
+ * table enforces (supabase/functions/seo-content/details.ts), and anything
+ * dropped is reported back.
+ */
+export async function saveLocationDetails(formData: FormData) {
+  const location = String(formData.get("location") ?? "");
+  const back = (notice?: string, error?: string) => {
+    const qs = new URLSearchParams();
+    if (location) qs.set("location", location);
+    qs.set("tab", "map");
+    if (notice) qs.set("notice", notice);
+    if (error) qs.set("error", error);
+    return `/seo?${qs.toString()}#location-details`;
+  };
+
+  const access = await getSeoAccess();
+  if (!access.allowed) redirect(back(undefined, "Local SEO isn't active on your plan."));
+  if (formData.get("confirm") !== "yes") redirect(back(undefined, "Tick the box to confirm these details are true before saving."));
+  const clientId = await getCurrentClientId();
+  if (!clientId) redirect("/login");
+  const supabase = await createClient();
+
+  const { data: loc } = await supabase.from("seo_locations").select("id").eq("id", location).maybeSingle();
+  if (!loc) redirect(back(undefined, "That location no longer exists."));
+
+  let dropped = 0;
+  const list = (field: ListField) => {
+    const r = cleanList(String(formData.get(field) ?? ""), field);
+    dropped += r.dropped;
+    return r.items;
+  };
+  const yearRaw = String(formData.get("year_founded") ?? "");
+  const year = cleanYear(yearRaw);
+  if (yearRaw.trim() && year === null) redirect(back(undefined, "The year founded must be a past year, like 2004."));
+  const guaranteeRaw = String(formData.get("guarantee") ?? "");
+  const guarantee = guaranteeRaw.trim() ? cleanItem(guaranteeRaw, DETAIL_LIMITS.guarantee) : null;
+  if (guaranteeRaw.trim() && !guarantee) redirect(back(undefined, `Describe the guarantee in one line of up to ${DETAIL_LIMITS.guarantee} characters, without links or phone numbers.`));
+  const flag = (name: string) => formData.get(name) === "on";
+
+  const row = {
+    location_id: location,
+    client_id: clientId,
+    service_areas: list("service_areas"),
+    landmarks: list("landmarks"),
+    services: list("services"),
+    year_founded: year,
+    licensed: flag("licensed"),
+    insured: flag("insured"),
+    bonded: flag("bonded"),
+    certifications: list("certifications"),
+    family_owned: flag("family_owned"),
+    locally_owned: flag("locally_owned"),
+    free_estimates: flag("free_estimates"),
+    guarantee,
+    awards: list("awards"),
+  };
+  const { error } = await supabase.from("seo_location_details").upsert(row, { onConflict: "location_id" });
+  if (error) redirect(back(undefined, error.message));
+
+  revalidatePath("/seo");
+  redirect(back(`Saved. New articles for this location can now use these details.${dropped ? ` ${dropped} line${dropped === 1 ? " was" : "s were"} left out (too long, repeated, over the limit, or containing a link or phone number).` : ""}`));
 }
 
 /**
