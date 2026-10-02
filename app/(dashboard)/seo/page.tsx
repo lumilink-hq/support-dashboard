@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BarChart, Donut, HBars, HeatGrid, Legend, LineChart, MonthTrend, SERIES_COLORS } from "@/components/seo/charts";
 import { CtrUpside } from "@/components/seo/ctr-upside";
+import { ImportCard } from "@/components/seo/import-card";
 import { SeoLocked } from "@/components/seo/locked";
 import { Story, TileGrid } from "@/components/seo/search-tiles";
 import { getSeoAccess } from "@/lib/seo-access";
@@ -297,12 +298,12 @@ function SuggestionList({
 export default async function SeoPortalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ location?: string; keyword?: string; error?: string; tab?: string; compare?: string }>;
+  searchParams: Promise<{ location?: string; keyword?: string; error?: string; notice?: string; tab?: string; compare?: string }>;
 }) {
   const access = await getSeoAccess();
   if (!access.allowed) return <SeoLocked state={access.state} />;
 
-  const { location: locParam, keyword: kwParam, error: actionError, tab: tabParam, compare: compareParam } = await searchParams;
+  const { location: locParam, keyword: kwParam, error: actionError, notice: actionNotice, tab: tabParam, compare: compareParam } = await searchParams;
   const tab: SeoTab = parseTab(tabParam);
   const compare: Compare = parseCompare(compareParam);
   const supabase = await createClient();
@@ -647,6 +648,9 @@ export default async function SeoPortalPage({
       {actionError ? (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{actionError}</div>
       ) : null}
+      {actionNotice && !actionError ? (
+        <div role="status" className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">{actionNotice}</div>
+      ) : null}
 
       {conn && conn.status !== "healthy" && conn.status !== "unchecked" ? (
         <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
@@ -921,6 +925,21 @@ export default async function SeoPortalPage({
                 ) : null}
               </div>
             )}
+          </Card>
+
+          <Card
+            title="Import from Semrush or Ahrefs"
+            id="import"
+            note="Already tracking keywords or competitors in another tool? Export them and pick the ones to track here."
+          >
+            <ImportCard
+              locationId={loc.id}
+              locationName={loc.name}
+              trackedKeywords={keywords.map((k) => k.keyword)}
+              trackedCompetitors={competitors.map((c) => c.domain)}
+              keywordCap={MAX_KEYWORDS_PER_LOCATION}
+              competitorCap={MAX_COMPETITORS_PER_LOCATION}
+            />
           </Card>
 
           {summary && topQueries.length > 0 ? (

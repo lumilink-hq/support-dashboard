@@ -363,6 +363,92 @@ export async function dismissCompetitorGap(formData: FormData) {
 }
 
 /**
+ * Track keywords or competitors picked from a Semrush or Ahrefs export (module
+ * 27). The file is parsed in the browser (lib/seo-import.ts); only the ticked
+ * values arrive here, as repeated `item` fields, and each is cleaned and
+ * checked again. Same rules as adding one by hand: the location is looked up
+ * under RLS, an inactive row comes back (its history intact; a keyword's map
+ * grid stays off), and the per-location cap holds.
+ */
+export async function importFromExport(formData: FormData) {
+  const location = String(formData.get("location") ?? "");
+  const kind = String(formData.get("kind") ?? "");
+  const back = (notice?: string, error?: string) => {
+    const qs = new URLSearchParams();
+    if (location) qs.set("location", location);
+    qs.set("tab", "keywords");
+    if (notice) qs.set("notice", notice);
+    if (error) qs.set("error", error);
+    return `/seo?${qs.toString()}#import`;
+  };
+  if (kind !== "keywords" && kind !== "competitors") redirect(back(undefined, "Unknown import type."));
+
+  const access = await getSeoAccess();
+  if (!access.allowed) redirect(back(undefined, "Local SEO isn't active on your plan."));
+  const clientId = await getCurrentClientId();
+  if (!clientId) redirect("/login");
+  const supabase = await createClient();
+
+  const { data: loc } = await supabase.from("seo_locations").select("id").eq("id", location).maybeSingle();
+  if (!loc) redirect(back(undefined, "That location no longer exists."));
+
+  const isKw = kind === "keywords";
+  const table = isKw ? "seo_keywords" : "seo_competitors";
+  const field = isKw ? "keyword" : "domain";
+  const cap = isKw ? MAX_KEYWORDS_PER_LOCATION : MAX_COMPETITORS_PER_LOCATION;
+
+  const values: string[] = [];
+  let invalid = 0;
+  for (const raw of formData.getAll("item").slice(0, 200)) {
+    const v = isKw ? cleanKeyword(String(raw)) : cleanDomain(String(raw));
+    const okValue = isKw ? !!v && v.length >= KEYWORD_MIN && v.length <= KEYWORD_MAX : !!v;
+    if (!okValue || !v) invalid++;
+    else if (!values.includes(v)) values.push(v);
+  }
+  if (values.length === 0) redirect(back(undefined, invalid ? "None of the picked rows is a valid keyword or website." : "Nothing was picked."));
+
+  const { data: existingRows, error: readErr } = await supabase.from(table).select(`id, ${field}, is_active`).eq("location_id", location);
+  if (readErr) redirect(back(undefined, readErr.message));
+  const existing = new Map(((existingRows ?? []) as unknown as Record<string, unknown>[]).map((r) => [String(r[field]), { id: String(r.id), active: r.is_active === true }]));
+  let room = cap - [...existing.values()].filter((e) => e.active).length;
+
+  const reactivate: string[] = [];
+  const insert: string[] = [];
+  let already = 0;
+  let overCap = 0;
+  for (const v of values) {
+    const e = existing.get(v);
+    if (e?.active) already++;
+    else if (room <= 0) overCap++;
+    else {
+      if (e) reactivate.push(e.id);
+      else insert.push(v);
+      room--;
+    }
+  }
+
+  if (reactivate.length) {
+    const patch = isKw ? { is_active: true, is_geo_grid_enabled: false, enabled_by: null, enabled_at: null } : { is_active: true };
+    const { error } = await supabase.from(table).update(patch).in("id", reactivate);
+    if (error) redirect(back(undefined, error.message));
+  }
+  if (insert.length) {
+    const { error } = await supabase.from(table).insert(insert.map((v) => ({ client_id: clientId, location_id: location, [field]: v })));
+    if (error) redirect(back(undefined, error.message));
+  }
+
+  const added = reactivate.length + insert.length;
+  const noun = isKw ? "keyword" : "competitor";
+  const parts = [`Now tracking ${added} more ${noun}${added === 1 ? "" : "s"}`];
+  if (already) parts.push(`${already} already tracked`);
+  if (overCap) parts.push(`${overCap} left out at the limit of ${cap} per location`);
+  if (invalid) parts.push(`${invalid} not valid`);
+
+  revalidatePath("/seo");
+  redirect(back(`${parts.join(", ")}.`));
+}
+
+/**
  * Dismiss a referring site from the link opportunities (module 26), for every
  * location of the client. The tables are read-only to tenants; 0066's definer
  * function records it.
