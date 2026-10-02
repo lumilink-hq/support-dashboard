@@ -99,6 +99,24 @@ const SEVERITY_ORDER: Record<string, number> = { critical: 0, warning: 1, info: 
 
 /** Highest severity first, then oldest detection, so a capped run does the
  * most valuable work and the same findings aren't starved every day. */
+/**
+ * How many model drafts are waiting on a person (pending approval or a manual
+ * step) before drafting pauses for a location. Without it, a large crawl
+ * (module 24) keeps a location drafting 10 a day until every finding has one,
+ * whether or not anyone is approving them, spending model budget on copy
+ * nobody has looked at. Same idea as seo-content's MAX_BACKLOG for articles.
+ */
+export const MAX_WAITING_DRAFTS = 10;
+
+/** Statuses that mean a draft is sitting with a person. */
+export const WAITING_STATUSES = ["draft", "pending_approval", "manual_required"];
+
+/** Model drafts this run may write: the per-run cap, or the room left under
+ * MAX_WAITING_DRAFTS, whichever is smaller; never negative. */
+export function draftRoom(waiting: number, perRun: number, maxWaiting = MAX_WAITING_DRAFTS): number {
+  return Math.max(0, Math.min(perRun, maxWaiting - waiting));
+}
+
 export function orderFindings<T extends Pick<FindingRow, "severity" | "detected_at">>(findings: T[]): T[] {
   return [...findings].sort(
     (a, b) =>

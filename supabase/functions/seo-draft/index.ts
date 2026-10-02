@@ -20,7 +20,10 @@
 // a location only runs when it has an open draftable finding with no live
 // draft, so a clean or fully drafted site costs nothing. A draft the validator
 // rejects leaves its finding open, so it is retried on the next daily run; that
-// is at most MAX_DRAFTS_PER_RUN wasted calls a day per location.
+// is at most MAX_DRAFTS_PER_RUN wasted calls a day per location. And drafting
+// pauses for a location while MAX_WAITING_DRAFTS (lib.ts) page fixes are
+// already waiting on a person (2026-10-02), so a big crawl can't spend the
+// model budget on drafts nobody has reviewed.
 //
 // FINDING LIFECYCLE. A finding that gets a draft is marked 'actioned'.
 // seo-crawl deletes only OPEN findings, so the finding (and the action's link to
@@ -40,12 +43,14 @@ import {
   buildLocalBusinessSchema,
   buildUserPayload,
   DRAFTABLE,
+  draftRoom,
   idempotencyKey,
   orderFindings,
   planDraft,
   siteTarget,
   SYSTEM_PROMPT,
   validateDraft,
+  WAITING_STATUSES,
   type FindingRow,
   type LocationFacts,
 } from "./lib.ts";
@@ -127,7 +132,7 @@ async function draftLocation(loc: LocationFacts & { id: string; client_id: strin
   // "don't draft this again".
   const { data: existing, error: aErr } = await supabase
     .from("seo_actions")
-    .select("target_url, finding_type, status, updated_at")
+    .select("target_url, finding_type, action_type, status, updated_at")
     .eq("location_id", loc.id)
     .in("status", ["draft", "pending_approval", "approved", "publishing", "manual_required", "published", "rejected"]);
   if (aErr) throw new Error(`loading actions failed: ${aErr.message}`);
@@ -180,7 +185,16 @@ async function draftLocation(loc: LocationFacts & { id: string; client_id: strin
   }
 
   // ---- Model-drafted copy ---------------------------------------------------
-  const copyFindings = todo.filter((f) => f.finding_type !== "missing_local_business_schema").slice(0, MAX_DRAFTS_PER_RUN);
+  // Paused while MAX_WAITING_DRAFTS page fixes already wait on a person: no
+  // model spend on copy nobody is reviewing (articles have their own cap).
+  const waiting = (existing ?? []).filter((a) => a.action_type === "onpage_fix" && WAITING_STATUSES.includes(a.status)).length;
+  const room = draftRoom(waiting, MAX_DRAFTS_PER_RUN);
+  const pending = todo.filter((f) => f.finding_type !== "missing_local_business_schema");
+  const copyFindings = pending.slice(0, room);
+  if (pending.length > copyFindings.length) {
+    out.skipped += pending.length - copyFindings.length;
+    if (room === 0) console.log(`seo-draft ${loc.id}: ${waiting} drafts already waiting on a person; drafting paused`);
+  }
   if (copyFindings.length > 0 && !anthropic) {
     // Not a per-finding failure: nothing was attempted. The caller settles this
     // as a failed job so it backs off instead of retrying hourly.

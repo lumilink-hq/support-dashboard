@@ -14,6 +14,9 @@ import {
   buildLocalBusinessSchema,
   buildUserPayload,
   DRAFTABLE,
+  draftRoom,
+  MAX_WAITING_DRAFTS,
+  WAITING_STATUSES,
   idempotencyKey,
   LIMITS,
   orderFindings,
@@ -69,6 +72,17 @@ for (const t of ["multiple_h1", "images_missing_alt", "thin_content", "phone_not
   ok(`${t} is not draftable`, planDraft({ finding_type: t, details: {} }) === null);
 }
 ok("a title_length finding with malformed details still plans", planDraft({ finding_type: "title_length", details: { title: 5 } })?.previous === null);
+
+console.log("draftRoom (waiting-draft cap)");
+{
+  ok("nothing waiting: the per-run cap", draftRoom(0, 10) === 10);
+  ok("some waiting: only the room left", draftRoom(7, 10) === 3);
+  ok("at the cap: none", draftRoom(MAX_WAITING_DRAFTS, 10) === 0);
+  ok("over the cap (e.g. it was lowered): none, never negative", draftRoom(MAX_WAITING_DRAFTS + 5, 10) === 0);
+  ok("a smaller per-run cap still wins", draftRoom(0, 3) === 3);
+  ok("cap is 10", MAX_WAITING_DRAFTS === 10);
+  ok("waiting means with a person, not published or rejected", WAITING_STATUSES.includes("pending_approval") && WAITING_STATUSES.includes("manual_required") && !WAITING_STATUSES.includes("published") && !WAITING_STATUSES.includes("rejected") && !WAITING_STATUSES.includes("approved"));
+}
 
 console.log("DRAFTABLE stays in step with the latest seo_draft_targets (migration 0064)");
 {

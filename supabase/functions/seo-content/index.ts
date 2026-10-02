@@ -140,7 +140,10 @@ async function writeArticle(payload: string): Promise<string> {
     model: MODEL,
     max_tokens: 8000,
     system: SYSTEM_PROMPT,
-    output_config: { effort: "medium" },
+    // Low (was medium, 2026-10-02): thinking is billed as output, and the
+    // budget is small. The validator and a human still check every article;
+    // raise it if rejections climb.
+    output_config: { effort: "low" },
     messages: [{ role: "user", content: payload }],
   });
   if (res.stop_reason === "refusal") throw new Error("model refused");
