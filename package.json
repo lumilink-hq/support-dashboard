@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node scripts/run-tests.mjs",
     "test:sql": "node scripts/run-sql-tests.mjs",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm run check:jsx && npm test",
+    "check:jsx": "npx --yes tsx scripts/check-jsx-spacing.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

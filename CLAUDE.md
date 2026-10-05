@@ -8,7 +8,7 @@ Deno edge functions in `supabase/functions/`). Billing is Stripe.
 
 ## Commands
 
-- `npm run check` — typecheck + every unit test. Run before calling a change done.
+- `npm run check` — typecheck + JSX missing-space check (`check:jsx`) + every unit test. Run before calling a change done.
 - `npm test` / `npm test -- seo` — the `scripts/test-*.ts` unit tests (all, or names containing "seo").
 - `npm run test:sql` — the `scripts/test_*.sql` tests against the **local** db container. Each test
   rolls itself back. Needs `npx supabase start` first.
