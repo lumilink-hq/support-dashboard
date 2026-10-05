@@ -12,10 +12,11 @@ the companion: this one is what exists, that one is what's missing.
 **This file itself has gone stale below this point** — everything from here down stops
 at migration `0030` (2026-08-03) and predates the SEO product line entirely. It hasn't
 been rewritten as part of that build (out of scope, and risky to touch a doc this size
-without a full pass). **For the SEO build specifically, `/plan.md` (repo root) is the
-current, actively-maintained status** — Phase 1 (5 modules) is complete as of
-2026-09-17, migrations `0042`–`0048`. Voice/email below is presumably still accurate in
-outline but unverified past `0030`.
+without a full pass). **For the SEO build specifically, `plan.md` is the current,
+actively-maintained status.** It lives one level ABOVE this repo
+(`C:\dev\LumiLink\plan.md`) and is not committed here. Production was at migration
+`0067` as of 2026-10-05. Voice/email below is presumably still accurate in outline but
+unverified past `0030`.
 
 ---
 
