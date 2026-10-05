@@ -120,7 +120,10 @@ ok("prompt guards against unconfirmed changes", prompt.toLowerCase().includes("n
 ok("prompt handles a passed appointment (book new, don't move)", prompt.toLowerCase().includes("already happened") && prompt.toLowerCase().includes("book a fresh one"));
 ok("prompt mentions the three tools", prompt.includes("check_availability") && prompt.includes("book") && prompt.includes("capture_lead"));
 ok("demo note present when is_demo", prompt.includes("DEMONSTRATION"));
-ok("transfer path used when transfer_number set", prompt.includes("warm-transfer"));
+// Since 0036 transfers are a routed "# Transfer routing" section (destination 1
+// derived from the legacy transfer_number here), not the old inline warm-transfer line.
+ok("transfer routing section used when a destination is set", prompt.includes("# Transfer routing") && prompt.includes("Destination 1"));
+ok("escalation line points at the routing section", prompt.includes("use the Transfer routing section below"));
 
 const noTransfer = readClientConfig({ ...clientRow, settings: { ...clientRow.settings, transfer_number: null } });
 ok("lead-capture path when no transfer_number", buildSystemPrompt(noTransfer, services).includes("capture the caller's details as a lead"));
@@ -185,10 +188,14 @@ ok("orders mode parsed from settings", ordersCfg.agentMode === "orders");
 ok("scheduling remains the default", cfg.agentMode === "scheduling");
 ok("unknown mode falls back to scheduling",
    readClientConfig({ ...ordersRow, settings: { voice_agent_mode: "typo" } }).agentMode === "scheduling");
+// Since 2026-07-30 orders mode overrides the FIRST MESSAGE only (so the greeting
+// names the right store), never the prompt.
 ok("ORDERS: no prompt override — the agent keeps its own",
-   ordersRes.conversation_config_override === undefined);
-ok("ORDERS: the key is absent, not just undefined",
-   !("conversation_config_override" in ordersRes));
+   ordersRes.conversation_config_override?.agent.prompt === undefined);
+ok("ORDERS: the prompt key is absent, not just undefined",
+   !("prompt" in (ordersRes.conversation_config_override?.agent ?? {})));
+ok("ORDERS: first message is overridden and names the store",
+   ordersRes.conversation_config_override?.agent.first_message === "Thanks for calling Tsunami support — how can I help you today?");
 ok("ORDERS: still carries the type discriminator",
    ordersRes.type === "conversation_initiation_client_data");
 ok("ORDERS: still carries dynamic variables",

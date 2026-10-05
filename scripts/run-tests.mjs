@@ -29,10 +29,12 @@ if (files.length === 0) {
 const failed = [];
 for (const f of files) {
   const started = Date.now();
-  const r = spawnSync("npx", ["--yes", "tsx", join(dir, f)], {
+  // One command string through the shell: npx is a .cmd shim on Windows, and
+  // Node no longer accepts an args array alongside shell: true.
+  const r = spawnSync(`npx --yes tsx "${join(dir, f)}"`, {
     cwd: join(dir, ".."),
     encoding: "utf8",
-    shell: process.platform === "win32",
+    shell: true,
   });
   const secs = ((Date.now() - started) / 1000).toFixed(1);
   if (r.status === 0) {
