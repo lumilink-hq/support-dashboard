@@ -134,18 +134,29 @@ begin
   assert v_row.next_run_at > now(), 'pull-forward: an inactive keyword is ignored';
 
   -- Search Console backfill finished after the last good run → pulled forward.
+  -- With pg_net installed the run_due calls above already dispatched B (and it
+  -- settled as failed, no Vault secrets yet), so reset its row to a known state.
+  delete from job_attempts where client_id = v_client_b and job_type = 'seo_keyword_research';
   insert into job_attempts (client_id, job_type, entity_id, status, attempt_count, next_run_at, last_run_at, last_success_at)
   values (v_client_b, 'seo_keyword_research', null, 'idle', 0, now() + interval '29 days', now() - interval '2 days', now() - interval '2 days');
   insert into seo_search_properties (client_id, site_url, status, backfilled_at)
   values (v_client_b, 'sc-domain:b.example.com', 'ok', now() - interval '1 day');
   perform run_due_seo_keyword_research(0);
   select * into v_row from job_attempts where client_id = v_client_b and job_type = 'seo_keyword_research' and entity_id is null;
-  assert v_row.next_run_at <= now(), 'pull-forward: a newly finished Search Console backfill makes the client due';
+  -- run_due dispatches in the same call, so with pg_net B may already have been
+  -- claimed (last_run_at moves to now(), the transaction's start); either way
+  -- it was pulled forward. Without pg_net it is simply left due.
+  assert v_row.next_run_at <= now() or v_row.last_run_at >= now(),
+    'pull-forward: a newly finished Search Console backfill makes the client due';
 
   -- Dispatch, when pg_net is present.
   if to_regproc('net.http_post') is not null then
     perform vault.create_secret('https://example.supabase.co/functions/v1/seo-keyword-research', 'seo_keyword_research_url', '');
     perform vault.create_secret('unit-test-shared-secret', 'voice_tool_secret', '');
+    -- The run_due calls above already dispatched B without secrets (settled as
+    -- failed, backing off); start the dispatch checks from a clean idle row.
+    update job_attempts set status = 'idle', attempt_count = 0, next_run_at = now()
+     where client_id = v_client_b and job_type = 'seo_keyword_research' and entity_id is null;
     assert request_seo_keyword_research(v_client_b) is not null, 'dispatch: succeeds with pg_net + vault secrets present';
     assert request_seo_keyword_research(v_client_b) is null, 'dedup: a second dispatch while running is refused';
   else

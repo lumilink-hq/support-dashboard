@@ -298,9 +298,10 @@ begin
   perform record_call_usage(v_b, 'CA_b_1', 600);
 
   -- A signed-in user belonging to Tenant A.
-  insert into auth.users (id) values (v_user_a);
-  insert into users (id, client_id, email, role)
-  values (v_user_a, v_a, 'a@example.com', 'admin');
+  -- The signup trigger (handle_new_user) provisions a users row and its own
+  -- workspace from the email; move that user onto Tenant A instead.
+  insert into auth.users (id, email) values (v_user_a, 'a@example.com');
+  update users set client_id = v_a, role = 'admin' where id = v_user_a;
 
   perform set_config('request.jwt.claim.sub', v_user_a::text, true);
   set local role authenticated;
