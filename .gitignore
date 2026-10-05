@@ -40,3 +40,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 supabase/.temp/
+
+# local-only working folders (scope docs, demo mockups, theme exports)
+/Claude outputs/
+/demo/
+/do not commit/
+# Office lock files
+.~lock.*#
+~$*

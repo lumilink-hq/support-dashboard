@@ -214,7 +214,8 @@ ok("fallback still valid shape", fb.dynamic_variables.store_name === "our team" 
 ok("fallback vars match required set", REQUIRED_VARS.every((k) => k in fb.dynamic_variables));
 
 // ---- verifySignature --------------------------------------------------------
-await (async () => {
+// Not top-level await: tsx compiles this file as CJS, which doesn't allow it.
+const signatureChecks = (async () => {
   const secret = "whsec_test";
   const rawBody = JSON.stringify({ called_number: "+14155550123" });
   const t = "1700000000";
