@@ -701,7 +701,7 @@ export default async function OnboardingPage({
                         className="mt-1"
                       />
                       <span>
-                        Take a number and raise a callback
+                        Take a number and raise a callback{" "}
                         <span className="block text-xs text-gray-400">
                           Nothing gets lost. You&rsquo;ll see it in your dashboard.
                         </span>
@@ -716,7 +716,7 @@ export default async function OnboardingPage({
                         className="mt-1"
                       />
                       <span>
-                        Give out our support email
+                        Give out our support email{" "}
                         <span className="block text-xs text-gray-400">
                           Only pick this if someone actually watches that inbox.
                         </span>
