@@ -21,18 +21,21 @@
 //
 //   npx tsx scripts/check-jsx-spacing.ts
 //
-// SIX KNOWN-GOOD HITS as of 2026-08-13, all reviewed and all correct. It is a
-// linter for prose, not a proof, so it flags shapes rather than outcomes:
+// SKIPPED BY DESIGN (tuned 2026-10-05, when 10 of 12 hits were all correct):
 //
-//   demo/hvac:99, demo/orders:78   a decorative <span/> tile before "LumiLink",
-//                                  spaced by the flex `gap-2.5` on the parent
-//   onboarding:111                 the template literal already ends in a space
-//                                  ("Setting up Acme. ")
-//   onboarding:399                 the following expression starts with " · "
-//   onboarding:612, :627           the following <span> is `block`, not inline
+//   * A neighbouring {expression} whose every possible string output already
+//     carries the gap: empty, starts/ends with a space or punctuation
+//     ({cond ? `, average position ${n}` : ""}), or is a plural suffix that is
+//     meant to touch ("location" + {n === 1 ? "" : "s"}). Anything the checker
+//     can't resolve to literals (a variable, a call) is still flagged.
+//   * Children of a flex/grid parent with a `gap-*` class: the gap spaces them.
 //
-// If the count is still six, nothing has regressed. Fix a NEW hit with {" "} at
-// the end of the previous line, or by putting the two on one line.
+// STILL FLAGGED ON PURPOSE: text before a `block` <span>. It looks fine on
+// screen but the accessible name runs together ("callbackNothing gets lost"),
+// which is what a radio label's screen reader reads. Fix it with {" "}.
+//
+// Expect "No missing spaces" — any hit is new. Fix it with {" "} at the end of
+// the previous line, or by putting the two on one line.
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -71,6 +74,55 @@ function isInlineNeighbour(n: ts.Node): boolean {
   return tag !== null && INLINE_TAGS.has(tag);
 }
 
+/**
+ * Every string an expression can render, if it's made only of literals and
+ * conditionals; null when any part is unknown (a variable, a call), which keeps
+ * it flaggable.
+ */
+function literalOutputs(e: ts.Expression | undefined): string[] | null {
+  if (!e) return [""];
+  if (ts.isParenthesizedExpression(e)) return literalOutputs(e.expression);
+  if (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) return [e.text];
+  if (ts.isTemplateExpression(e)) {
+    // Only the literal edges matter: the head's start and the last tail's end.
+    // The middle is opaque, so stand in a non-space placeholder for it.
+    const spans = e.templateSpans;
+    return [e.head.text + "X" + spans[spans.length - 1].literal.text];
+  }
+  if (e.kind === ts.SyntaxKind.NullKeyword) return [""];
+  if (ts.isConditionalExpression(e)) {
+    const a = literalOutputs(e.whenTrue);
+    const b = literalOutputs(e.whenFalse);
+    return a && b ? [...a, ...b] : null;
+  }
+  return null;
+}
+
+const PLURAL_SUFFIX = /^(s|es)$/;
+
+/** Does this neighbouring expression already supply (or not need) the gap? */
+function expressionCarriesGap(n: ts.Node, side: "start" | "end"): boolean {
+  if (!ts.isJsxExpression(n)) return false;
+  const outs = literalOutputs(n.expression);
+  if (!outs) return false;
+  return outs.every((o) => {
+    if (o === "" || PLURAL_SUFFIX.test(o)) return true;
+    const edge = side === "start" ? o[0] : o[o.length - 1];
+    return !/[A-Za-z0-9]/.test(edge);
+  });
+}
+
+/** A flex/grid container with a gap spaces its children; no text space needed. */
+function parentHasGap(node: ts.JsxElement | ts.JsxFragment): boolean {
+  if (!ts.isJsxElement(node)) return false;
+  for (const attr of node.openingElement.attributes.properties) {
+    if (!ts.isJsxAttribute(attr) || attr.name.getText() !== "className") continue;
+    const cls = attr.initializer?.getText() ?? "";
+    return /\b(inline-)?(flex|grid)\b/.test(cls) && /\bgap-/.test(cls);
+  }
+  return false;
+}
+
 /** A {" "} literal — the explicit fix, so never flag it. */
 function isSpaceExpression(n: ts.Node): boolean {
   return (
@@ -88,7 +140,7 @@ for (const file of [...walkDir("app"), ...walkDir("components")]) {
   const sf = ts.createSourceFile(file, src, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TSX);
 
   const visit = (node: ts.Node) => {
-    if (ts.isJsxElement(node) || ts.isJsxFragment(node)) {
+    if ((ts.isJsxElement(node) || ts.isJsxFragment(node)) && !parentHasGap(node)) {
       const kids = node.children;
       for (let i = 0; i < kids.length; i++) {
         const k = kids[i];
@@ -118,7 +170,8 @@ for (const file of [...walkDir("app"), ...walkDir("components")]) {
           /^[^\S\n]*\n/.test(raw) &&
           prev &&
           isInlineNeighbour(prev) &&
-          !isSpaceExpression(prev)
+          !isSpaceExpression(prev) &&
+          !expressionCarriesGap(prev, "end")
         ) {
           report(file, sf, k.getStart(sf), `"${raw.trim().slice(0, 40)}…" runs into what precedes it`);
         }
@@ -128,7 +181,8 @@ for (const file of [...walkDir("app"), ...walkDir("components")]) {
           /\n[^\S\n]*$/.test(raw) &&
           next &&
           isInlineNeighbour(next) &&
-          !isSpaceExpression(next)
+          !isSpaceExpression(next) &&
+          !expressionCarriesGap(next, "start")
         ) {
           report(file, sf, k.getStart(sf), `"…${raw.trim().slice(-40)}" runs into what follows it`);
         }
