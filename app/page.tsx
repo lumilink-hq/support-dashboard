@@ -16,6 +16,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Landing, LANDING_METADATA } from "@/components/marketing/landing";
 import { createClient } from "@/lib/supabase/server";
+import { JsonLd } from "@/components/json-ld";
+import { homeJsonLd } from "@/lib/structured-data";
 
 export const metadata: Metadata = {
   ...LANDING_METADATA,
@@ -38,5 +40,10 @@ export default async function Home() {
 
   if (signedIn) redirect("/conversations");
 
-  return <Landing />;
+  return (
+    <>
+      <JsonLd data={homeJsonLd()} />
+      <Landing />
+    </>
+  );
 }

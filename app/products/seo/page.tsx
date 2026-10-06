@@ -7,6 +7,8 @@
 
 import type { Metadata } from "next";
 import { SEO_METADATA, SeoSolution } from "@/components/marketing/seo";
+import { JsonLd } from "@/components/json-ld";
+import { seoServiceJsonLd } from "@/lib/structured-data";
 
 export const metadata: Metadata = {
   ...SEO_METADATA,
@@ -14,5 +16,10 @@ export const metadata: Metadata = {
 };
 
 export default function SeoSolutionPage() {
-  return <SeoSolution />;
+  return (
+    <>
+      <JsonLd data={seoServiceJsonLd()} />
+      <SeoSolution />
+    </>
+  );
 }
