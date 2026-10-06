@@ -89,6 +89,33 @@ export function seoServiceJsonLd() {
   };
 }
 
+/** /blog/<slug>: one article. Written by and published by the organization. */
+export function blogPostingJsonLd(post: {
+  slug: string;
+  title: string;
+  description: string;
+  date: string;
+  updated: string | null;
+  image: string | null;
+}) {
+  const origin = siteOrigin();
+  const url = `${origin}/blog/${post.slug}`;
+  return {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "@id": `${url}#article`,
+    headline: post.title,
+    description: post.description,
+    url,
+    mainEntityOfPage: url,
+    datePublished: post.date,
+    dateModified: post.updated ?? post.date,
+    ...(post.image ? { image: post.image } : {}),
+    author: { "@id": orgId(origin) },
+    publisher: { "@id": orgId(origin) },
+  };
+}
+
 /**
  * JSON.stringify does not escape "<", so a "</script>" inside any string would
  * end the tag early. Next's JSON-LD guide recommends this replacement.

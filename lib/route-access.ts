@@ -42,6 +42,8 @@ export const PUBLIC_PREFIXES = [
   // these, not a one-off — forgetting to add a new /lp page here is exactly
   // how /story and /partners silently 404'd into /login on 2026-08-30.
   "/lp",
+  // The blog: /blog and /blog/<slug> (lib/blog.ts). Indexable.
+  "/blog",
   // API Route Handlers, not pages — a session-cookie redirect to /login makes
   // no sense for a fetch() caller (it'd try to parse an HTML login page as
   // JSON) and is actively wrong for /api/webhooks/stripe, which Stripe calls

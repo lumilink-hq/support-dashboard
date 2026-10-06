@@ -56,6 +56,8 @@ ok(
 
 ok("/sitemap.xml", isPublicPath("/sitemap.xml"));
 ok("/robots.txt", isPublicPath("/robots.txt"));
+ok("/blog (index)", isPublicPath("/blog"));
+ok("/blog/<slug> (prefix covers posts)", isPublicPath("/blog/missed-calls"));
 for (const path of SITEMAP_PATHS) {
   ok(`sitemap page ${path} is public`, isPublicPath(path));
 }

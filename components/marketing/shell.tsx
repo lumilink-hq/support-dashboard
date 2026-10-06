@@ -9,6 +9,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getAllPosts } from "@/lib/blog";
 import { PRODUCTS, SOLUTIONS } from "@/lib/catalog";
 
 // TWO MENUS, THEN FLAT LINKS (2026-09-23). Products (what you buy) and
@@ -48,6 +49,8 @@ function navGroups(marketingHome: string) {
       { href: "/pricing", label: "Pricing" },
       { href: "/pricing#enterprise", label: "Enterprise" },
       { href: "/story", label: "Our Story" },
+      // Footer only, and only once there's something to read (lib/blog.ts).
+      ...(getAllPosts().length > 0 ? [{ href: "/blog", label: "Blog" }] : []),
       { href: `${marketingHome}#faq`, label: "FAQ" },
       { href: "/contact", label: "Contact" },
     ] as NavItem[],
