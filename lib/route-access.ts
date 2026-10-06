@@ -78,6 +78,10 @@ export const PUBLIC_EXACT = [
   // Was "/addons" until 2026-09-23; that path now redirects here
   // (next.config.ts). Redirects run before the proxy, so it needs no entry.
   "/pricing",
+  // app/sitemap.ts and app/robots.ts. Until 2026-10-06 neither existed and
+  // both redirected to /login, so Google had no sitemap for the site.
+  "/sitemap.xml",
+  "/robots.txt",
 ] as const;
 
 /**

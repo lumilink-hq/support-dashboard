@@ -20,6 +20,7 @@ import {
   isPublicPath,
   safeNextPath,
 } from "../lib/route-access.ts";
+import { SITEMAP_PATHS } from "../lib/site-pages.ts";
 
 let failures = 0;
 
@@ -52,6 +53,12 @@ ok(
   "/api/billing/checkout (auth is the route's own requireClientId check, not a redirect)",
   isPublicPath("/api/billing/checkout"),
 );
+
+ok("/sitemap.xml", isPublicPath("/sitemap.xml"));
+ok("/robots.txt", isPublicPath("/robots.txt"));
+for (const path of SITEMAP_PATHS) {
+  ok(`sitemap page ${path} is public`, isPublicPath(path));
+}
 
 // ---------------------------------------------------------------------------
 console.log("\nEVERY dashboard route stays gated");
