@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BarChart, HeatGrid, Legend, LineChart, MonthTrend, SERIES_COLORS } from "@/components/seo/charts";
 import { SeoLocked } from "@/components/seo/locked";
+import { BrandStory, StoreStory } from "@/components/seo/earned";
 import { Story, TileGrid } from "@/components/seo/search-tiles";
 import { dayLabel, fmtInt, fmtMoney, monthLabel, perClickLabel } from "@/supabase/functions/seo-search-console/insights";
 import { getSeoAccess } from "@/lib/seo-access";
@@ -63,6 +64,8 @@ function SearchBlock({ loc, sameAs }: { loc: LocationReport; sameAs: string | nu
         ) : null}
       </div>
       <TileGrid tiles={sum.tiles} compare="yoy" />
+      {s.brand ? <BrandStory brand={s.brand} compare="yoy" /> : null}
+      {s.stores && s.stores.rows.length > 0 ? <StoreStory stores={s.stores} compare="yoy" /> : null}
       <Story
         eyebrow="Growth"
         headline="Clicks from Google search, every month"

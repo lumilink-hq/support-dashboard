@@ -2,7 +2,7 @@
 // the function fetches rows and hands them here, so all of this is unit-tested
 // with scripts/test-seo-report.ts.
 
-import type { SearchState, SearchSummary } from "../seo-search-console/insights.ts";
+import type { BrandSplit, SearchState, SearchSummary, StoreTraffic } from "../seo-search-console/insights.ts";
 
 // -----------------------------------------------------------------------------
 // Period
@@ -303,7 +303,17 @@ export type GridData = {
  * and the numbers are the whole site's. Optional: older reports don't have it.
  */
 export type LocationSearch =
-  | { state: "ok"; summary: SearchSummary; shared_with: number; hero: { headline: string; summary: string } }
+  | {
+      state: "ok";
+      summary: SearchSummary;
+      shared_with: number;
+      hero: { headline: string; summary: string };
+      // 0069: brand vs non-brand and clicks per store page, for the report month
+      // only. Optional: reports made before them omit both; null when the month
+      // has no query or page rollup, or no store page is set.
+      brand?: BrandSplit | null;
+      stores?: StoreTraffic | null;
+    }
   | { state: Exclude<SearchState, "ok"> | "no_data"; site_url: string | null; message: string };
 
 export type LocationReport = {

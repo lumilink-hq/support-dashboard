@@ -4,7 +4,21 @@
 // name with an emoji becomes "?" instead of throwing and losing the report.
 
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
-import { fmtInt, monthLabel, perClickLabel, type Delta, type Tile } from "../seo-search-console/insights.ts";
+import {
+  brandHeadline,
+  brandLead,
+  brandSource,
+  fmtInt,
+  monthLabel,
+  perClickLabel,
+  STORE_LEAD,
+  STORE_SOURCE,
+  storeHeadline,
+  type BrandSplit,
+  type Delta,
+  type StoreTraffic,
+  type Tile,
+} from "../seo-search-console/insights.ts";
 import {
   aiPlatformsPhrase,
   METRIC_LABELS,
@@ -222,6 +236,39 @@ function deltaText(d: Delta | null): string {
   return `${sign}${d.change.toFixed(1)}${d.unit === "pp" ? " pts" : "%"} (was ${d.before})`;
 }
 
+/** 0069: non-brand clicks. Same sentences as the portal (insights.ts). */
+function brandSection(w: Writer, b: BrandSplit) {
+  w.gap(6);
+  w.text("Earned by search", { size: 10, bold: true });
+  w.text(brandHeadline(b, "yoy"), { size: 10, bold: true });
+  w.text(brandLead(b), { size: 10 });
+  if (b.months.length >= 2) {
+    w.gap(2);
+    w.lineChart(
+      [
+        { name: "Non-brand", color: rgb(0.15, 0.39, 0.92), points: b.months.map((m) => ({ x: m.month, y: m.nonBrand })) },
+        { name: "Brand", color: rgb(0.6, 0.65, 0.72), dashed: true, points: b.months.map((m) => ({ x: m.month, y: m.brand })) },
+      ],
+      { invert: false, xLabel: (x) => monthLabel(x), yLabel: (v) => fmtInt(v) },
+    );
+  }
+  w.text(brandSource(b), { size: 8, color: MUTED });
+}
+
+/** 0069: clicks per store page. */
+function storeSection(w: Writer, st: StoreTraffic) {
+  w.gap(6);
+  w.text("Store pages", { size: 10, bold: true });
+  w.text(storeHeadline(st), { size: 10, bold: true });
+  w.text(STORE_LEAD, { size: 10 });
+  const xs = [0, 170, 230, 340, 450];
+  w.row(["Store", monthLabel(st.month), "vs last year", "vs last month", "12 months"], xs, { bold: true, color: MUTED });
+  for (const r of st.rows) {
+    w.row([r.name, fmtInt(r.latest), deltaText(r.yoy), deltaText(r.mom), fmtInt(r.year)], xs);
+  }
+  w.text(STORE_SOURCE, { size: 8, color: MUTED });
+}
+
 function searchSection(w: Writer, loc: LocationReport, shownFor: Map<string, string>) {
   const s = loc.search;
   if (!s) return; // a report made before module 21
@@ -269,6 +316,8 @@ function searchSection(w: Writer, loc: LocationReport, shownFor: Map<string, str
       yLabel: (v) => fmtInt(v),
     });
   }
+  if (s.brand) brandSection(w, s.brand);
+  if (s.stores && s.stores.rows.length > 0) storeSection(w, s.stores);
   if (sum.top_pages.length > 0) {
     w.gap(2);
     const px = [0, 300, 365, 440];

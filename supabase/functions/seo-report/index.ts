@@ -35,12 +35,19 @@
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { renderReportPdf } from "./pdf.ts";
 import {
+  brandSplit,
+  brandTerms,
   heroSentence,
   searchStateMessage,
   searchSummary,
+  storeTraffic,
+  type BrandSplit,
   type DayTotal,
   type KeywordCountRow,
+  type PageClicks,
+  type QueryClicks,
   type SearchState,
+  type StoreTraffic,
 } from "../seo-search-console/insights.ts";
 import { addMonths } from "../seo-search-console/lib.ts";
 import {
@@ -121,6 +128,8 @@ async function settle(clientId: string, success: boolean, error: string | null) 
   if (jobError) console.error(`seo-report ${clientId}: complete_job_attempt failed: ${jobError.message}`);
 }
 
+type StorePage = { id: string; name: string; store_page_url: string };
+
 type LocationRow = {
   id: string;
   name: string;
@@ -139,6 +148,7 @@ async function propertySearch(
   period: Period,
   centsPerClick: number,
   sharedWith: number,
+  earned: { staffTerms: string[] | null; stores: StorePage[] },
 ): Promise<LocationSearch> {
   const { data: prop, error: pErr } = await supabase
     .from("seo_search_properties")
@@ -204,7 +214,36 @@ async function propertySearch(
   if (!summary) {
     return { state: "no_data", site_url: siteUrl, message: `Search Console has no data for ${period.label} yet. ${searchStateMessage("ok", siteUrl, dataThrough)}` };
   }
-  return { state: "ok", summary, shared_with: sharedWith, hero: heroSentence(summary, "yoy") };
+
+  // Brand vs non-brand and store pages (0069), for the report month only: if
+  // its query / page rollup isn't built, they're left out rather than showing
+  // an earlier month. staffTerms null = 0069 isn't applied: no brand section.
+  const rollupMonths = summary.months.filter((m) => m.complete).slice(-13).map((m) => m.month);
+  const perMonth = async <T,>(table: string, cols: string): Promise<T[]> => {
+    const res = await Promise.all(
+      rollupMonths.map((m) =>
+        supabase.from(table).select(cols).eq("client_id", clientId).eq("site_url", siteUrl).eq("month", m).gt("clicks", 0).limit(500),
+      ),
+    );
+    for (const r of res) if (r.error) throw new Error(`loading ${table} failed: ${r.error.message}`);
+    return res.flatMap((r) => (r.data ?? []) as T[]);
+  };
+  let brand: BrandSplit | null = null;
+  if (earned.staffTerms) {
+    const split = brandSplit({
+      months: summary.months,
+      queries: await perMonth<QueryClicks>("seo_search_monthly_queries", "month, query, clicks"),
+      terms: brandTerms(siteUrl, earned.staffTerms),
+    });
+    brand = split?.latest.month === period.start ? split : null;
+  }
+  let stores: StoreTraffic | null = null;
+  if (earned.stores.length > 0) {
+    const pages = await perMonth<PageClicks>("seo_search_monthly_pages", "month, page, clicks");
+    const st = storeTraffic({ stores: earned.stores, pages, months: [...new Set(pages.map((p) => p.month))] });
+    stores = st?.month === period.start ? st : null;
+  }
+  return { state: "ok", summary, shared_with: sharedWith, hero: heroSentence(summary, "yoy"), brand, stores };
 }
 
 async function locationReport(
@@ -467,6 +506,25 @@ async function runClient(clientId: string, period: Period): Promise<Record<strin
     .eq("client_id", clientId)
     .maybeSingle();
   const centsPerClick = (settings?.value_per_click_cents as number | undefined) ?? 200;
+  // 0069's settings, read on their own so a database without it still gets a
+  // report (just without the brand and store-page sections).
+  const { data: termRow, error: termErr } = await supabase
+    .from("seo_client_settings")
+    .select("brand_terms")
+    .eq("client_id", clientId)
+    .maybeSingle();
+  const staffTerms = termErr ? null : ((termRow?.brand_terms as string[] | undefined) ?? []);
+  const { data: storeRows, error: storeErr } = await supabase
+    .from("seo_locations")
+    .select("id, name, store_page_url, search_console_site_url")
+    .eq("client_id", clientId)
+    .eq("is_active", true)
+    .not("store_page_url", "is", null)
+    .order("name", { ascending: true });
+  const storesFor = (site: string): StorePage[] =>
+    ((storeErr ? [] : storeRows ?? []) as (StorePage & { search_console_site_url: string | null })[])
+      .filter((l) => (l.search_console_site_url ?? "").trim() === site && l.store_page_url.trim())
+      .map(({ id, name, store_page_url }) => ({ id, name, store_page_url }));
   const siteOf = (l: LocationRow) => (l.search_console_site_url ?? "").trim();
   const searchBySite = new Map<string, LocationSearch>();
   for (const loc of locations) {
@@ -477,7 +535,7 @@ async function runClient(clientId: string, period: Period): Promise<Record<strin
     } else {
       if (!searchBySite.has(site)) {
         const sharing = locations.filter((l) => siteOf(l) === site).length - 1;
-        searchBySite.set(site, await propertySearch(clientId, site, period, centsPerClick, sharing));
+        searchBySite.set(site, await propertySearch(clientId, site, period, centsPerClick, sharing, { staffTerms, stores: storesFor(site) }));
       }
       search = searchBySite.get(site)!;
     }

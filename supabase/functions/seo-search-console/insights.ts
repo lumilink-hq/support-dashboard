@@ -540,6 +540,230 @@ export function ctrUpside(impressions: number, clicks: number, targetCtr: number
 }
 
 // -----------------------------------------------------------------------------
+// Brand vs non-brand clicks
+//
+// People who search the business's own name would mostly have found it anyway;
+// clicks from every other search are the ones SEO earns. Brand clicks are
+// counted from the stored top queries, which are ranked by clicks, so brand
+// searches are always among them. Non-brand is the month's TRUE total (the
+// date-only pull) minus brand, so it includes the long tail and the anonymised
+// queries Search Console leaves out of query rows; those are almost never a
+// brand name.
+//
+// Complete months only, and only months whose query rollup exists.
+// -----------------------------------------------------------------------------
+
+function queryWords(s: string): string[] {
+  return s.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+}
+
+/**
+ * The brand name in a Search Console property: "sc-domain:packsclub.com" and
+ * "https://www.packsclub.com/" both give "packsclub". Null if there isn't one.
+ */
+export function siteBrandTerm(siteUrl: string): string | null {
+  const host = normalisePageUrl(siteUrl.replace(/^sc-domain:/i, "")).split(/[/?]/)[0];
+  const labels = host.split(".").filter(Boolean);
+  if (labels.length < 2) return null;
+  // example.co.uk -> "example", not "co".
+  const i = labels.length >= 3 && labels[labels.length - 2].length <= 3 ? labels.length - 3 : labels.length - 2;
+  const term = labels[i].replace(/-/g, "");
+  return term.length >= 3 ? term : null;
+}
+
+/** The terms a query is checked against: the site's own name plus any set by LumiLink staff, lowercased, deduplicated. */
+export function brandTerms(siteUrl: string, staffTerms: string[]): string[] {
+  const out = new Set<string>();
+  const site = siteBrandTerm(siteUrl);
+  if (site) out.add(site);
+  for (const t of staffTerms) {
+    const w = queryWords(t).join(" ");
+    if (w.replace(/ /g, "").length >= 3) out.add(w);
+  }
+  return [...out];
+}
+
+/**
+ * Whether a query is a brand search: some run of whole words in it, joined
+ * without spaces, equals a term joined without spaces. So "packs" matches
+ * "packs santa ana" but not "backpacks", and "packsclub" matches both
+ * "packsclub" and "packs club".
+ */
+export function isBrandQuery(query: string, terms: string[]): boolean {
+  const words = queryWords(query);
+  for (const t of terms) {
+    const target = queryWords(t).join("");
+    if (!target) continue;
+    for (let i = 0; i < words.length; i++) {
+      let acc = "";
+      for (let j = i; j < words.length && acc.length < target.length; j++) {
+        acc += words[j];
+        if (acc === target) return true;
+      }
+    }
+  }
+  return false;
+}
+
+export type QueryClicks = { month: string; query: string; clicks: number };
+export type BrandMonth = { month: string; total: number; brand: number; nonBrand: number };
+
+export type BrandSplit = {
+  terms: string[];
+  /** Complete months with a query rollup, oldest first, up to 13. */
+  months: BrandMonth[];
+  latest: BrandMonth;
+  /** Non-brand clicks against the same month last year / the month before. */
+  yoy: Delta | null;
+  mom: Delta | null;
+  /** Non-brand share of all clicks in the latest month. */
+  share: number | null;
+  /** Sums over the up to 12 months ending at `latest`. */
+  year: { months: number; total: number; nonBrand: number; first: string; last: string };
+};
+
+/** Null when no complete month has both daily totals and query rows. */
+export function brandSplit(input: { months: MonthPoint[]; queries: QueryClicks[]; terms: string[] }): BrandSplit | null {
+  const brandBy = new Map<string, number>();
+  for (const q of input.queries) {
+    const m = monthStart(q.month);
+    if (!brandBy.has(m)) brandBy.set(m, 0);
+    if (isBrandQuery(q.query, input.terms)) brandBy.set(m, brandBy.get(m)! + q.clicks);
+  }
+  const all = input.months
+    .filter((m) => m.complete && brandBy.has(m.month))
+    .map((m): BrandMonth => {
+      // Never more brand than the true total (the two pulls are a day apart at most).
+      const brand = Math.min(brandBy.get(m.month)!, m.clicks);
+      return { month: m.month, total: m.clicks, brand, nonBrand: m.clicks - brand };
+    });
+  if (all.length === 0) return null;
+  const latest = all[all.length - 1];
+  const at = new Map(all.map((m) => [m.month, m]));
+  const delta = (back: number): Delta | null => {
+    const before = at.get(addMonths(latest.month, -back));
+    return before ? pctDelta(latest.nonBrand, before.nonBrand, fmtInt(before.nonBrand), monthLabel(before.month, true)) : null;
+  };
+  const year = all.filter((m) => m.month > addMonths(latest.month, -12));
+  return {
+    terms: input.terms,
+    months: all.slice(-13),
+    latest,
+    yoy: delta(12),
+    mom: delta(1),
+    share: latest.total > 0 ? latest.nonBrand / latest.total : null,
+    year: {
+      months: year.length,
+      total: year.reduce((s, m) => s + m.total, 0),
+      nonBrand: year.reduce((s, m) => s + m.nonBrand, 0),
+      first: year[0].month,
+      last: latest.month,
+    },
+  };
+}
+
+function changeWords(d: Delta): string {
+  return `${d.change >= 0 ? "up" : "down"} ${Math.abs(d.change).toFixed(1)}% on ${d.against}`;
+}
+
+/** "4,065 clicks in August 2026 came from searches that didn't use your name, up 61.6% on August 2025". */
+export function brandHeadline(b: BrandSplit, compare: Compare): string {
+  const d = b[compare];
+  return `${fmtInt(b.latest.nonBrand)} clicks in ${monthLabel(b.latest.month, true)} came from searches that didn't use your name${d ? `, ${changeWords(d)}` : ""}`;
+}
+
+export function brandLead(b: BrandSplit): string {
+  return `People searching for what you sell or where you are, not for you by name, so most wouldn't have found you otherwise.${
+    b.share !== null ? ` That's ${Math.round(b.share * 100)}% of all clicks from Google search that month.` : ""
+  }`;
+}
+
+/** "a", "a or b", "a, b or c". */
+function orList(items: string[]): string {
+  return items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
+}
+
+export function brandSource(b: BrandSplit): string {
+  return `Brand searches are any containing ${orList(b.terms.map((t) => `"${t}"`))}. Brand clicks come from Search Console's top 500 searches each month; non-brand is the month's total minus brand, so it includes the searches Google keeps private. Complete months only.`;
+}
+
+// -----------------------------------------------------------------------------
+// Clicks per store page
+//
+// A location's store page (seo_locations.store_page_url, e.g. a dispensary's
+// menu for that store) and every page under it. Counted from the stored top
+// 500 pages per month, so a month's figure is a floor: pages outside the top
+// 500 aren't in it.
+// -----------------------------------------------------------------------------
+
+/** Whether a normalised page is the store page or under it: "x.com/menu/oc" covers "x.com/menu/oc/flower", not "x.com/menu/oc-2". */
+export function underPage(page: string, prefix: string): boolean {
+  return page === prefix || page.startsWith(`${prefix}/`) || page.startsWith(`${prefix}?`);
+}
+
+export type PageClicks = { month: string; page: string; clicks: number };
+export type StoreRow = {
+  id: string;
+  name: string;
+  page: string;
+  latest: number;
+  yoy: Delta | null;
+  mom: Delta | null;
+  /** Clicks per month over `months`, oldest first. */
+  series: number[];
+  year: number;
+};
+export type StoreTraffic = { month: string; months: string[]; rows: StoreRow[] };
+
+/**
+ * `months`: the complete months whose page rollup exists, oldest first. A store
+ * with no matching page in one of them had no clicks there. Null when there are
+ * no stores with a page set or no months.
+ */
+export function storeTraffic(input: {
+  stores: { id: string; name: string; store_page_url: string }[];
+  pages: PageClicks[];
+  months: string[];
+}): StoreTraffic | null {
+  const months = [...new Set(input.months.map(monthStart))].sort().slice(-13);
+  if (input.stores.length === 0 || months.length === 0) return null;
+  const latestMonth = months[months.length - 1];
+  const rows = input.stores.map((s): StoreRow => {
+    const prefix = normalisePageUrl(s.store_page_url);
+    const by = new Map<string, number>(months.map((m) => [m, 0]));
+    for (const p of input.pages) {
+      const m = monthStart(p.month);
+      if (by.has(m) && underPage(p.page, prefix)) by.set(m, by.get(m)! + p.clicks);
+    }
+    const latest = by.get(latestMonth)!;
+    const delta = (back: number): Delta | null => {
+      const m = addMonths(latestMonth, -back);
+      return by.has(m) ? pctDelta(latest, by.get(m)!, fmtInt(by.get(m)!), monthLabel(m, true)) : null;
+    };
+    return {
+      id: s.id,
+      name: s.name,
+      page: prefix,
+      latest,
+      yoy: delta(12),
+      mom: delta(1),
+      series: months.map((m) => by.get(m)!),
+      year: months.filter((m) => m > addMonths(latestMonth, -12)).reduce((sum, m) => sum + by.get(m)!, 0),
+    };
+  });
+  rows.sort((a, b) => b.latest - a.latest || a.name.localeCompare(b.name));
+  return { month: latestMonth, months, rows };
+}
+
+export function storeHeadline(s: StoreTraffic): string {
+  return `${fmtInt(s.rows.reduce((sum, r) => sum + r.latest, 0))} clicks from Google search landed on store pages in ${monthLabel(s.month, true)}`;
+}
+
+export const STORE_LEAD = "Each store's page and every page under it. Someone who lands there from a search is one step from ordering or visiting.";
+export const STORE_SOURCE =
+  "Search Console's top 500 pages per month, so each figure is a floor: a page outside the top 500 isn't counted. Address variants (www, tracking tags) count as one page. Complete months only.";
+
+// -----------------------------------------------------------------------------
 // Chart markers
 // -----------------------------------------------------------------------------
 

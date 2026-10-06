@@ -4,6 +4,7 @@ import { CtrUpside } from "@/components/seo/ctr-upside";
 import { ImportCard } from "@/components/seo/import-card";
 import { SeoLocked } from "@/components/seo/locked";
 import { Story, TileGrid } from "@/components/seo/search-tiles";
+import { BrandStory, StoreStory } from "@/components/seo/earned";
 import { getSeoAccess } from "@/lib/seo-access";
 import { formatDateTime } from "@/lib/format";
 import {
@@ -46,6 +47,8 @@ import { createClient } from "@/lib/supabase/server";
 import { MAX_QUERIES_PER_CLIENT } from "@/supabase/functions/seo-ai-visibility/lib";
 import {
   addMonths,
+  brandSplit,
+  brandTerms,
   dayLabel,
   fmtInt,
   fmtMoney,
@@ -56,11 +59,16 @@ import {
   perClickLabel,
   searchStateMessage,
   searchSummary,
+  storeTraffic,
+  type BrandSplit,
   type Compare,
   type DayTotal,
   type KeywordCountRow,
+  type PageClicks,
+  type QueryClicks,
   type SearchState,
   type SearchSummary,
+  type StoreTraffic,
 } from "@/supabase/functions/seo-search-console/insights";
 import { DETAIL_LIMITS, type LocationDetails } from "@/supabase/functions/seo-content/details";
 import { competitorGapScore, type CompetitorGapRow } from "@/supabase/functions/seo-content/lib";
@@ -509,6 +517,45 @@ export default async function SeoPortalPage({
   }
   const articleRows = articleResults(articles, articlePages);
 
+  // Brand vs non-brand clicks, and clicks per store page (0069). Settings are
+  // read on their own, so a database without 0069 just hides these sections
+  // instead of breaking the queries above. One request per complete month:
+  // each month holds at most 500 query rows and 500 page rows.
+  let brand: BrandSplit | null = null;
+  let stores: StoreTraffic | null = null;
+  if (summary && site) {
+    const rollupMonths = summary.months.filter((m) => m.complete).slice(-13).map((m) => m.month);
+    const [termsRes, storeRes] = await Promise.all([
+      supabase.from("seo_client_settings").select("brand_terms").maybeSingle(),
+      supabase.from("seo_locations").select("id, name, store_page_url, search_console_site_url").eq("is_active", true).not("store_page_url", "is", null).order("name"),
+    ]);
+    const storeLocs = ((storeRes.error ? [] : storeRes.data ?? []) as { id: string; name: string; store_page_url: string; search_console_site_url: string | null }[])
+      .filter((l) => (l.search_console_site_url ?? "").trim() === site && l.store_page_url.trim());
+    const [queryMonths, pageMonths] = await Promise.all([
+      Promise.all(
+        rollupMonths.map((m) =>
+          supabase.from("seo_search_monthly_queries").select("month, query, clicks").eq("site_url", site).eq("month", m).gt("clicks", 0).limit(500),
+        ),
+      ),
+      storeLocs.length
+        ? Promise.all(
+            rollupMonths.map((m) =>
+              supabase.from("seo_search_monthly_pages").select("month, page, clicks").eq("site_url", site).eq("month", m).gt("clicks", 0).limit(500),
+            ),
+          )
+        : Promise.resolve([]),
+    ]);
+    if (!termsRes.error) {
+      brand = brandSplit({
+        months: summary.months,
+        queries: queryMonths.flatMap((r) => (r.data ?? []) as QueryClicks[]),
+        terms: brandTerms(site, (termsRes.data?.brand_terms as string[] | undefined) ?? []),
+      });
+    }
+    const pageRows = pageMonths.flatMap((r) => (r.data ?? []) as PageClicks[]);
+    stores = storeTraffic({ stores: storeLocs, pages: pageRows, months: [...new Set(pageRows.map((p) => p.month))] });
+  }
+
   // ---------------------------------------------------------------------------
   // Rankings, competitors, map grid (module 10)
   // ---------------------------------------------------------------------------
@@ -738,6 +785,10 @@ export default async function SeoPortalPage({
           {summary ? (
             <>
               <TileGrid tiles={summary.tiles} compare={compare} />
+
+              {brand ? <BrandStory brand={brand} compare={compare} /> : null}
+
+              {stores && stores.rows.length > 0 ? <StoreStory stores={stores} compare={compare} /> : null}
 
               <Story
                 eyebrow="Growth"

@@ -22,16 +22,26 @@ import {
   syncWindow,
 } from "../supabase/functions/seo-search-console/lib.ts";
 import {
+  brandHeadline,
+  brandLead,
+  brandSource,
+  brandSplit,
+  brandTerms,
   comparisonRange,
   ctrUpside,
   headlinePeriod,
   heroSentence,
+  isBrandQuery,
   markers,
   monthlyTotals,
   periodForMonth,
   rangeLabel,
   searchSummary,
+  siteBrandTerm,
+  storeHeadline,
+  storeTraffic,
   sumRange,
+  underPage,
   type DayTotal,
   type KeywordCountRow,
 } from "../supabase/functions/seo-search-console/insights.ts";
@@ -259,6 +269,115 @@ eq(
     { month: "2026-03-01", label: "Google connected · Site migration" },
   ],
 );
+
+// -----------------------------------------------------------------------------
+// Brand vs non-brand
+// -----------------------------------------------------------------------------
+
+eq("siteBrandTerm: domain property", siteBrandTerm("sc-domain:packsclub.com"), "packsclub");
+eq("siteBrandTerm: URL property with www", siteBrandTerm("https://www.packsclub.com/"), "packsclub");
+eq("siteBrandTerm: two-part suffix", siteBrandTerm("https://shop.example.co.uk/"), "example");
+eq("siteBrandTerm: hyphens dropped", siteBrandTerm("sc-domain:lumi-link.com"), "lumilink");
+eq("siteBrandTerm: no domain", siteBrandTerm("localhost"), null);
+eq(
+  "brandTerms: site term plus staff terms, normalised and deduplicated",
+  brandTerms("sc-domain:packsclub.com", ["PACKS", "packsclub", "Packs-Club", "x"]),
+  ["packsclub", "packs", "packs club"],
+);
+
+const BRAND = ["packsclub", "packs"];
+ok("isBrandQuery: exact name", isBrandQuery("packs", BRAND));
+ok("isBrandQuery: name plus place", isBrandQuery("packs santa ana", BRAND));
+ok("isBrandQuery: squashed term matches spaced query", isBrandQuery("packs club dispensary", BRAND));
+ok("isBrandQuery: spaced term matches squashed query", isBrandQuery("packsclub", ["packs club"]));
+ok("isBrandQuery: punctuation ignored", isBrandQuery("PACKS-Club hours?", BRAND));
+ok("isBrandQuery: not inside another word", !isBrandQuery("backpacks", BRAND));
+ok("isBrandQuery: not a prefix of a longer word", !isBrandQuery("packsy weed", ["packs"]));
+ok("isBrandQuery: generic search", !isBrandQuery("dispensary near me", BRAND));
+ok("isBrandQuery: no terms", !isBrandQuery("packs", []));
+
+{
+  // From `months` above: Aug 2025 = 3,100 clicks, Sep 2025 = 3,000, Aug 2026 = 4,650; Sep 2026 is partial.
+  const split = brandSplit({
+    months,
+    terms: BRAND,
+    queries: [
+      { month: "2025-08-01", query: "packs", clicks: 1100 },
+      { month: "2025-08-01", query: "dispensary near me", clicks: 400 },
+      // Jul 2026: no rows, so no rollup: left out.
+      { month: "2026-08-01", query: "packs club", clicks: 1500 },
+      { month: "2026-08-01", query: "packs santa ana", clicks: 150 },
+      { month: "2026-08-01", query: "weed delivery", clicks: 900 },
+      // Partial month: ignored even though it has rows.
+      { month: "2026-09-01", query: "packs", clicks: 999 },
+    ],
+  });
+  ok("brandSplit: returns a split", split !== null);
+  if (split) {
+    eq("brandSplit: latest is the last complete month with a rollup", split.latest, { month: "2026-08-01", total: 4650, brand: 1650, nonBrand: 3000 });
+    eq("brandSplit: months without a rollup are left out", split.months.map((m) => m.month), ["2025-08-01", "2026-08-01"]);
+    // Aug 2025 non-brand: 3,100 - 1,100 = 2,000.
+    eq("brandSplit: matched-month yoy on non-brand", split.yoy, { change: 50, unit: "pct", before: "2,000", against: "August 2025" });
+    eq("brandSplit: mom needs July, which has no rollup", split.mom, null);
+    eq("brandSplit: share", split.share, 3000 / 4650);
+    eq("brandSplit: year sums only months inside the last 12", split.year, { months: 1, total: 4650, nonBrand: 3000, first: "2026-08-01", last: "2026-08-01" });
+    eq("brandHeadline: with the comparison", brandHeadline(split, "yoy"), "3,000 clicks in August 2026 came from searches that didn't use your name, up 50.0% on August 2025");
+    eq("brandHeadline: no comparison, no clause", brandHeadline(split, "mom"), "3,000 clicks in August 2026 came from searches that didn't use your name");
+    ok("brandLead: states the share", brandLead(split).endsWith("That's 65% of all clicks from Google search that month."), brandLead(split));
+    ok("brandSource: lists the terms", brandSource(split).startsWith('Brand searches are any containing "packsclub" or "packs".'), brandSource(split));
+  }
+  eq(
+    "brandSplit: brand capped at the true total",
+    brandSplit({ months, terms: BRAND, queries: [{ month: "2026-08-01", query: "packs", clicks: 999999 }] })?.latest.nonBrand,
+    0,
+  );
+  eq("brandSplit: nothing to split", brandSplit({ months, terms: BRAND, queries: [] }), null);
+}
+
+// -----------------------------------------------------------------------------
+// Store pages
+// -----------------------------------------------------------------------------
+
+ok("underPage: the page itself", underPage("packsclub.com/menu/orange-county", "packsclub.com/menu/orange-county"));
+ok("underPage: a page under it", underPage("packsclub.com/menu/orange-county/categories/flower", "packsclub.com/menu/orange-county"));
+ok("underPage: a query string", underPage("packsclub.com/menu/orange-county?tab=deals", "packsclub.com/menu/orange-county"));
+ok("underPage: not a sibling sharing a prefix", !underPage("packsclub.com/menu/orange-county-2", "packsclub.com/menu/orange-county"));
+
+{
+  const st = storeTraffic({
+    stores: [
+      { id: "oc", name: "PACKS OC", store_page_url: "https://www.packsclub.com/menu/orange-county/" },
+      { id: "sgv", name: "PACKS SGV", store_page_url: "packsclub.com/menu/san-gabriel-valley" },
+    ],
+    months: ["2025-08-01", "2026-07-01", "2026-08-01"],
+    pages: [
+      { month: "2025-08-01", page: "packsclub.com/menu/orange-county", clicks: 100 },
+      { month: "2026-07-01", page: "packsclub.com/menu/orange-county", clicks: 120 },
+      { month: "2026-08-01", page: "packsclub.com/menu/orange-county", clicks: 130 },
+      { month: "2026-08-01", page: "packsclub.com/menu/orange-county/categories/flower", clicks: 20 },
+      { month: "2026-08-01", page: "packsclub.com/menu/san-gabriel-valley", clicks: 300 },
+      { month: "2026-08-01", page: "packsclub.com/blogs/news/x", clicks: 999 },
+      // A month outside `months` (no rollup known) is ignored.
+      { month: "2026-06-01", page: "packsclub.com/menu/orange-county", clicks: 5000 },
+    ],
+  });
+  ok("storeTraffic: returns rows", st !== null && st.rows.length === 2);
+  if (st) {
+    eq("storeTraffic: latest month", st.month, "2026-08-01");
+    eq("storeTraffic: sorted by latest clicks", st.rows.map((r) => r.id), ["sgv", "oc"]);
+    const oc = st.rows.find((r) => r.id === "oc")!;
+    eq("storeTraffic: store page normalised", oc.page, "packsclub.com/menu/orange-county");
+    eq("storeTraffic: subpages counted", oc.latest, 150);
+    eq("storeTraffic: yoy", oc.yoy, { change: 50, unit: "pct", before: "100", against: "August 2025" });
+    eq("storeTraffic: mom", oc.mom, { change: 25, unit: "pct", before: "120", against: "July 2026" });
+    eq("storeTraffic: series over months", oc.series, [100, 120, 150]);
+    eq("storeTraffic: year excludes the month 12 back", oc.year, 270);
+    eq("storeHeadline: sums every store", storeHeadline(st), "450 clicks from Google search landed on store pages in August 2026");
+    eq("storeTraffic: zero before gives no yoy", st.rows.find((r) => r.id === "sgv")!.yoy, null);
+  }
+  eq("storeTraffic: no stores", storeTraffic({ stores: [], pages: [], months: ["2026-08-01"] }), null);
+  eq("storeTraffic: no months", storeTraffic({ stores: [{ id: "a", name: "A", store_page_url: "x.com/a" }], pages: [], months: [] }), null);
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
