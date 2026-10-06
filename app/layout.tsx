@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { siteOrigin } from "@/lib/site-pages";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,6 +20,9 @@ const bricolage = Bricolage_Grotesque({
 });
 
 export const metadata: Metadata = {
+  // Makes every relative canonical ("/pricing") a full URL. Without it Next
+  // printed href="/pricing", which Google tolerates but doesn't recommend.
+  metadataBase: new URL(siteOrigin()),
   title: "Support Dashboard",
   description: "AI customer support — email channel",
 };

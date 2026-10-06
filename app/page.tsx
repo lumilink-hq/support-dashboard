@@ -17,7 +17,10 @@ import { redirect } from "next/navigation";
 import { Landing, LANDING_METADATA } from "@/components/marketing/landing";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata: Metadata = LANDING_METADATA;
+export const metadata: Metadata = {
+  ...LANDING_METADATA,
+  alternates: { canonical: "/" },
+};
 
 export default async function Home() {
   // A Supabase outage must not take the marketing site down with it: on error
