@@ -35,7 +35,9 @@ import {
 } from "@/lib/entitlements";
 
 export const metadata: Metadata = {
-  title: "Plans and pricing | Lumilink",
+  title: "Plans and pricing | LumiLink",
+  // Was the only public page with no canonical (module 24 audit, 2026-10-08).
+  alternates: { canonical: "/plans" },
   // Was "100 included minutes ... published overage rates" — both stale. The
   // allowance is 180 minutes (CFO workbook 2026-08-16) and there are no overage
   // rates at all since the hard cap landed on 2026-08-13. Derived from

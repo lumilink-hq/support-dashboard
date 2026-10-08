@@ -18,7 +18,9 @@ import { DEMO_LINES } from "@/lib/demo";
 const LINE = DEMO_LINES.service;
 
 export const metadata: Metadata = {
-  title: "Meet Lumi — the AI receptionist that books jobs 24/7 | LumiLink",
+  // Shortened 2026-10-08: the module 24 audit flagged 63 characters.
+  title: "Meet Lumi: the AI receptionist that books jobs | LumiLink",
+  alternates: { canonical: "/demo/hvac" },
   description:
     "Try Lumi, the AI phone receptionist for home-service companies. Book a service visit with our demo HVAC company, by phone or in your browser.",
   ...(LINE.tel ? {} : { robots: { index: false, follow: false } }),

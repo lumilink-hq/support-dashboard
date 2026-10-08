@@ -31,9 +31,9 @@ import { DEMO_LINES } from "@/lib/demo";
 import { guaranteedCalls, STARTER_PLAN } from "@/lib/entitlements";
 
 export const SERVICE_METADATA = {
-  title: "Lumilink for service businesses | AI booking, 24/7",
+  title: "LumiLink for service businesses | AI booking, 24/7",
   description:
-    "Lumi answers every call, quotes from your price list, and books the job on your real calendar — for HVAC, plumbing, electrical and the trades. A missed call is a job that goes to whoever picked up.",
+    "Lumi answers every call, quotes from your price list and books the job on your real calendar, for HVAC, plumbing, electrical and the trades.",
 };
 
 // Live since 2026-08-12. Shared with /demo/hvac via lib/demo.ts.

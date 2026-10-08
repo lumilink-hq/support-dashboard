@@ -53,7 +53,7 @@ const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
 export const metadata: Metadata = {
   title: "Pricing | LumiLink",
   description:
-    "Every plan, add-on and product in one place: the AI phone agent, website chat, extra lines and locations, and SEO + AI search for your website and every location.",
+    "Every plan, add-on and product in one place: the AI phone agent, website chat, extra lines and locations, and SEO + AI search.",
   alternates: { canonical: "/pricing" },
 };
 

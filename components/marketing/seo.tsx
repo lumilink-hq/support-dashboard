@@ -36,9 +36,9 @@ import { MockupFrame } from "@/components/marketing/dashboard-mockups";
 import { SEO_EXTRA_LOCATION, SEO_PLANS, seoBundleSavings, seoPlanByKey } from "@/lib/seo-pricing";
 
 export const SEO_METADATA = {
-  title: "SEO + AI Search For Your Website And Every Location | LumiLink",
+  title: "SEO + AI Search For Your Website And Locations | LumiLink",
   description:
-    "Get found on Google, in the local map pack, and in AI answers from ChatGPT and Google AI Overviews. Weekly audits, rank tracking, AI search visibility, and fixes you approve before anything goes live.",
+    "Get found on Google, in the map pack and in ChatGPT and Google AI Overviews. Weekly audits, rank tracking, and fixes you approve before they go live.",
 };
 
 // Signed out: create an account for Local SEO (?product=seo).

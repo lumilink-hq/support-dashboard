@@ -26,7 +26,9 @@ import { LumiWidget } from "@/components/lumi-widget";
 import { DEMO_LINES } from "@/lib/demo";
 
 export const metadata: Metadata = {
-  title: "Meet Lumi — the AI agent that answers order questions | LumiLink",
+  // Shortened 2026-10-08: the module 24 audit flagged 64 characters.
+  title: "Meet Lumi: the AI agent for order questions | LumiLink",
+  alternates: { canonical: "/demo/orders" },
   description:
     "Try Lumi, the AI phone agent for online stores. Ask about an order, a delivery, or what's in stock at our demo store, by phone or in your browser.",
 };

@@ -18,7 +18,7 @@ import {
 export const metadata: Metadata = {
   title: "Privacy Policy | LumiLink",
   description:
-    "What LumiLink collects across the AI phone agent, website chat and SEO + AI Search, including data from a connected Google account: why, how long we keep it, and who processes it.",
+    "What LumiLink collects across the phone agent, website chat and SEO + AI Search, including connected Google data: why, how long we keep it, and who sees it.",
   alternates: { canonical: "/legal/privacy" },
 };
 

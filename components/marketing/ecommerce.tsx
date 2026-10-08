@@ -39,9 +39,9 @@ import { DEMO_LINES } from "@/lib/demo";
 import { STARTER_PLAN } from "@/lib/entitlements";
 
 export const ECOMMERCE_METADATA = {
-  title: "Lumilink for online stores | AI order support, 24/7",
+  title: "LumiLink for online stores | AI order support, 24/7",
   description:
-    "Lumi answers “where is my order?” by phone and on your site — looking up the real order in Shopify or WooCommerce, reading back tracking, and logging a ticket when it can't finish. Including merchants other vendors turn away.",
+    "Lumi answers “where is my order?” by phone and on your site, looking up the real order in Shopify or WooCommerce and reading back tracking.",
 };
 
 // Live since 2026-08-12. Comes from lib/demo.ts, which is also what /demo/orders

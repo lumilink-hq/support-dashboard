@@ -61,7 +61,7 @@ import { SEO_EXTRA_LOCATION, seoBundleSavings, seoPlanByKey } from "@/lib/seo-pr
 export const LANDING_METADATA = {
   title: "LumiLink | Automate The Repetitive. Escalate What Matters.",
   description:
-    "AI automation for your whole business: an agent that answers every call and website visitor, books the job, gets you found on Google and in AI search, and connects to the tools you already use.",
+    "AI automation for your business: an agent that answers every call and website visitor, books the job, and gets you found on Google and in AI search.",
 };
 
 const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
