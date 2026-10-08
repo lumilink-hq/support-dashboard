@@ -18,6 +18,7 @@ import {
   checkCandidate,
   type CheckContext,
   finalSuggestions,
+  licencesByAddress,
   licenceSuggestions,
   nameWords,
   OUTPUT_SCHEMA,
@@ -90,6 +91,57 @@ console.log("\nlicence suggestions");
   ok("a quote stays within its own line", quoteAround(lines, at, at + 15) === "State licence C10-0000123-LIC. Shop flower.", quoteAround(lines, at, at + 15));
   ok("readable text leaves out the head (title, meta)", !readableText("<html><head><title>Title text</title></head><body><p>Body</p></body></html>").includes("Title text"));
   ok("quoteAround stays near the match and within the limit", quoteAround("a ".repeat(500) + "HERE" + " b".repeat(500), 1000, 1004).length <= 240 && quoteAround("a ".repeat(500) + "HERE" + " b".repeat(500), 1000, 1004).includes("HERE"));
+}
+
+// -----------------------------------------------------------------------------
+console.log("\nlicences matched to a store by address");
+{
+  // packsclub.com/pages/contact and its footer, as crawled 2026-10-08.
+  const contact: SourcePage = {
+    url: `${W}/pages/contact`,
+    text: [
+      "PACKS Club Cannabis Weed Dispensary near SGV",
+      "(626) 406-4822",
+      "3551 Peck Rd #102, El Monte, CA 91731",
+      "6AM TO 10PM | EVERYDAY",
+      "License Number: C10-0000823-LIC",
+      "PACKS Club Weed Dispensary Hollywood",
+      "(323) 853-7714",
+      "1944 Cahuenga Blvd N, Los Angeles, CA 90068-3853",
+      "License Number: C10-0000107-LIC",
+      "PACKS Club Weed Dispensary Orange County",
+      "2840 S Croddy Way, Santa Ana, CA 92704",
+      "License Number: C10-0001448-LIC",
+      "PACKS Club Weed Dispensary San Bernardino",
+      "2211 Hunts Lane, STE KSan Bernardino, CA 92408",
+      "License Number: C12-0000380-LIC",
+      "Quick Links",
+      "San Gabriel Valley 3551 Peck Rd, El Monte C10-0000823-LIC HOLLYWOOD 1944 Cahuenga Blvd N C10-0000107-LIC",
+    ].join("\n"),
+    json_ld: null,
+  };
+  const stores = [
+    { id: "sgv", address_line1: "3551 Peck Rd" },
+    { id: "hw", address_line1: "1944 Cahuenga Blvd N" },
+    { id: "oc", address_line1: "2840 S Croddy Way" },
+    { id: "sb", address_line1: "2211 S Hunts Ln" },
+  ];
+  const by = licencesByAddress([contact], stores);
+  const lic = (id: string) => by.get(id)?.find((x) => x.field === "certifications")?.value;
+  ok("SGV gets C10-0000823", lic("sgv") === "California cannabis licence C10-0000823-LIC", lic("sgv"));
+  ok("Hollywood gets C10-0000107", lic("hw") === "California cannabis licence C10-0000107-LIC", lic("hw"));
+  ok("OC gets C10-0001448", lic("oc") === "California cannabis licence C10-0001448-LIC", lic("oc"));
+  ok("SB gets C12-0000380 ('Hunts Lane' matches 'Hunts Ln')", lic("sb") === "California cannabis licence C12-0000380-LIC", lic("sb"));
+  ok("each also gets Licensed, once", ["sgv", "hw", "oc", "sb"].every((id) => by.get(id)!.filter((x) => x.field === "licensed").length === 1));
+  ok("the quote runs from the address to the licence", by.get("hw")![0].quote.startsWith("1944 Cahuenga") && by.get("hw")![0].quote.endsWith("C10-0000107-LIC"), by.get("hw")![0].quote);
+  ok("a licence seen again in the footer isn't repeated", by.get("sgv")!.length === 2);
+  const lonely = licencesByAddress([{ url: "u", text: "Our licence: C10-0009999-LIC", json_ld: null }], stores);
+  ok("a licence with no store address before it is nobody's", lonely.size === 0);
+  const far = licencesByAddress([{ url: "u", text: `3551 Peck Rd ${"x ".repeat(300)} C10-0009999-LIC`, json_ld: null }], stores);
+  ok("an address too far back doesn't count", far.size === 0);
+  const ctx: CheckContext = { pages: new Map([[contact.url, contact]]), storeUrl: null, shared: true, city: "Los Angeles", nameWords: ["hollywood"] };
+  ok("the model can't propose a licence number", !checkCandidate({ field: "certifications", value: "License Number: C10-0000107-LIC", quote: "License Number: C10-0000107-LIC", source_url: contact.url }, ctx, NOW).ok);
+  ok("readable text drops zero-width spaces", readableText("<p>Orange County​</p><p>​</p><p>Santa Ana</p>") === "Orange County\nSanta Ana", readableText("<p>Orange County​</p><p>​</p><p>Santa Ana</p>"));
 }
 
 // -----------------------------------------------------------------------------

@@ -41,6 +41,7 @@ import {
   buildPayload,
   checkCandidate,
   finalSuggestions,
+  licencesByAddress,
   licenceSuggestions,
   nameWords,
   OUTPUT_SCHEMA,
@@ -118,8 +119,8 @@ async function askModel(loc: Member, pages: SourcePage[]): Promise<string> {
   return r.content.find((b) => b.type === "text")?.text ?? "";
 }
 
-type Member = SiteMember & { client_id: string; city: string | null };
-const LOCATION_COLUMNS = "id, client_id, name, city, website_url, store_page_url, created_at";
+type Member = SiteMember & { client_id: string; city: string | null; address_line1: string | null };
+const LOCATION_COLUMNS = "id, client_id, name, city, address_line1, website_url, store_page_url, created_at";
 
 type PageRow = { url: string; final_url: string | null; is_root: boolean; page_text: string | null; json_ld: unknown[] | null };
 
@@ -151,6 +152,10 @@ async function suggestForSite(primary: Member, members: Member[], brand: string 
   ]);
   const savedBy = new Map(((detailRows ?? []) as (LocationDetails & { location_id: string })[]).map((d) => [d.location_id, d]));
 
+  // Licences on any kept page (a contact page or footer listing every store),
+  // each matched to the store whose street address sits just before it.
+  const licencesByStore = licencesByAddress(rows.map(toPage), group.members);
+
   const results: Record<string, unknown> = {};
   let modelFailures = 0;
   for (const m of group.members) {
@@ -158,6 +163,7 @@ async function suggestForSite(primary: Member, members: Member[], brand: string 
     const storePage = own ? toPage(own) : null;
     const found: Suggestion[] = [];
     if (storePage) found.push(...licenceSuggestions(storePage), ...structuredSuggestions(storePage));
+    found.push(...(licencesByStore.get(m.id) ?? []));
 
     const pages = [...(storePage ? [storePage] : []), ...factPages];
     let dropped = 0;

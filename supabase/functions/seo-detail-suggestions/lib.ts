@@ -5,8 +5,11 @@
 // scripts/test-seo-detail-suggestions.ts.
 //
 // THREE SOURCES, most certain first:
-//   pattern    — a California cannabis licence number on the store's own page
-//                ("Licensed" plus the licence under certifications).
+//   pattern    — a California cannabis licence number on the store's own page,
+//                or on any page right after the store's street address (a
+//                contact page or footer listing every store): "Licensed"
+//                plus the licence under certifications. The model is never
+//                trusted with licence numbers.
 //   structured — the store page's JSON-LD: foundingDate, areaServed, award.
 //   model      — one Claude call per location over the store page and the
 //                site's fact pages; every item must come with a quote.
@@ -24,6 +27,7 @@
 // =============================================================================
 
 import { cleanItem, cleanYear, DCC_LICENCE, DETAIL_LIMITS, type ListField, type LocationDetails } from "../seo-content/details.ts";
+import { streetParts } from "../seo-crawl/stores.ts";
 
 export type SuggestField =
   | "service_areas"
@@ -125,6 +129,47 @@ export function licenceSuggestions(page: SourcePage): Suggestion[] {
     const quote = quoteAround(page.text, m.index!, m.index! + m[0].length);
     out.push({ field: "certifications", value: `California cannabis licence ${licence}`, quote, source_url: page.url, method: "pattern" });
     if (seen.size === 1) out.push({ field: "licensed", value: "true", quote, source_url: page.url, method: "pattern" });
+  }
+  return out;
+}
+
+/** How far before a licence number a store's street address may be. */
+export const LICENCE_ADDRESS_WINDOW = 400;
+
+/**
+ * Licences on any page (a contact page or footer listing every store), each
+ * given to the store whose street address (house number and street name)
+ * appears closest before it, within LICENCE_ADDRESS_WINDOW characters. A
+ * licence with no address before it is nobody's. The quote runs from the
+ * address to the licence. First page wins for a licence seen twice.
+ */
+export function licencesByAddress(pages: SourcePage[], stores: { id: string; address_line1: string | null }[]): Map<string, Suggestion[]> {
+  const out = new Map<string, Suggestion[]>();
+  const seen = new Set<string>();
+  const parts = stores.map((s) => ({ id: s.id, p: streetParts(s.address_line1) })).filter((s) => s.p);
+  for (const page of pages) {
+    const lower = page.text.toLowerCase();
+    for (const m of page.text.matchAll(DCC_LICENCE)) {
+      const licence = m[0].toUpperCase();
+      if (seen.has(licence)) continue;
+      const from = Math.max(0, m.index! - LICENCE_ADDRESS_WINDOW);
+      const windowText = lower.slice(from, m.index!);
+      let best: { id: string; at: number } | null = null;
+      for (const s of parts) {
+        const num = [...windowText.matchAll(new RegExp(`\\b${s.p!.number}\\b`, "g"))].pop();
+        if (!num || !new RegExp(`\\b${s.p!.word}\\b`).test(windowText.slice(num.index!))) continue;
+        if (!best || num.index! > best.at) best = { id: s.id, at: num.index! };
+      }
+      if (!best) continue;
+      seen.add(licence);
+      const quote = page.text.slice(from + best.at, m.index! + m[0].length).replace(/\s+/g, " ").trim().slice(-QUOTE_MAX);
+      const list = out.get(best.id) ?? [];
+      list.push(
+        { field: "certifications", value: `California cannabis licence ${licence}`, quote, source_url: page.url, method: "pattern" },
+        { field: "licensed", value: "true", quote, source_url: page.url, method: "pattern" },
+      );
+      out.set(best.id, list);
+    }
   }
   return out;
 }
@@ -303,6 +348,11 @@ export function checkCandidate(c: Candidate, ctx: CheckContext, now = new Date()
     if (!value) return { ok: false, reason: "value fails the intake's cleaning" };
     if (!valueInQuote(value, quote)) return { ok: false, reason: "value isn't in the quote" };
   }
+
+  // Licence numbers come only from the pattern rules (the store's own page,
+  // or matched to its address): a page listing every store's licence would
+  // otherwise let the model hand one store another's.
+  if (new RegExp(DCC_LICENCE.source, "i").test(c.value)) return { ok: false, reason: "licence numbers come from the pattern rules" };
 
   // Another store's towns aren't this one's: on a shared website, an area or
   // landmark from a page other than this store's own must name the store.

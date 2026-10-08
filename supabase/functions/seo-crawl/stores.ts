@@ -186,6 +186,7 @@ export function readableText(html: string, max = PAGE_TEXT_MAX): string {
       .replace(/<(br|p|div|li|h[1-6]|tr|section|article|header|footer|nav|ul|ol|table)\b[^>]*>/gi, "\n")
       .replace(/<[^>]+>/g, " "),
   )
+    .replace(/[​-‍⁠﻿]/g, "")
     .replace(/[ \t\f\v ]+/g, " ")
     .replace(/ *\n[ \n]*/g, "\n")
     .trim();
