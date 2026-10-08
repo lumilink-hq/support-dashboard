@@ -75,6 +75,15 @@ export function emptyDetails(): LocationDetails {
 
 const URLISH = /https?:\/\/|www\.|\.(com|net|org|io|co|biz|us)\b/i;
 
+/**
+ * A California Department of Cannabis Control licence number, e.g.
+ * C10-0000123-LIC (C9 delivery, C10 retail, C11 distribution, C12
+ * microbusiness, C13 distribution transport; -LIC annual, -TMP temporary).
+ * California requires it on a licensee's website, so module 30 reads it from
+ * each store page. Its digits aren't a phone number.
+ */
+export const DCC_LICENCE = /\bC(?:9|1[0-3])-\d{7}-(?:LIC|TMP)\b/gi;
+
 /** One short, single-line, plain item, or null when it can't be one. */
 export function cleanItem(raw: string, maxLen: number): string | null {
   let s = "";
@@ -85,7 +94,8 @@ export function cleanItem(raw: string, maxLen: number): string | null {
   s = s.replace(/\s+/g, " ").trim();
   if (s.length < 2 || s.length > maxLen) return null;
   if (URLISH.test(s) || /[<>{}]/.test(s)) return null;
-  if ((s.match(/\d/g) ?? []).length >= 7) return null; // phone-number shaped
+  // Phone-number shaped, not counting a cannabis licence number's digits.
+  if ((s.replace(DCC_LICENCE, "").match(/\d/g) ?? []).length >= 7) return null;
   return s;
 }
 

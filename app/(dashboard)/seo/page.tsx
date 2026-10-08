@@ -74,6 +74,7 @@ import {
   type StoreTraffic,
 } from "@/supabase/functions/seo-search-console/insights";
 import { DETAIL_LIMITS, type LocationDetails } from "@/supabase/functions/seo-content/details";
+import { type DetailSuggestion, suggestionLabel } from "@/lib/seo-detail-suggestions";
 import { competitorGapScore, type CompetitorGapRow } from "@/supabase/functions/seo-content/lib";
 import {
   describeRadius,
@@ -89,6 +90,7 @@ import {
   addCompetitor,
   addKeyword,
   dismissCompetitorGap,
+  dismissDetailSuggestion,
   dismissKeywordSuggestion,
   dismissLinkOpportunity,
   saveLocationDetails,
@@ -421,7 +423,7 @@ export default async function SeoPortalPage({
   const [
     kwRes, trendRes, radiusRes, connRes, compRes, backlinkRes, metricRes, shippedRes, queryRes, mentionRes, pendingRes,
     propRes, dailyRes, kwCountRes, settingsRes, milestoneRes, entRes, googleRes, publishedRes, metricLatestRes,
-    kwStatsRes, suggestionRes, gapRes, crawlRunRes, findingRes, sovRes, linkRes, detailsRes,
+    kwStatsRes, suggestionRes, gapRes, crawlRunRes, findingRes, sovRes, linkRes, detailsRes, detailSuggestionRes,
   ] = await Promise.all([
     supabase.from("seo_keywords").select("id, keyword, is_geo_grid_enabled").eq("location_id", loc.id).eq("is_active", true).order("keyword"),
     supabase.from("seo_rank_trend").select("rank_type, check_date, avg_position").eq("location_id", loc.id).gte("check_date", since200).order("check_date"),
@@ -486,6 +488,15 @@ export default async function SeoPortalPage({
       .limit(300),
     // Module 28: this location's local-detail intake.
     supabase.from("seo_location_details").select("*").eq("location_id", loc.id).maybeSingle(),
+    // Module 30: details found on the website, waiting to be ticked.
+    supabase
+      .from("seo_detail_suggestions")
+      .select("id, field, value, quote, source_url, method")
+      .eq("location_id", loc.id)
+      .eq("status", "open")
+      .order("field")
+      .order("value")
+      .limit(60),
   ]);
 
   const keywords = (kwRes.data ?? []) as Keyword[];
@@ -502,6 +513,7 @@ export default async function SeoPortalPage({
   const storeIssues = summarizeFindings(storeFindings);
   const linkOps = (linkRes.data ?? []) as LinkOpportunity[];
   const details = detailsRes.data as (LocationDetails & { confirmed_at: string | null }) | null;
+  const detailSuggestions = (detailSuggestionRes.data ?? []) as DetailSuggestion[];
   const linkGaps = linkOps
     .filter((o) => o.kind === "gap")
     .sort((a, b) => b.competitors.length - a.competitors.length || (b.domain_rank ?? -1) - (a.domain_rank ?? -1));
@@ -1340,6 +1352,36 @@ export default async function SeoPortalPage({
           >
             <form action={saveLocationDetails} className="space-y-4 text-sm">
               <input type="hidden" name="location" value={loc.id} />
+              {detailSuggestions.length > 0 ? (
+                <div className="rounded-md border border-blue-100 bg-blue-50/60 p-3">
+                  <p className="font-medium text-gray-900">Found on your website ({detailSuggestions.length})</p>
+                  <p className="mt-0.5 text-xs text-gray-600">
+                    Each one is quoted from your own site. Ticked ones are added when you save; untick anything that isn&apos;t true of {loc.name}, or remove it for good with &ldquo;Not right&rdquo;.
+                  </p>
+                  <ul className="mt-2 space-y-2">
+                    {detailSuggestions.map((s) => (
+                      <li key={s.id} className="flex items-start gap-2">
+                        <input type="checkbox" name="accept" value={s.id} defaultChecked className="mt-1" aria-label={suggestionLabel(s)} />
+                        <span className="min-w-0 flex-1">
+                          <span className="text-gray-900">{suggestionLabel(s)}</span>
+                          <span className="block break-words text-xs text-gray-500">
+                            From {pagePath(s.source_url)}: &ldquo;{s.quote}&rdquo;
+                          </span>
+                        </span>
+                        <button
+                          type="submit"
+                          // Bound, not name/value: React drops a button's name when its formAction is a function.
+                          formAction={dismissDetailSuggestion.bind(null, s.id)}
+                          formNoValidate
+                          className="shrink-0 text-xs text-gray-500 underline hover:text-gray-700"
+                        >
+                          Not right
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               <div className="grid gap-4 md:grid-cols-3">
                 <DetailList name="service_areas" label="Neighbourhoods and towns you serve" hint="e.g. Midtown" values={details?.service_areas} />
                 <DetailList name="landmarks" label="Nearby landmarks" hint="e.g. the County Fairgrounds" values={details?.landmarks} />

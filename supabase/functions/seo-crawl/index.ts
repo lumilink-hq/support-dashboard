@@ -79,7 +79,10 @@ import {
 } from "./site.ts";
 import {
   auditStorePage,
+  jsonLdBlocks,
+  keepPageText,
   noStorePageFinding,
+  readableText,
   notLinkedFinding,
   pageKey,
   type SiteGroup,
@@ -273,7 +276,13 @@ type Run = {
   started_at: string;
 };
 
-type PageRow = PageFact & { word_count: number | null; page_findings: CrawlFinding[] };
+type PageRow = PageFact & {
+  word_count: number | null;
+  page_findings: CrawlFinding[];
+  // Module 30: kept only for store pages, the homepage and likely fact pages.
+  page_text: string | null;
+  json_ld: unknown[] | null;
+};
 
 async function saveRun(run: Run): Promise<void> {
   const { error } = await supabase.from("seo_crawl_runs").upsert(
@@ -322,6 +331,8 @@ async function savePages(loc: LocationRow, run: Run, rows: PageRow[]): Promise<v
       internal_links: r.internal_links,
       outbound_links: r.outbound_links,
       page_findings: r.page_findings,
+      page_text: r.page_text,
+      json_ld: r.json_ld,
     })),
     { onConflict: "location_id,run_id,url" },
   );
@@ -356,7 +367,10 @@ function pageRow(url: string, f: Fetched, html: string | null, site: Site, siteH
   const findings = html ? auditPage(html, { name: store?.name ?? null, phone_number: store?.phone_number ?? null }, { isRoot: !!store }) : [];
   // A store URL that redirects is judged where it lands, not here.
   if (store && f.hops === 0) findings.push(...auditStorePage({ html, status: f.status, wordCount }, store, { shared: site.group.shared }));
+  const keep = !!html && keepPageText(url, { isStore: !!store, isRoot });
   return {
+    page_text: keep ? readableText(html!) : null,
+    json_ld: keep ? jsonLdBlocks(html!) : null,
     url,
     status_code: f.status,
     final_url: f.hops > 0 ? f.finalUrl : null,

@@ -155,6 +155,65 @@ function visibleText(html: string): string {
     .replace(/\s+/g, " ");
 }
 
+// -----------------------------------------------------------------------------
+// Page text kept for module 30 (suggested location details)
+// -----------------------------------------------------------------------------
+
+/** Characters of text / JSON-LD kept per page. Mirrors 0071's checks. */
+export const PAGE_TEXT_MAX = 20_000;
+
+/** Pages likely to state facts about the business (about, locations, FAQ…). */
+const FACT_PATH = /\/(about|about-us|our-story|story|who-we-are|locations?|stores?|visit|faq|faqs|contact|contact-us)(\/|$|-)|location/i;
+
+/** Should the crawl keep this page's text? Store pages and the homepage
+ * always; otherwise a page whose path looks like it states facts. */
+export function keepPageText(url: string, opts: { isStore: boolean; isRoot: boolean }): boolean {
+  if (opts.isStore || opts.isRoot) return true;
+  try {
+    return FACT_PATH.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+}
+
+/** The page as a reader sees it: no scripts, styles or tags; block elements
+ * become line breaks; entities decoded; capped. Case is kept. */
+export function readableText(html: string, max = PAGE_TEXT_MAX): string {
+  const s = decodeEntities(
+    (html ?? "")
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<(head|script|style|noscript|template|svg)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+      .replace(/<(br|p|div|li|h[1-6]|tr|section|article|header|footer|nav|ul|ol|table)\b[^>]*>/gi, "\n")
+      .replace(/<[^>]+>/g, " "),
+  )
+    .replace(/[ \t\f\v ]+/g, " ")
+    .replace(/ *\n[ \n]*/g, "\n")
+    .trim();
+  return s.slice(0, max);
+}
+
+/** The page's JSON-LD blocks that parse, whole, while they fit in `max`
+ * characters together. Null when there are none. */
+export function jsonLdBlocks(html: string, max = PAGE_TEXT_MAX): unknown[] | null {
+  const re = /<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  const out: unknown[] = [];
+  let size = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html ?? "")) !== null) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(m[1]);
+    } catch {
+      continue;
+    }
+    const n = JSON.stringify(parsed).length;
+    if (size + n > max) continue;
+    size += n;
+    out.push(parsed);
+  }
+  return out.length ? out : null;
+}
+
 /** Does the page's visible text carry this street address (number and name)? */
 export function pageContainsAddress(html: string, addressLine1: string | null | undefined): boolean {
   const parts = streetParts(addressLine1);

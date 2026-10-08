@@ -18,6 +18,7 @@ import {
 } from "@/lib/seo-portal";
 import { createClient } from "@/lib/supabase/server";
 import { cleanItem, cleanList, cleanYear, DETAIL_LIMITS, type ListField } from "@/supabase/functions/seo-content/details";
+import { applyAccepted, DETAIL_FLAGS, DETAIL_LISTS, type DetailsForm } from "@/lib/seo-detail-suggestions";
 // The weekly AI-visibility job only ever checks this many active queries; more
 // would be accepted here and silently never checked, so the form stops at the cap.
 import { MAX_QUERIES_PER_CLIENT } from "@/supabase/functions/seo-ai-visibility/lib";
@@ -391,19 +392,36 @@ export async function saveLocationDetails(formData: FormData) {
   const { data: loc } = await supabase.from("seo_locations").select("id").eq("id", location).maybeSingle();
   if (!loc) redirect(back(undefined, "That location no longer exists."));
 
+  // Module 30: suggestions found on the website and left ticked. Read under
+  // RLS, so only this client's own open suggestions for this location count.
+  const acceptIds = formData.getAll("accept").map(String).filter(Boolean).slice(0, 100);
+  const { data: acceptedRows } = acceptIds.length
+    ? await supabase.from("seo_detail_suggestions").select("id, field, value").in("id", acceptIds).eq("location_id", location).eq("status", "open")
+    : { data: [] };
+  const accepted = (acceptedRows ?? []) as { id: string; field: string; value: string }[];
+  const form = applyAccepted(
+    {
+      lists: Object.fromEntries(DETAIL_LISTS.map((f) => [f, String(formData.get(f) ?? "")])) as DetailsForm["lists"],
+      flags: Object.fromEntries(DETAIL_FLAGS.map((f) => [f, formData.get(f) === "on"])) as DetailsForm["flags"],
+      year: String(formData.get("year_founded") ?? ""),
+      guarantee: String(formData.get("guarantee") ?? ""),
+    },
+    accepted,
+  );
+
   let dropped = 0;
   const list = (field: ListField) => {
-    const r = cleanList(String(formData.get(field) ?? ""), field);
+    const r = cleanList(form.lists[field], field);
     dropped += r.dropped;
     return r.items;
   };
-  const yearRaw = String(formData.get("year_founded") ?? "");
+  const yearRaw = form.year;
   const year = cleanYear(yearRaw);
   if (yearRaw.trim() && year === null) redirect(back(undefined, "The year founded must be a past year, like 2004."));
-  const guaranteeRaw = String(formData.get("guarantee") ?? "");
+  const guaranteeRaw = form.guarantee;
   const guarantee = guaranteeRaw.trim() ? cleanItem(guaranteeRaw, DETAIL_LIMITS.guarantee) : null;
   if (guaranteeRaw.trim() && !guarantee) redirect(back(undefined, `Describe the guarantee in one line of up to ${DETAIL_LIMITS.guarantee} characters, without links or phone numbers.`));
-  const flag = (name: string) => formData.get(name) === "on";
+  const flag = (name: (typeof DETAIL_FLAGS)[number]) => form.flags[name];
 
   const row = {
     location_id: location,
@@ -424,9 +442,36 @@ export async function saveLocationDetails(formData: FormData) {
   };
   const { error } = await supabase.from("seo_location_details").upsert(row, { onConflict: "location_id" });
   if (error) redirect(back(undefined, error.message));
+  if (accepted.length) {
+    await supabase.rpc("decide_seo_detail_suggestions", { p_location_id: location, p_ids: accepted.map((a) => a.id), p_status: "accepted" });
+  }
 
   revalidatePath("/seo");
-  redirect(back(`Saved. New articles for this location can now use these details.${dropped ? ` ${dropped} line${dropped === 1 ? " was" : "s were"} left out (too long, repeated, over the limit, or containing a link or phone number).` : ""}`));
+  redirect(back(`Saved. New articles for this location can now use these details.${accepted.length ? ` ${accepted.length} found on your website ${accepted.length === 1 ? "was" : "were"} added.` : ""}${dropped ? ` ${dropped} line${dropped === 1 ? " was" : "s were"} left out (too long, repeated, over the limit, or containing a link or phone number).` : ""}`));
+}
+
+/**
+ * "Not right" on a suggested detail (module 30): it's dismissed and never
+ * suggested again for this location. Submitted from the details form without
+ * its confirm box, so nothing else in the form is saved.
+ */
+export async function dismissDetailSuggestion(id: string, formData: FormData) {
+  const location = String(formData.get("location") ?? "");
+  const back = (error?: string) => {
+    const qs = new URLSearchParams();
+    if (location) qs.set("location", location);
+    qs.set("tab", "map");
+    if (error) qs.set("error", error);
+    return `/seo?${qs.toString()}#location-details`;
+  };
+  const access = await getSeoAccess();
+  if (!access.allowed) redirect(back("Local SEO isn't active on your plan."));
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("decide_seo_detail_suggestions", { p_location_id: location, p_ids: [id], p_status: "dismissed" });
+  if (error) redirect(back(error.message));
+  if (!data) redirect(back("That suggestion was already handled."));
+  revalidatePath("/seo");
+  redirect(back());
 }
 
 /**
