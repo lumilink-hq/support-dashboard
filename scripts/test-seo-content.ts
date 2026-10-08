@@ -199,6 +199,7 @@ async function main() {
     const parsed = JSON.parse(payload);
     ok("the payload is one JSON document with the keyword", parsed.keyword === "drain cleaning tulsa" && parsed.business_name === hostile.name);
     ok("no street address or phone in the payload", !("address" in parsed) && !("phone" in parsed) && !/\d{3}-\d{4}/.test(payload));
+    ok("with no city, the prompt forbids naming a place", /If city is empty[^\n]*do not name or imply any city/.test(SYSTEM_PROMPT));
     ok("the system prompt forbids the invented specifics we validate for", /licences|insurance|certifications|awards|guarantees/.test(SYSTEM_PROMPT));
     ok("the format the parser expects is the format the prompt asks for", /TITLE:/.test(SYSTEM_PROMPT) && /META:/.test(SYSTEM_PROMPT) && /IMAGE:/.test(SYSTEM_PROMPT) && /ALT:/.test(SYSTEM_PROMPT) && /---/.test(SYSTEM_PROMPT));
   }

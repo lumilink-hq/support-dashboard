@@ -25,6 +25,9 @@
 // can't smuggle a different NAP into on-page copy.
 // =============================================================================
 
+// Pure too (no Deno, no network), so the plain-tsx tests still load.
+import { isOnlineOnly } from "../seo-crawl/lib.ts";
+
 export type DraftField = "title_tag" | "meta_description" | "h1" | "local_business_schema";
 
 /** Mirrors the finding_type list in 0054's seo_draft_targets view. */
@@ -236,12 +239,14 @@ export function validateDraft(
 // -----------------------------------------------------------------------------
 
 /** null when the location has no name to describe. Only present fields are
- * emitted, so nothing is guessed. */
+ * emitted, so nothing is guessed. An online-only location (no street address,
+ * no city: isOnlineOnly in seo-crawl/lib.ts) gets Organization, not
+ * LocalBusiness: a software company or web-only store has no premises. */
 export function buildLocalBusinessSchema(loc: LocationFacts): Record<string, unknown> | null {
   if (!loc.name?.trim()) return null;
   const out: Record<string, unknown> = {
     "@context": "https://schema.org",
-    "@type": "LocalBusiness",
+    "@type": isOnlineOnly(loc) ? "Organization" : "LocalBusiness",
     name: loc.name.trim(),
   };
   if (loc.website_url) out.url = loc.website_url;

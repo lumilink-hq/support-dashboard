@@ -57,6 +57,7 @@ import {
   extractMetaDescription,
   extractTitle,
   isAllowedByRobots,
+  isOnlineOnly,
   normalizeUrl,
   visibleWordCount,
   type CrawlFinding,
@@ -247,9 +248,10 @@ type LocationRow = SiteMember & {
   client_id: string;
   phone_number: string | null;
   address_line1: string | null;
+  city: string | null;
 };
 
-const LOCATION_COLUMNS = "id, client_id, name, website_url, store_page_url, phone_number, address_line1, created_at";
+const LOCATION_COLUMNS = "id, client_id, name, website_url, store_page_url, phone_number, address_line1, city, created_at";
 
 /** The website being crawled: the primary location, everyone sharing the
  * site, and each one's store page (module 29, stores.ts). */
@@ -364,7 +366,17 @@ function pageRow(url: string, f: Fetched, html: string | null, site: Site, siteH
   const links = html ? extractLinks(html, base, siteHost) : { internal: [], outbound: [] };
   const store = storeFor(site.stores, url);
   const wordCount = html ? visibleWordCount(html) : null;
-  const findings = html ? auditPage(html, { name: store?.name ?? null, phone_number: store?.phone_number ?? null }, { isRoot: !!store }) : [];
+  const noindex = html ? isNoindex(html, f.xRobots) : !!f.xRobots && /\bnoindex\b/i.test(f.xRobots);
+  // A noindex page never shows in Google, so its title, description and length
+  // don't matter, and drafting fixes for it wastes a review (2026-10-08). A
+  // store page is still audited: a noindex store page is itself the problem.
+  const findings = html && (!noindex || store)
+    ? auditPage(
+        html,
+        { name: store?.name ?? null, phone_number: store?.phone_number ?? null, online_only: !!store && isOnlineOnly(store) },
+        { isRoot: !!store },
+      )
+    : [];
   // A store URL that redirects is judged where it lands, not here.
   if (store && f.hops === 0) findings.push(...auditStorePage({ html, status: f.status, wordCount }, store, { shared: site.group.shared }));
   const keep = !!html && keepPageText(url, { isStore: !!store, isRoot });
@@ -380,7 +392,7 @@ function pageRow(url: string, f: Fetched, html: string | null, site: Site, siteH
     title: html ? extractTitle(html) : null,
     meta_description: html ? extractMetaDescription(html) : null,
     canonicals: html ? extractCanonicals(html, base) : [],
-    noindex: html ? isNoindex(html, f.xRobots) : !!f.xRobots && /\bnoindex\b/i.test(f.xRobots),
+    noindex,
     word_count: wordCount,
     internal_links: links.internal,
     outbound_links: links.outbound,

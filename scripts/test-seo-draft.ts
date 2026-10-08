@@ -161,6 +161,9 @@ console.log("buildLocalBusinessSchema");
   ok("no name means no schema", buildLocalBusinessSchema({ ...loc, name: "  " }) === null);
   const sparse = buildLocalBusinessSchema({ ...loc, address_line1: null, city: null, region: null, postal_code: null, country_code: null, phone_number: null, website_url: null }) as Record<string, unknown>;
   ok("absent fields are omitted, not guessed", !("address" in sparse) && !("telephone" in sparse) && !("url" in sparse));
+  ok("no street address and no city: Organization, not LocalBusiness", sparse["@type"] === "Organization");
+  const serviceArea = buildLocalBusinessSchema({ ...loc, address_line1: null }) as Record<string, unknown>;
+  ok("a city without a street address stays LocalBusiness", serviceArea["@type"] === "LocalBusiness");
   ok("it round-trips through JSON", JSON.parse(JSON.stringify(s)).name === "Acme Plumbing");
 }
 

@@ -15,6 +15,7 @@ import {
   extractMetaDescription,
   extractTitle,
   hasLocalBusinessSchema,
+  isOnlineOnly,
   isAllowedByRobots,
   normalizeUrl,
   pageContainsPhone,
@@ -126,6 +127,13 @@ console.log("\nhasLocalBusinessSchema");
   const wrongType = `<script type="application/ld+json">{"@type":"BreadcrumbList"}</script>`;
   ok("false for an unrelated schema type", !hasLocalBusinessSchema(wrongType));
 
+  // Online-only businesses (2026-10-08): Organization counts, but only when asked.
+  const org = `<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","name":"LumiLink"},{"@type":"WebSite"}]}</script>`;
+  ok("Organization alone is not LocalBusiness", !hasLocalBusinessSchema(org));
+  ok("Organization counts with orOrganization", hasLocalBusinessSchema(org, { orOrganization: true }));
+  ok("LocalBusiness still counts with orOrganization", hasLocalBusinessSchema(withSchema, { orOrganization: true }));
+  ok("an unrelated type still fails with orOrganization", !hasLocalBusinessSchema(wrongType, { orOrganization: true }));
+
   const malformedThenValid = `
     <script type="application/ld+json">{ this is not json }</script>
     <script type="application/ld+json">{"@type":"LocalBusiness"}</script>
@@ -225,6 +233,28 @@ console.log("\ndiscoverLinks / normalizeUrl / isAllowedByRobots — copied fetch
   ok("robots disallows /admin", !isAllowedByRobots(robots, "/admin/edit"));
   ok("robots allows everything else", isAllowedByRobots(robots, "/services"));
   ok("no robots.txt fails open", isAllowedByRobots(null, "/anything"));
+}
+
+// ---------------------------------------------------------------------------
+console.log("\nisOnlineOnly + auditPage for a business with no premises");
+{
+  ok("no address and no city is online-only", isOnlineOnly({ address_line1: null, city: null }));
+  ok("blank strings count as empty", isOnlineOnly({ address_line1: "  ", city: "" }));
+  ok("a city alone is local (service-area business)", !isOnlineOnly({ address_line1: null, city: "Tulsa" }));
+  ok("a street address is local", !isOnlineOnly({ address_line1: "12 Main St", city: null }));
+
+  const orgHome = `<html><head><title>LumiLink | AI automation for your business</title>
+    <meta name="description" content="An agent that answers every call and website visitor, books the job, and gets you found.">
+    <script type="application/ld+json">{"@type":"Organization","name":"LumiLink"}</script></head>
+    <body><h1>LumiLink</h1></body></html>`;
+  const types = (fs: { finding_type: string }[]) => fs.map((f) => f.finding_type);
+  ok("online-only home with Organization: no schema finding",
+    !types(auditPage(orgHome, { name: "LumiLink", phone_number: null, online_only: true })).includes("missing_local_business_schema"));
+  ok("local home with only Organization: still flagged",
+    types(auditPage(orgHome, { name: "LumiLink", phone_number: null })).includes("missing_local_business_schema"));
+  const bare = orgHome.replace(/<script[\s\S]*?<\/script>/, "");
+  const f = auditPage(bare, { name: "LumiLink", phone_number: null, online_only: true }).find((x) => x.finding_type === "missing_local_business_schema");
+  ok("online-only home with no schema: flagged, asking for Organization", !!f && f.title.includes("Organization"), f?.title);
 }
 
 // ---------------------------------------------------------------------------

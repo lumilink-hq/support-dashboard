@@ -263,11 +263,28 @@ function collectTypes(node: unknown, out: Set<string>): void {
   if (Array.isArray(obj["@graph"])) collectTypes(obj["@graph"], out);
 }
 
+/** Organization types that describe a business with no storefront. An
+ * online-only business (isOnlineOnly) satisfies the homepage schema rule with
+ * one of these instead of LocalBusiness. */
+const ORGANIZATION_TYPES = new Set(["organization", "corporation", "onlinebusiness", "onlinestore"]);
+
+/**
+ * A location with no street address and no city: a software company, an
+ * online store, anything not tied to one place (LumiLink's own workspace,
+ * 2026-10-08). For these the LocalBusiness rule is wrong (Organization is the
+ * right schema), and seo-draft / seo-content leave out any city framing. A
+ * service-area business with a city but no street address is still local.
+ */
+export function isOnlineOnly(loc: { address_line1?: string | null; city?: string | null }): boolean {
+  return !loc.address_line1?.trim() && !loc.city?.trim();
+}
+
 /** Does the page carry LocalBusiness (or a subtype) JSON-LD? Malformed JSON
  * in one <script type="application/ld+json"> block must not abort checking
  * the rest — a hand-edited template with one broken block is common and
- * should still let a valid block elsewhere count. */
-export function hasLocalBusinessSchema(html: string): boolean {
+ * should still let a valid block elsewhere count. With `orOrganization`,
+ * an Organization (or subtype) counts too. */
+export function hasLocalBusinessSchema(html: string, opts: { orOrganization?: boolean } = {}): boolean {
   const re = /<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
   let m: RegExpExecArray | null;
   const types = new Set<string>();
@@ -278,7 +295,10 @@ export function hasLocalBusinessSchema(html: string): boolean {
       continue;
     }
   }
-  for (const t of types) if (LOCAL_BUSINESS_TYPES.has(t)) return true;
+  for (const t of types) {
+    if (LOCAL_BUSINESS_TYPES.has(t)) return true;
+    if (opts.orOrganization && ORGANIZATION_TYPES.has(t)) return true;
+  }
   return false;
 }
 
@@ -323,6 +343,8 @@ export type CrawlFinding = {
 export type LocationNap = {
   name: string | null;
   phone_number: string | null;
+  /** isOnlineOnly(): Organization schema satisfies the homepage rule. */
+  online_only?: boolean;
 };
 
 const TITLE_MIN = 15;
@@ -393,11 +415,15 @@ export function auditPage(html: string, location: LocationNap, opts: { isRoot?: 
     });
   }
 
-  if (isRoot && !hasLocalBusinessSchema(html)) {
+  // Same finding type either way, so seo-draft's mapping and the dashboard
+  // labels hold; seo-draft builds Organization markup for an online-only one.
+  if (isRoot && !hasLocalBusinessSchema(html, { orOrganization: location.online_only })) {
     findings.push({
       finding_type: "missing_local_business_schema",
       severity: "warning",
-      title: "Page has no LocalBusiness structured data",
+      title: location.online_only
+        ? "Page has no Organization structured data"
+        : "Page has no LocalBusiness structured data",
       details: {},
     });
   }
