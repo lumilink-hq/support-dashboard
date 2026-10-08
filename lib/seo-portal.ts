@@ -320,10 +320,15 @@ export const ISSUE_LABELS: Record<string, string> = {
   duplicate_meta_description: "Meta descriptions shared with other pages",
   missing_h1: "Pages with no main heading (H1)",
   multiple_h1: "Pages with more than one H1",
-  missing_local_business_schema: "Homepage has no LocalBusiness structured data",
+  missing_local_business_schema: "No LocalBusiness structured data",
   images_missing_alt: "Pages with images missing alt text",
   thin_content: "Pages with very little text",
-  phone_not_on_page: "Phone number not on the homepage",
+  phone_not_on_page: "Phone number not on the page",
+  address_not_on_page: "Street address not on the page",
+  store_page_unreachable: "Store page is broken",
+  store_page_needs_javascript: "Store page is empty without JavaScript",
+  store_page_not_linked_from_homepage: "Homepage doesn't link to the store page",
+  store_page_not_set: "No store page set",
   broken_internal_links: "Pages linking to broken pages on your site",
   internal_links_redirect: "Pages linking through redirects",
   broken_outbound_links: "Pages linking to dead pages on other sites",
@@ -361,6 +366,33 @@ export function summarizeFindings(rows: FindingRow[]): IssueGroup[] {
     groups.set(r.finding_type, g);
   }
   return [...groups.values()].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || b.count - a.count || a.label.localeCompare(b.label));
+}
+
+/**
+ * Module 29: on a website shared by several locations, the site's primary
+ * location holds the findings for pages every store shares, and each location
+ * holds its own store page's (scope 'store'). `site` is what the website
+ * section shows, `store` what "this store's page" shows. A website with one
+ * location shows everything as the website's, as before.
+ */
+export function splitSiteFindings<T extends { location_id: string; scope: string | null }>(
+  rows: T[],
+  opts: { shared: boolean; primaryId: string; locationId: string },
+): { site: T[]; store: T[] } {
+  if (!opts.shared) return { site: rows.filter((r) => r.location_id === opts.locationId), store: [] };
+  return {
+    site: rows.filter((r) => r.location_id === opts.primaryId && r.scope !== "store"),
+    store: rows.filter((r) => r.location_id === opts.locationId && r.scope === "store"),
+  };
+}
+
+/** "packsclub.com" for "https://www.packsclub.com/x"; null if not a URL. */
+export function hostOf(url: string | null | undefined): string | null {
+  try {
+    return new URL(url ?? "").host.replace(/^www\./, "") || null;
+  } catch {
+    return null;
+  }
 }
 
 /** "/services/drains" for a URL on the site, the full URL otherwise. */

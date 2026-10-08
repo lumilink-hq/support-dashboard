@@ -28,9 +28,12 @@ import {
   SEO_TAB_LABELS,
   SEO_TABS,
   shareOfVoice,
+  hostOf,
+  splitSiteFindings,
   splitSuggestions,
   summarizeFindings,
   trendPoints,
+  type IssueGroup,
   type ClientRank,
   type Competitor,
   type CompetitorRank,
@@ -95,7 +98,15 @@ import {
   setKeywordGeoGrid,
 } from "./actions";
 
-type Loc = { id: string; name: string; lat: number | null; lng: number | null; search_console_site_url: string | null };
+type Loc = {
+  id: string;
+  name: string;
+  lat: number | null;
+  lng: number | null;
+  search_console_site_url: string | null;
+  website_url: string | null;
+  store_page_url: string | null;
+};
 type Keyword = { id: string; keyword: string; is_geo_grid_enabled: boolean };
 type Shipped = {
   id: string;
@@ -132,6 +143,39 @@ function Card({ title, id, children, note }: { title: string; id?: string; child
       {note ? <p className="mt-0.5 text-xs text-gray-500">{note}</p> : null}
       <div className="mt-3">{children}</div>
     </section>
+  );
+}
+
+/** Open audit findings grouped by issue, each opening to the pages it's on. */
+function IssueList({ issues }: { issues: IssueGroup[] }) {
+  return (
+    <ul className="divide-y divide-gray-100 text-sm">
+      {issues.map((g) => (
+        <li key={g.type} className="py-2">
+          <details>
+            <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2">
+              <span className="min-w-0 text-gray-900">{g.label}</span>
+              <span className="flex items-center gap-2 text-xs">
+                <span
+                  className={`rounded-full px-2 py-0.5 ${
+                    g.severity === "critical" ? "bg-red-50 text-red-700" : g.severity === "warning" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {g.severity === "critical" ? "Fix first" : g.severity === "warning" ? "Worth fixing" : "Good to know"}
+                </span>
+                <span className="tabular-nums text-gray-500">{g.count}</span>
+              </span>
+            </summary>
+            <ul className="mt-1 space-y-0.5 pl-3 text-xs text-gray-600">
+              {g.pages.slice(0, 10).map((u) => (
+                <li key={u} className="break-all">{pagePath(u)}</li>
+              ))}
+              {g.pages.length > 10 ? <li className="text-gray-400">and {g.pages.length - 10} more</li> : null}
+            </ul>
+          </details>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -337,7 +381,7 @@ export default async function SeoPortalPage({
 
   const { data: locData } = await supabase
     .from("seo_locations")
-    .select("id, name, lat, lng, search_console_site_url")
+    .select("id, name, lat, lng, search_console_site_url, website_url, store_page_url")
     .eq("is_active", true)
     .order("name", { ascending: true });
   const locations = (locData ?? []) as Loc[];
@@ -360,6 +404,20 @@ export default async function SeoPortalPage({
   const since200 = daysAgo(200);
   const since16m = addMonths(daysAgo(0), -16);
 
+  // Module 29: locations sharing a website. The site's primary location holds
+  // the audit, the findings for pages every store shares, link opportunities
+  // and fixes to shared pages; each store holds its own store page's.
+  const { data: siteRow } = await supabase
+    .from("seo_site_locations")
+    .select("primary_location_id, site_location_count")
+    .eq("location_id", loc.id)
+    .maybeSingle();
+  const sitePrimaryId: string = siteRow?.primary_location_id ?? loc.id;
+  const siteCount: number = Number(siteRow?.site_location_count ?? 1);
+  const siteShared = siteCount > 1;
+  const siteIds = [...new Set([loc.id, sitePrimaryId])];
+  const websiteHost = hostOf(loc.website_url);
+
   const [
     kwRes, trendRes, radiusRes, connRes, compRes, backlinkRes, metricRes, shippedRes, queryRes, mentionRes, pendingRes,
     propRes, dailyRes, kwCountRes, settingsRes, milestoneRes, entRes, googleRes, publishedRes, metricLatestRes,
@@ -372,10 +430,10 @@ export default async function SeoPortalPage({
     supabase.from("seo_competitors").select("id, domain, label").eq("location_id", loc.id).eq("is_active", true).order("domain"),
     supabase.from("seo_backlink_snapshots").select("snapshot_date, referring_domains_count, total_backlinks, gained_count, lost_count").eq("location_id", loc.id).order("snapshot_date", { ascending: false }).limit(12),
     supabase.from("seo_metrics_daily").select("metric_date, metrics").eq("location_id", loc.id).gte("metric_date", daysAgo(60)).order("metric_date"),
-    supabase.from("seo_actions").select("id, action_type, target_field, target_url, apply_mode, publish_result, proposed_value, published_at").eq("location_id", loc.id).eq("status", "published").gte("published_at", since90).order("published_at", { ascending: false }).limit(25),
+    supabase.from("seo_actions").select("id, action_type, target_field, target_url, apply_mode, publish_result, proposed_value, published_at").in("location_id", siteIds).eq("status", "published").gte("published_at", since90).order("published_at", { ascending: false }).limit(25),
     supabase.from("seo_ai_queries").select("id, query").eq("is_active", true).order("created_at"),
     supabase.from("seo_ai_mentions").select("query_id, platform, cited_count, check_date").gte("check_date", daysAgo(30)).limit(2000),
-    supabase.from("seo_actions").select("id", { count: "exact", head: true }).eq("location_id", loc.id).in("status", ["pending_approval", "manual_required"]),
+    supabase.from("seo_actions").select("id", { count: "exact", head: true }).in("location_id", siteIds).in("status", ["pending_approval", "manual_required"]),
     // Module 21: Search Console traffic for this location's website.
     site
       ? supabase.from("seo_search_properties").select("status, data_through, last_synced_at").eq("site_url", site).maybeSingle()
@@ -390,7 +448,7 @@ export default async function SeoPortalPage({
     supabase.from("seo_milestones").select("occurred_on, label").order("occurred_on"),
     supabase.from("entitlements").select("started_at").eq("feature", "seo").order("started_at").limit(1).maybeSingle(),
     supabase.from("google_oauth_connections").select("connected_at, status").maybeSingle(),
-    supabase.from("seo_actions").select("action_type, target_url, apply_mode, publish_result, proposed_value, published_at").eq("location_id", loc.id).eq("status", "published").gte("published_at", since16m).order("published_at").limit(1000),
+    supabase.from("seo_actions").select("action_type, target_url, apply_mode, publish_result, proposed_value, published_at").in("location_id", siteIds).eq("status", "published").gte("published_at", since16m).order("published_at").limit(1000),
     supabase.from("seo_metrics_daily").select("metric_date").eq("location_id", loc.id).order("metric_date", { ascending: false }).limit(1).maybeSingle(),
     // Module 22: volume and difficulty per phrase (per client, so every
     // location's keywords are in here), and the open suggestions.
@@ -407,22 +465,23 @@ export default async function SeoPortalPage({
       .eq("location_id", loc.id)
       .order("search_volume", { ascending: false, nullsFirst: false })
       .limit(100),
-    // Module 24: the site audit (crawl run state and open findings).
-    supabase.from("seo_crawl_runs").select("phase, pages_crawled, page_limit, truncated, started_at, finished_at").eq("location_id", loc.id).maybeSingle(),
+    // Module 24: the site audit (crawl run state and open findings), the
+    // website's and, on a shared website, this store's own page's (module 29).
+    supabase.from("seo_crawl_runs").select("phase, pages_crawled, page_limit, truncated, started_at, finished_at").eq("location_id", sitePrimaryId).maybeSingle(),
     supabase
       .from("seo_findings")
-      .select("finding_type, severity, title, target_url")
-      .eq("location_id", loc.id)
+      .select("finding_type, severity, title, target_url, location_id, scope:details->>scope")
+      .in("location_id", siteIds)
       .eq("status", "open")
       .in("module", ["crawl", "technical", "backlinks"])
       .limit(3000),
     // Module 25: AI share of voice against competitors, last 30 days.
     supabase.from("seo_ai_share_of_voice").select("query_id, platform, domain, is_client, cited_count, check_date").gte("check_date", daysAgo(30)).limit(5000),
-    // Module 26: link gap and lost links for this location (dismissed sites left out).
+    // Module 26: link gap and lost links for this website (dismissed sites left out).
     supabase
       .from("seo_link_opportunities_open")
       .select("kind, referring_domain, url_from, url_to, competitors, domain_rank, backlinks, anchor, dofollow, lost_date")
-      .eq("location_id", loc.id)
+      .eq("location_id", sitePrimaryId)
       .order("domain_rank", { ascending: false, nullsFirst: false })
       .limit(300),
     // Module 28: this location's local-detail intake.
@@ -437,14 +496,17 @@ export default async function SeoPortalPage({
   const crawlRun = crawlRunRes.data as
     | { phase: "pages" | "links" | "done"; pages_crawled: number; page_limit: number; truncated: boolean; started_at: string; finished_at: string | null }
     | null;
-  const issues = summarizeFindings((findingRes.data ?? []) as FindingRow[]);
+  const findingRows = (findingRes.data ?? []) as (FindingRow & { location_id: string; scope: string | null })[];
+  const { site: siteFindings, store: storeFindings } = splitSiteFindings(findingRows, { shared: siteShared, primaryId: sitePrimaryId, locationId: loc.id });
+  const issues = summarizeFindings(siteFindings);
+  const storeIssues = summarizeFindings(storeFindings);
   const linkOps = (linkRes.data ?? []) as LinkOpportunity[];
   const details = detailsRes.data as (LocationDetails & { confirmed_at: string | null }) | null;
   const linkGaps = linkOps
     .filter((o) => o.kind === "gap")
     .sort((a, b) => b.competitors.length - a.competitors.length || (b.domain_rank ?? -1) - (a.domain_rank ?? -1));
   const lostLinks = linkOps.filter((o) => o.kind === "lost");
-  const brokenPages = ((findingRes.data ?? []) as FindingRow[]).filter((f) => f.finding_type === "backlinks_to_broken_page");
+  const brokenPages = siteFindings.filter((f) => f.finding_type === "backlinks_to_broken_page");
   const trend = (trendRes.data ?? []) as TrendRow[];
   const backlinks = ((backlinkRes.data ?? []) as BacklinkRow[]).slice().reverse();
   const metrics = (metricRes.data ?? []) as MetricRow[];
@@ -1517,9 +1579,13 @@ export default async function SeoPortalPage({
           </Card>
 
           <Card
-            title="Site health"
+            title={siteShared && websiteHost ? `Website health: ${websiteHost}` : "Site health"}
             id="site-health"
-            note="What the weekly audit of your website found, grouped by issue. Fixes to titles and descriptions are drafted for you under Approvals."
+            note={
+              siteShared
+                ? `What the weekly audit of the website found, grouped by issue. ${siteCount} locations share this website, so it's audited once and these issues are the same for all of them. Fixes are drafted for you under Approvals.`
+                : "What the weekly audit of your website found, grouped by issue. Fixes to titles and descriptions are drafted for you under Approvals."
+            }
           >
             {crawlRun ? (
               <p className="mb-3 text-sm text-gray-700">
@@ -1531,35 +1597,27 @@ export default async function SeoPortalPage({
             {issues.length === 0 ? (
               <Empty>{crawlRun ? "No open issues. Nice work." : "The first audit hasn't run yet. It runs weekly."}</Empty>
             ) : (
-              <ul className="divide-y divide-gray-100 text-sm">
-                {issues.map((g) => (
-                  <li key={g.type} className="py-2">
-                    <details>
-                      <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2">
-                        <span className="min-w-0 text-gray-900">{g.label}</span>
-                        <span className="flex items-center gap-2 text-xs">
-                          <span
-                            className={`rounded-full px-2 py-0.5 ${
-                              g.severity === "critical" ? "bg-red-50 text-red-700" : g.severity === "warning" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"
-                            }`}
-                          >
-                            {g.severity === "critical" ? "Fix first" : g.severity === "warning" ? "Worth fixing" : "Good to know"}
-                          </span>
-                          <span className="tabular-nums text-gray-500">{g.count}</span>
-                        </span>
-                      </summary>
-                      <ul className="mt-1 space-y-0.5 pl-3 text-xs text-gray-600">
-                        {g.pages.slice(0, 10).map((u) => (
-                          <li key={u} className="break-all">{pagePath(u)}</li>
-                        ))}
-                        {g.pages.length > 10 ? <li className="text-gray-400">and {g.pages.length - 10} more</li> : null}
-                      </ul>
-                    </details>
-                  </li>
-                ))}
-              </ul>
+              <IssueList issues={issues} />
             )}
           </Card>
+
+          {siteShared ? (
+            <Card
+              title={`${loc.name}: its own page`}
+              id="store-page-health"
+              note={
+                loc.store_page_url
+                  ? `Checks on ${pagePath(loc.store_page_url)}, the page this store's searchers and map visitors land on: its address, phone number and structured data, whether the homepage links to it, and whether Google can read it.`
+                  : "This location has no store page set, so only the website as a whole is checked."
+              }
+            >
+              {storeIssues.length === 0 ? (
+                <Empty>{crawlRun ? "No open issues on this store's page." : "The first audit hasn't run yet. It runs weekly."}</Empty>
+              ) : (
+                <IssueList issues={storeIssues} />
+              )}
+            </Card>
+          ) : null}
 
           <Story
             eyebrow="What's driving it"

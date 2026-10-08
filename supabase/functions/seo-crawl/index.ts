@@ -24,9 +24,17 @@
 // the cron tick (every 5 minutes since 0064) picks it up. A small site still
 // finishes in one call.
 //
-// FINDING LIFECYCLE: unchanged. Open 'crawl' findings for the location are
-// DELETED and replaced with the finished run's set; dismissed/actioned ones
-// are untouched. Nothing is written mid-run, so a half-done crawl never
+// SHARED WEBSITES (module 29, stores.ts, 0070). Several locations on one site
+// are crawled ONCE, by the site's primary location; the run, its pages and
+// link checks are stored under the primary. Every location's store page is
+// queued first and gets the store rules with that store's own details; its
+// findings go to that location (details.scope = 'store'). Everything else on
+// the site goes to the primary. Called for a location that isn't its site's
+// primary, it settles and does nothing.
+//
+// FINDING LIFECYCLE: open 'crawl' findings for every location on the website
+// are DELETED and replaced with the finished run's set; dismissed/actioned
+// ones are untouched. Nothing is written mid-run, so a half-done crawl never
 // replaces a complete set with a partial one.
 //
 // "FAIL CLEARLY INSTEAD OF RETURNING EMPTY RESULTS" (plan.md): a robots.txt
@@ -69,6 +77,18 @@ import {
   sitemapPages,
   sitemapsFromRobots,
 } from "./site.ts";
+import {
+  auditStorePage,
+  noStorePageFinding,
+  notLinkedFinding,
+  pageKey,
+  type SiteGroup,
+  siteGroup,
+  type SiteMember,
+  storeFor,
+  storeLinkedFromHome,
+  storePageMap,
+} from "./stores.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const rawSecrets = Deno.env.get("SUPABASE_SECRET_KEYS");
@@ -220,13 +240,19 @@ async function tryRender(url: string): Promise<string | null> {
 // Run state
 // -----------------------------------------------------------------------------
 
-type LocationRow = {
-  id: string;
+type LocationRow = SiteMember & {
   client_id: string;
-  name: string | null;
-  website_url: string | null;
   phone_number: string | null;
+  address_line1: string | null;
 };
+
+const LOCATION_COLUMNS = "id, client_id, name, website_url, store_page_url, phone_number, address_line1, created_at";
+
+/** The website being crawled: the primary location, everyone sharing the
+ * site, and each one's store page (module 29, stores.ts). */
+type Site = { group: SiteGroup<LocationRow>; stores: Map<string, LocationRow> };
+
+type FindingOut = CrawlFinding & { target_url: string; location_id: string };
 
 type Run = {
   location_id: string;
@@ -318,10 +344,18 @@ function robotsCheck(robots: string | null) {
   };
 }
 
-/** Facts about one fetched page, plus its own (page-level) findings. */
-function pageRow(url: string, f: Fetched, html: string | null, loc: LocationRow, siteHost: string, inSitemap: boolean, isRoot: boolean): PageRow {
+/** Facts about one fetched page, plus its own (page-level) findings. A store
+ * page also gets the store rules (schema, phone, address, reachable, readable
+ * without JavaScript) with that store's own details; every other page gets
+ * only the page rules. */
+function pageRow(url: string, f: Fetched, html: string | null, site: Site, siteHost: string, inSitemap: boolean, isRoot: boolean): PageRow {
   const base = f.hops > 0 ? f.finalUrl : url;
   const links = html ? extractLinks(html, base, siteHost) : { internal: [], outbound: [] };
+  const store = storeFor(site.stores, url);
+  const wordCount = html ? visibleWordCount(html) : null;
+  const findings = html ? auditPage(html, { name: store?.name ?? null, phone_number: store?.phone_number ?? null }, { isRoot: !!store }) : [];
+  // A store URL that redirects is judged where it lands, not here.
+  if (store && f.hops === 0) findings.push(...auditStorePage({ html, status: f.status, wordCount }, store, { shared: site.group.shared }));
   return {
     url,
     status_code: f.status,
@@ -333,10 +367,10 @@ function pageRow(url: string, f: Fetched, html: string | null, loc: LocationRow,
     meta_description: html ? extractMetaDescription(html) : null,
     canonicals: html ? extractCanonicals(html, base) : [],
     noindex: html ? isNoindex(html, f.xRobots) : !!f.xRobots && /\bnoindex\b/i.test(f.xRobots),
-    word_count: html ? visibleWordCount(html) : null,
+    word_count: wordCount,
     internal_links: links.internal,
     outbound_links: links.outbound,
-    page_findings: html ? auditPage(html, { name: loc.name, phone_number: loc.phone_number }, { isRoot }) : [],
+    page_findings: findings,
   };
 }
 
@@ -346,14 +380,15 @@ function pageRow(url: string, f: Fetched, html: string | null, loc: LocationRow,
 
 /** Starts a run: robots, homepage, render fallback, sitemap, first queue.
  * Returns null when the run ended right away with a "couldn't audit" finding. */
-async function startRun(loc: LocationRow): Promise<Run | null> {
+async function startRun(site: Site): Promise<Run | null> {
+  const loc = site.group.primary;
   const startUrl = normalizeUrl(loc.website_url!);
   const origin = new URL(startUrl).origin;
   const robots = await fetchTextFile(new URL("/robots.txt", origin).toString());
   const allowed = robotsCheck(robots);
 
   const endRun = async (status: Parameters<typeof settleCrawl>[1], error: string, finding: CrawlFinding) => {
-    await settleCrawl(loc, status, error, [{ ...finding, target_url: startUrl }]);
+    await settleCrawl(site, status, error, [{ ...finding, target_url: startUrl, location_id: loc.id }]);
     await supabase.from("seo_crawl_runs").delete().eq("location_id", loc.id);
     return null;
   };
@@ -433,12 +468,19 @@ async function startRun(loc: LocationRow): Promise<Run | null> {
   const pageLimit = await pageLimitFor(loc.client_id);
   // The homepage is recorded where it lands (website_url → https://www. is
   // normal, and module 17 already reports a long redirect chain there), so a
-  // sitemap listing the final URL isn't mistaken for "lists a redirect".
-  const rootRow = pageRow(root.finalUrl, { ...root, hops: 0 }, rootHtml, loc, siteHost, sitemapSet.has(root.finalUrl), true);
+  // sitemap listing the final URL isn't mistaken for "lists a redirect". A
+  // single-location site's store page is the homepage, wherever it lands.
+  const rootSite: Site = { group: site.group, stores: storePageMap(site.group, root.finalUrl) };
+  const rootRow = pageRow(root.finalUrl, { ...root, hops: 0 }, rootHtml, rootSite, siteHost, sitemapSet.has(root.finalUrl), true);
+
+  // Store pages go first, so a page limit can't leave a store unchecked.
+  const storeUrls = site.group.members
+    .map((m) => (m.store_page_url && pageKey(m.store_page_url) ? normalizeUrl(m.store_page_url) : null))
+    .filter((u): u is string => !!u && sameSite(u, siteHost));
 
   const seen = new Set([startUrl, root.finalUrl]);
   const queue: string[] = [];
-  for (const u of [...sitemap, ...rootRow.internal_links]) {
+  for (const u of [...storeUrls, ...sitemap, ...rootRow.internal_links]) {
     if (seen.has(u) || !allowed(u)) continue;
     seen.add(u);
     queue.push(u);
@@ -469,7 +511,8 @@ async function startRun(loc: LocationRow): Promise<Run | null> {
 
 /** Fetch queued pages until the queue is empty, the limit is reached, or the
  * step's time is up. Discovered links join the end of the queue. */
-async function crawlPages(loc: LocationRow, run: Run, deadline: number): Promise<void> {
+async function crawlPages(site: Site, run: Run, deadline: number): Promise<void> {
+  const loc = site.group.primary;
   const robots = await fetchTextFile(new URL("/robots.txt", run.root_url).toString());
   const allowed = robotsCheck(robots);
   const sitemapSet = new Set(run.sitemap_urls);
@@ -495,7 +538,7 @@ async function crawlPages(loc: LocationRow, run: Run, deadline: number): Promise
     // A URL that redirects records only its status and hops. Its HTML belongs
     // to the page it lands on, which is crawled in its own right (below), so
     // auditing it here would report that page's copy twice.
-    const row = pageRow(url, f, f.hops > 0 ? null : f.html, loc, run.site_host, sitemapSet.has(url), false);
+    const row = pageRow(url, f, f.hops > 0 ? null : f.html, site, run.site_host, sitemapSet.has(url), false);
     batch.push(row);
     run.pages_crawled++;
 
@@ -592,8 +635,11 @@ async function checkLinks(loc: LocationRow, run: Run, deadline: number): Promise
   await saveRun(run);
 }
 
-/** Site-wide rules over the finished run, then the one findings write. */
-async function finish(loc: LocationRow, run: Run): Promise<number> {
+/** Site-wide rules over the finished run, then the one findings write. Each
+ * finding goes to the location it's about: a store page's to that store, the
+ * rest of the site's to the primary. */
+async function finish(site: Site, run: Run): Promise<number> {
+  const loc = site.group.primary;
   const [{ data: pageData, error: pErr }, { data: checkData, error: cErr }] = await Promise.all([
     supabase
       .from("seo_crawl_pages")
@@ -606,19 +652,29 @@ async function finish(loc: LocationRow, run: Run): Promise<number> {
   if (cErr) throw new Error(`reading link checks failed: ${cErr.message}`);
   const pages = (pageData ?? []) as (PageFact & { page_findings: CrawlFinding[] })[];
 
-  const findings: (CrawlFinding & { target_url: string })[] = [];
-  for (const p of pages) for (const f of p.page_findings ?? []) findings.push({ ...f, target_url: p.url });
-  findings.push(
-    ...auditSite({
-      siteHost: run.site_host,
-      pages,
-      checks: (checkData ?? []) as LinkCheck[],
-      pageLimit: run.page_limit,
-      truncated: run.truncated,
-      sitemapFound: run.sitemap_found,
-      sitemapUrlCount: run.sitemap_url_count,
-    }),
-  );
+  // A finding about a store page belongs to that store, marked scope 'store'
+  // so the dashboard can tell "this store's page" from "the website".
+  const owner = (url: string) => storeFor(site.stores, url);
+  const place = (f: CrawlFinding, url: string): FindingOut => {
+    const store = owner(url);
+    return store
+      ? { ...f, details: { ...f.details, scope: "store" }, target_url: url, location_id: store.id }
+      : { ...f, target_url: url, location_id: loc.id };
+  };
+
+  const findings: FindingOut[] = [];
+  for (const p of pages) for (const f of p.page_findings ?? []) findings.push(place(f, p.url));
+  for (const f of auditSite({
+    siteHost: run.site_host,
+    pages,
+    checks: (checkData ?? []) as LinkCheck[],
+    pageLimit: run.page_limit,
+    truncated: run.truncated,
+    sitemapFound: run.sitemap_found,
+    sitemapUrlCount: run.sitemap_url_count,
+  })) {
+    findings.push(place(f, f.target_url));
+  }
   if (run.rendered_root) {
     findings.push({
       finding_type: "javascript_rendered_site_audited_via_render",
@@ -626,10 +682,26 @@ async function finish(loc: LocationRow, run: Run): Promise<number> {
       title: "This site needed a headless-browser render to audit — a plain fetch alone wasn't enough",
       details: { url: run.root_url },
       target_url: run.root_url,
+      location_id: loc.id,
     });
   }
 
-  await settleCrawl(loc, "ok", null, findings, pages.length);
+  // The path to each store: is its page set, and does the homepage link to it?
+  if (site.group.shared) {
+    const root = pages.find((p) => p.is_root);
+    for (const m of site.group.members) {
+      const storeUrl = m.store_page_url && pageKey(m.store_page_url) ? normalizeUrl(m.store_page_url) : null;
+      if (!storeUrl) {
+        findings.push({ ...noStorePageFinding(), details: { scope: "store" }, target_url: run.root_url, location_id: m.id });
+      } else if (!sameSite(storeUrl, run.site_host)) {
+        continue; // a store page on another website isn't this crawl's to judge
+      } else if (root && pageKey(storeUrl) !== pageKey(root.url) && !storeLinkedFromHome(root.internal_links, storeUrl)) {
+        findings.push({ ...notLinkedFinding(), details: { scope: "store", homepage: root.url }, target_url: storeUrl, location_id: m.id });
+      }
+    }
+  }
+
+  await settleCrawl(site, "ok", null, findings, pages.length);
 
   // Keep only this run's rows.
   await supabase.from("seo_crawl_pages").delete().eq("location_id", loc.id).neq("run_id", run.run_id);
@@ -637,7 +709,8 @@ async function finish(loc: LocationRow, run: Run): Promise<number> {
   return findings.length;
 }
 
-async function step(loc: LocationRow): Promise<Record<string, unknown>> {
+async function step(site: Site): Promise<Record<string, unknown>> {
+  const loc = site.group.primary;
   const deadline = Date.now() + STEP_BUDGET_MS;
 
   const { data: existing, error } = await supabase.from("seo_crawl_runs").select("*").eq("location_id", loc.id).maybeSingle();
@@ -646,15 +719,15 @@ async function step(loc: LocationRow): Promise<Record<string, unknown>> {
   const stale = run && run.phase !== "done" && Date.now() - new Date(run.started_at).getTime() > STALE_RUN_MS;
 
   if (!run || run.phase === "done" || stale) {
-    run = await startRun(loc);
+    run = await startRun(site);
     if (!run) return { phase: "ended_early" };
   }
 
-  if (run.phase === "pages") await crawlPages(loc, run, deadline);
+  if (run.phase === "pages") await crawlPages(site, run, deadline);
   if (run.phase === "links" && Date.now() < deadline) await checkLinks(loc, run, deadline);
 
   if (run.phase === "done") {
-    const n = await finish(loc, run);
+    const n = await finish(site, run);
     return { phase: "done", pages: run.pages_crawled, findings: n, truncated: run.truncated };
   }
 
@@ -673,19 +746,22 @@ async function step(loc: LocationRow): Promise<Record<string, unknown>> {
 }
 
 async function settleCrawl(
-  loc: LocationRow,
+  site: Site,
   status: "ok" | "js_rendered" | "fetch_failed" | "robots_disallowed",
   error: string | null,
-  findings: (CrawlFinding & { target_url?: string })[],
+  findings: FindingOut[],
   pagesCrawled = 0,
 ): Promise<void> {
-  // Replace this location's OPEN crawl findings with the fresh set — a fixed
-  // issue disappears on its own next week instead of accumulating duplicate
-  // rows for a persistent one. Dismissed/actioned findings are untouched.
+  const loc = site.group.primary;
+  const memberIds = site.group.members.map((m) => m.id);
+  // Replace the website's OPEN crawl findings (every location sharing it) with
+  // the fresh set — a fixed issue disappears on its own next week instead of
+  // accumulating duplicate rows for a persistent one. Dismissed/actioned
+  // findings are untouched.
   const { error: delErr } = await supabase
     .from("seo_findings")
     .delete()
-    .eq("location_id", loc.id)
+    .in("location_id", memberIds)
     .eq("module", "crawl")
     .eq("status", "open");
   if (delErr) console.error(`seo-crawl ${loc.id}: clearing old findings failed: ${delErr.message}`);
@@ -693,7 +769,7 @@ async function settleCrawl(
   if (findings.length > 0) {
     const rows = findings.map((f) => ({
       client_id: loc.client_id,
-      location_id: loc.id,
+      location_id: f.location_id,
       module: "crawl",
       finding_type: f.finding_type,
       severity: f.severity,
@@ -710,7 +786,7 @@ async function settleCrawl(
   const { error: updErr } = await supabase
     .from("seo_locations")
     .update({ last_crawled_at: new Date().toISOString(), crawl_status: status, crawl_error: error })
-    .eq("id", loc.id);
+    .in("id", memberIds);
   if (updErr) console.error(`seo-crawl ${loc.id}: updating location status failed: ${updErr.message}`);
 
   // js_rendered/robots_disallowed are steady states, not transient failures:
@@ -752,17 +828,36 @@ Deno.serve(async (req) => {
   const locationId = String(body.location_id ?? "").trim();
   if (!locationId) return json({ error: "location_id is required" }, 400);
 
-  const { data: loc, error } = await supabase
-    .from("seo_locations")
-    .select("id, client_id, name, website_url, phone_number")
-    .eq("id", locationId)
-    .maybeSingle();
+  const { data: loc, error } = await supabase.from("seo_locations").select(LOCATION_COLUMNS).eq("id", locationId).maybeSingle();
   if (error) return json({ error: error.message }, 500);
   if (!loc) return json({ error: "location not found" }, 404);
   if (!loc.website_url) return json({ status: "no_website", location_id: locationId });
 
   try {
-    const result = await step(loc as LocationRow);
+    // Module 29: the website is crawled once, by its primary location.
+    const { data: all, error: sErr } = await supabase
+      .from("seo_locations")
+      .select(LOCATION_COLUMNS)
+      .eq("client_id", loc.client_id)
+      .eq("is_active", true);
+    if (sErr) throw new Error(`reading sibling locations failed: ${sErr.message}`);
+    const group = siteGroup((all ?? []) as LocationRow[], loc as LocationRow)!;
+    if (group.primary.id !== loc.id) {
+      // Dispatched for a location that no longer leads its website (0070's
+      // scheduler won't do this): settle quietly for the normal interval.
+      await supabase.rpc("complete_job_attempt", {
+        p_client_id: loc.client_id,
+        p_job_type: "seo_crawl",
+        p_success: true,
+        p_error: null,
+        p_base_interval_minutes: BASE_INTERVAL_MINUTES,
+        p_max_backoff_minutes: MAX_BACKOFF_MINUTES,
+        p_entity_id: loc.id,
+      });
+      return json({ ok: true, location_id: locationId, status: "not_primary", primary_location_id: group.primary.id });
+    }
+    const site: Site = { group, stores: storePageMap(group, group.primary.website_url) };
+    const result = await step(site);
     console.log(`seo-crawl ${locationId}: ${JSON.stringify(result)}`);
     return json({ ok: true, location_id: locationId, ...result });
   } catch (e) {

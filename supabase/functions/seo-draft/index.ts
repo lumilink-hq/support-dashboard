@@ -25,6 +25,12 @@
 // already waiting on a person (2026-10-02), so a big crawl can't spend the
 // model budget on drafts nobody has reviewed.
 //
+// SHARED WEBSITES (module 29). Since 0070 the site's primary location holds
+// the findings for pages every store shares, and each store holds its own
+// page's. A shared page is drafted with the brand (the client's name) and no
+// city; a store page with that store's facts. The draft's diff carries
+// scope 'site' or 'store'. Imports ../seo-crawl/stores.ts.
+//
 // FINDING LIFECYCLE. A finding that gets a draft is marked 'actioned'.
 // seo-crawl deletes only OPEN findings, so the finding (and the action's link to
 // it) survives the next crawl; when the crawl re-detects an unfixed issue it
@@ -54,6 +60,7 @@ import {
   type FindingRow,
   type LocationFacts,
 } from "./lib.ts";
+import { draftFactsFor, type SiteGroup, siteGroup, type SiteMember } from "../seo-crawl/stores.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const rawSecrets = Deno.env.get("SUPABASE_SECRET_KEYS");
@@ -115,7 +122,12 @@ async function callModel(userPayload: string): Promise<string> {
 
 type Outcome = { drafted: number; skipped: number; failed: number };
 
-async function draftLocation(loc: LocationFacts & { id: string; client_id: string }): Promise<Outcome> {
+type DraftLocation = LocationFacts & SiteMember & { id: string; client_id: string };
+
+const LOCATION_COLUMNS =
+  "id, client_id, name, address_line1, city, region, postal_code, country_code, phone_number, website_url, store_page_url, primary_category, created_at";
+
+async function draftLocation(loc: DraftLocation, group: SiteGroup<DraftLocation> | null, brandName: string | null): Promise<Outcome> {
   const out: Outcome = { drafted: 0, skipped: 0, failed: 0 };
 
   const { data: findings, error: fErr } = await supabase
@@ -152,11 +164,14 @@ async function draftLocation(loc: LocationFacts & { id: string; client_id: strin
     (f) => !covered.has(`${f.target_url ?? ""}|${f.finding_type}`),
   );
 
-  // ---- LocalBusiness schema: one site-wide draft, no model ------------------
+  // ---- LocalBusiness schema: one draft per store page, no model -------------
+  // The crawl reports it on the store's own page (module 29), or the homepage
+  // when the location has none; the schema points at that page.
   const schemaFindings = todo.filter((f) => f.finding_type === "missing_local_business_schema");
   if (schemaFindings.length > 0) {
-    const schema = buildLocalBusinessSchema(loc);
-    const target = siteTarget(loc.website_url);
+    const storePage = loc.store_page_url?.trim() ? schemaFindings[0].target_url : null;
+    const schema = buildLocalBusinessSchema(storePage ? { ...loc, website_url: storePage } : loc);
+    const target = storePage ?? siteTarget(loc.website_url);
     const siteWide = `${target ?? ""}|missing_local_business_schema`;
     if (!schema || !target) {
       out.skipped += schemaFindings.length;
@@ -174,6 +189,7 @@ async function draftLocation(loc: LocationFacts & { id: string; client_id: strin
         after,
         targetUrl: target,
         draftedBy: "deterministic",
+        scope: "store",
       });
       if (ok) {
         out.drafted++;
@@ -205,9 +221,13 @@ async function draftLocation(loc: LocationFacts & { id: string; client_id: strin
     const plan = planDraft(finding);
     if (!plan || plan.field === "local_business_schema") continue;
 
+    // Module 29: a page shared by every store on the website is written with
+    // the brand name and no city; a store's own page with that store's facts.
+    const { facts, scope } = draftFactsFor(loc, group, finding.target_url, brandName);
+
     let text: string;
     try {
-      text = await callModel(buildUserPayload(plan.field, loc, plan.previous, finding.target_url, plan.duplicate));
+      text = await callModel(buildUserPayload(plan.field, { ...loc, ...facts }, plan.previous, finding.target_url, plan.duplicate));
     } catch (e) {
       console.error(`seo-draft ${loc.id} finding ${finding.id}: model call failed: ${e instanceof Error ? e.message : e}`);
       out.failed++;
@@ -227,6 +247,7 @@ async function draftLocation(loc: LocationFacts & { id: string; client_id: strin
       after: verdict.text,
       targetUrl: finding.target_url,
       draftedBy: MODEL,
+      scope,
     });
     if (ok) {
       out.drafted++;
@@ -242,7 +263,7 @@ async function draftLocation(loc: LocationFacts & { id: string; client_id: strin
 async function insertAction(
   loc: { id: string; client_id: string },
   finding: FindingRow,
-  d: { field: string; previous: string | null; after: string; targetUrl: string | null; draftedBy: string },
+  d: { field: string; previous: string | null; after: string; targetUrl: string | null; draftedBy: string; scope: "site" | "store" },
 ): Promise<boolean> {
   const { error } = await supabase.from("seo_actions").insert({
     client_id: loc.client_id,
@@ -254,7 +275,8 @@ async function insertAction(
     target_url: d.targetUrl,
     previous_value: { value: d.previous },
     proposed_value: { value: d.after },
-    diff: buildDiff(d.field as never, d.previous, d.after),
+    // scope 'site': the approvals queue labels it "Whole website", not a store.
+    diff: { ...buildDiff(d.field as never, d.previous, d.after), scope: d.scope },
     status: "pending_approval",
     idempotency_key: idempotencyKey(finding.id),
     drafted_by: d.draftedBy,
@@ -306,16 +328,18 @@ Deno.serve(async (req) => {
   const locationId = String(body.location_id ?? "").trim();
   if (!locationId) return json({ error: "location_id is required" }, 400);
 
-  const { data: loc, error } = await supabase
-    .from("seo_locations")
-    .select("id, client_id, name, address_line1, city, region, postal_code, country_code, phone_number, website_url, primary_category")
-    .eq("id", locationId)
-    .maybeSingle();
+  const { data: loc, error } = await supabase.from("seo_locations").select(LOCATION_COLUMNS).eq("id", locationId).maybeSingle();
   if (error) return json({ error: error.message }, 500);
   if (!loc) return json({ error: "location not found" }, 404);
 
   try {
-    const outcome = await draftLocation(loc);
+    const [{ data: all, error: sErr }, { data: client }] = await Promise.all([
+      supabase.from("seo_locations").select(LOCATION_COLUMNS).eq("client_id", loc.client_id).eq("is_active", true),
+      supabase.from("clients").select("name").eq("id", loc.client_id).maybeSingle(),
+    ]);
+    if (sErr) throw new Error(`reading sibling locations failed: ${sErr.message}`);
+    const group = siteGroup((all ?? []) as DraftLocation[], loc as DraftLocation);
+    const outcome = await draftLocation(loc as DraftLocation, group, client?.name ?? null);
     // A model or insert failure backs the job off; a validator rejection does
     // not (the model answered, the answer just wasn't usable).
     const failed = outcome.failed > 0;

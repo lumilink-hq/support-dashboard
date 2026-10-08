@@ -24,6 +24,10 @@
 //
 // About $0.35 a location-month at 5 competitors (see 0066).
 //
+// SHARED WEBSITES (module 29, 0070): links point at a website, not a store, so
+// a site shared by several locations is pulled once, by its primary, using
+// every location's competitors. Imports ../seo-crawl/stores.ts.
+//
 // Env: SUPABASE_URL, SUPABASE_SECRET_KEYS (["default"] = service role),
 //      VOICE_TOOL_SECRET, DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD,
 //      DATAFORSEO_BASE_URL (optional; tests point it at a mock).
@@ -42,6 +46,7 @@ import {
   parseLost,
   targetDomain,
 } from "./lib.ts";
+import { siteGroup, type SiteMember } from "../seo-crawl/stores.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const rawSecrets = Deno.env.get("SUPABASE_SECRET_KEYS");
@@ -105,7 +110,9 @@ async function settle(clientId: string, locationId: string, success: boolean, er
   if (jobError) console.error(`seo-link-opportunities ${locationId}: complete_job_attempt failed: ${jobError.message}`);
 }
 
-type LocationRow = { id: string; client_id: string; website_url: string | null };
+type LocationRow = SiteMember & { client_id: string };
+
+const LOCATION_COLUMNS = "id, client_id, name, website_url, store_page_url, created_at";
 
 async function replaceRows(loc: LocationRow, kind: "gap" | "lost", rows: Record<string, unknown>[]): Promise<void> {
   const { error: delErr } = await supabase.from("seo_link_opportunities").delete().eq("location_id", loc.id).eq("kind", kind);
@@ -117,7 +124,7 @@ async function replaceRows(loc: LocationRow, kind: "gap" | "lost", rows: Record<
   if (error) throw new Error(`writing ${kind} rows failed: ${error.message}`);
 }
 
-async function pullLocation(loc: LocationRow): Promise<Record<string, unknown>> {
+async function pullLocation(loc: LocationRow, siteLocationIds: string[]): Promise<Record<string, unknown>> {
   const site = targetDomain(loc.website_url);
   if (!site) return { status: "no_domain", errors: [] };
 
@@ -127,7 +134,9 @@ async function pullLocation(loc: LocationRow): Promise<Record<string, unknown>> 
   let ok = 0;
 
   // ---- Link gap -------------------------------------------------------------
-  const { data: comps, error: cErr } = await supabase.from("seo_competitors").select("domain").eq("location_id", loc.id).eq("is_active", true).order("created_at");
+  // Every location on the website's competitors (module 29), de-duplicated by
+  // competitorList.
+  const { data: comps, error: cErr } = await supabase.from("seo_competitors").select("domain").in("location_id", siteLocationIds).eq("is_active", true).order("created_at");
   if (cErr) throw new Error(`reading seo_competitors failed: ${cErr.message}`);
   const competitors = competitorList(((comps ?? []) as { domain: string }[]).map((c) => c.domain), site);
   if (competitors.length < 2) {
@@ -214,12 +223,21 @@ Deno.serve(async (req) => {
   const locationId = String(body.location_id ?? "").trim();
   if (!locationId) return json({ error: "location_id is required" }, 400);
 
-  const { data: loc, error } = await supabase.from("seo_locations").select("id, client_id, website_url").eq("id", locationId).maybeSingle();
+  const { data: loc, error } = await supabase.from("seo_locations").select(LOCATION_COLUMNS).eq("id", locationId).maybeSingle();
   if (error) return json({ error: error.message }, 500);
   if (!loc) return json({ error: "location not found" }, 404);
 
   try {
-    const result = await pullLocation(loc as LocationRow);
+    // Module 29: link opportunities belong to the website, pulled once by its
+    // primary location.
+    const { data: all, error: sErr } = await supabase.from("seo_locations").select(LOCATION_COLUMNS).eq("client_id", loc.client_id).eq("is_active", true);
+    if (sErr) throw new Error(`reading sibling locations failed: ${sErr.message}`);
+    const group = siteGroup((all ?? []) as LocationRow[], loc as LocationRow);
+    if (group && group.primary.id !== loc.id) {
+      await settle(loc.client_id, loc.id, true, null);
+      return json({ ok: true, location_id: locationId, status: "not_primary", primary_location_id: group.primary.id });
+    }
+    const result = await pullLocation(loc as LocationRow, group ? group.members.map((m) => m.id) : [loc.id]);
     const failed = result.status === "failed";
     const errors = (result.errors as string[]) ?? [];
     await settle(loc.client_id, loc.id, !failed, failed ? errors.join("; ").slice(0, 500) : null);

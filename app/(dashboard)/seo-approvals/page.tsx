@@ -93,7 +93,8 @@ type ActionRow = {
   status: string;
   target_field: string | null;
   target_url: string | null;
-  diff: { field?: string; before?: string | null; after?: string } | null;
+  // scope (module 29): 'site' = a page every location on the website shares.
+  diff: { field?: string; before?: string | null; after?: string; scope?: "site" | "store" } | null;
   apply_mode: string | null;
   manual_instructions: ManualInstructions | null;
   error: string | null;
@@ -362,7 +363,7 @@ export default async function SeoApprovalsPage({
                   {STATUS_LABELS[item.status] ?? humanize(item.status)}
                 </span>
                 <span className="text-xs text-gray-400">
-                  {item.seo_locations?.name ? `${item.seo_locations.name} · ` : ""}
+                  {item.diff?.scope === "site" ? "Whole website · " : item.seo_locations?.name ? `${item.seo_locations.name} · ` : ""}
                   drafted {timeAgo(item.created_at)}
                   {item.published_at ? ` · live ${timeAgo(item.published_at)}` : ""}
                 </span>

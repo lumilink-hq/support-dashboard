@@ -143,6 +143,7 @@ export const SYSTEM_PROMPT = [
   "- No HTML, no URLs, no phone numbers, no emoji.",
   "- Write for a person deciding whether to click or call: natural, specific, no keyword stuffing, no superlatives such as 'best' or '#1'.",
   "- Stay within min_chars and max_chars.",
+  "- If city is empty, do not name any city, neighbourhood or single location (the page may serve several).",
   "- field 'title_tag': lead with what the business does, include the business name and the city if known.",
   "- field 'meta_description': one or two plain sentences saying what the business does and where, ending with a light call to action.",
   "- field 'h1': the page's main heading, what the business does and where, without repeating the title tag word for word.",

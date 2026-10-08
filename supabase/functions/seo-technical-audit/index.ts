@@ -21,6 +21,11 @@
 // findings for this location are replaced with this run's fresh set.
 // Dismissed/actioned findings are untouched.
 //
+// SHARED WEBSITES (module 29, 0070): a site shared by several locations is
+// audited once, by its primary; each store page also gets PageSpeed and URL
+// Inspection, filed under that store (details.scope = 'store'). Imports
+// ../seo-crawl/stores.ts, so a change there means redeploying this too.
+//
 // MANUAL ACTIONS IS NOT HERE. See lib.ts's header — no public API exists.
 //
 // Env: SUPABASE_URL, SUPABASE_SECRET_KEYS (["default"] = service role),
@@ -37,6 +42,7 @@ import {
   type Finding,
   type RedirectHop,
 } from "./lib.ts";
+import { pageKey, type SiteGroup, siteGroup, siteKey, type SiteMember } from "../seo-crawl/stores.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const rawSecrets = Deno.env.get("SUPABASE_SECRET_KEYS");
@@ -227,14 +233,17 @@ async function runUrlInspection(
   }
 }
 
-type LocationRow = {
-  id: string;
+type LocationRow = SiteMember & {
   client_id: string;
-  website_url: string | null;
   search_console_site_url: string | null;
 };
 
-async function auditLocation(loc: LocationRow): Promise<void> {
+const LOCATION_COLUMNS = "id, client_id, name, website_url, store_page_url, search_console_site_url, created_at";
+
+type FindingOut = Finding & { target_url: string; location_id: string };
+
+async function auditSite(group: SiteGroup<LocationRow>): Promise<number> {
+  const loc = group.primary;
   const startUrl = loc.website_url!;
   const origin = new URL(startUrl).origin;
 
@@ -246,22 +255,36 @@ async function auditLocation(loc: LocationRow): Promise<void> {
 
   const sitemap = await findSitemap(origin, robots);
 
-  const findings: (Finding & { target_url: string })[] = [
-    ...analyzeRedirectChain(hops).map((f) => ({ ...f, target_url: startUrl })),
-    ...analyzeRobotsTxt(robots !== null, robots).map((f) => ({ ...f, target_url: new URL("/robots.txt", origin).toString() })),
-    ...analyzeSitemap(sitemap.found, sitemap.url).map((f) => ({ ...f, target_url: sitemap.url ?? startUrl })),
-    ...psiFindings.map((f) => ({ ...f, target_url: startUrl })),
+  const findings: FindingOut[] = [
+    ...analyzeRedirectChain(hops).map((f) => ({ ...f, target_url: startUrl, location_id: loc.id })),
+    ...analyzeRobotsTxt(robots !== null, robots).map((f) => ({ ...f, target_url: new URL("/robots.txt", origin).toString(), location_id: loc.id })),
+    ...analyzeSitemap(sitemap.found, sitemap.url).map((f) => ({ ...f, target_url: sitemap.url ?? startUrl, location_id: loc.id })),
+    ...psiFindings.map((f) => ({ ...f, target_url: startUrl, location_id: loc.id })),
   ];
 
   if (loc.search_console_site_url) {
     const urlInspectionFindings = await runUrlInspection(loc.client_id, startUrl, loc.search_console_site_url);
-    findings.push(...urlInspectionFindings.map((f) => ({ ...f, target_url: startUrl })));
+    findings.push(...urlInspectionFindings.map((f) => ({ ...f, target_url: startUrl, location_id: loc.id })));
+  }
+
+  // Module 29: on a shared website, each store's own page is where its
+  // customers land from search and maps, so it gets speed and indexing checks
+  // of its own, filed under that store.
+  if (group.shared) {
+    for (const m of group.members) {
+      const page = m.store_page_url?.trim();
+      if (!page || siteKey(page) !== group.key || pageKey(page) === pageKey(startUrl)) continue;
+      const tag = (f: Finding): FindingOut => ({ ...f, details: { ...f.details, scope: "store" }, target_url: page, location_id: m.id });
+      findings.push(...(await runPageSpeed(page)).map(tag));
+      const property = (m.search_console_site_url ?? loc.search_console_site_url ?? "").trim();
+      if (property) findings.push(...(await runUrlInspection(loc.client_id, page, property)).map(tag));
+    }
   }
 
   const { error: delErr } = await supabase
     .from("seo_findings")
     .delete()
-    .eq("location_id", loc.id)
+    .in("location_id", group.members.map((m) => m.id))
     .eq("module", "technical")
     .eq("status", "open");
   if (delErr) console.error(`seo-technical-audit ${loc.id}: clearing old findings failed: ${delErr.message}`);
@@ -269,7 +292,7 @@ async function auditLocation(loc: LocationRow): Promise<void> {
   if (findings.length > 0) {
     const rows = findings.map((f) => ({
       client_id: loc.client_id,
-      location_id: loc.id,
+      location_id: f.location_id,
       module: "technical",
       finding_type: f.finding_type,
       severity: f.severity,
@@ -291,7 +314,8 @@ async function auditLocation(loc: LocationRow): Promise<void> {
   });
   if (jobError) console.error(`seo-technical-audit ${loc.id}: complete_job_attempt failed: ${jobError.message}`);
 
-  console.log(`seo-technical-audit ${loc.id}: findings=${findings.length} hops=${hops.length}`);
+  console.log(`seo-technical-audit ${loc.id}: findings=${findings.length} hops=${hops.length} locations=${group.members.length}`);
+  return findings.length;
 }
 
 Deno.serve(async (req) => {
@@ -315,18 +339,31 @@ Deno.serve(async (req) => {
   const locationId = String(body.location_id ?? "").trim();
   if (!locationId) return json({ error: "location_id is required" }, 400);
 
-  const { data: loc, error } = await supabase
-    .from("seo_locations")
-    .select("id, client_id, website_url, search_console_site_url")
-    .eq("id", locationId)
-    .maybeSingle();
+  const { data: loc, error } = await supabase.from("seo_locations").select(LOCATION_COLUMNS).eq("id", locationId).maybeSingle();
   if (error) return json({ error: error.message }, 500);
   if (!loc) return json({ error: "location not found" }, 404);
   if (!loc.website_url) return json({ status: "no_website", location_id: locationId });
 
   try {
-    await auditLocation(loc as LocationRow);
-    return json({ ok: true, location_id: locationId });
+    // Module 29: a website shared by several locations is audited once, by
+    // its primary location.
+    const { data: all, error: sErr } = await supabase.from("seo_locations").select(LOCATION_COLUMNS).eq("client_id", loc.client_id).eq("is_active", true);
+    if (sErr) throw new Error(`reading sibling locations failed: ${sErr.message}`);
+    const group = siteGroup((all ?? []) as LocationRow[], loc as LocationRow);
+    if (!group) return json({ status: "no_website", location_id: locationId });
+    if (group.primary.id !== loc.id) {
+      await supabase.rpc("complete_job_attempt", {
+        p_client_id: loc.client_id,
+        p_job_type: "seo_technical_audit",
+        p_success: true,
+        p_base_interval_minutes: BASE_INTERVAL_MINUTES,
+        p_max_backoff_minutes: MAX_BACKOFF_MINUTES,
+        p_entity_id: loc.id,
+      });
+      return json({ ok: true, location_id: locationId, status: "not_primary", primary_location_id: group.primary.id });
+    }
+    const n = await auditSite(group);
+    return json({ ok: true, location_id: locationId, findings: n, locations: group.members.length });
   } catch (e) {
     const reason = e instanceof Error ? e.message : "audit failed";
     console.error(`seo-technical-audit ${locationId} unhandled: ${reason}`);
