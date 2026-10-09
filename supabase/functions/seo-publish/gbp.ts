@@ -45,16 +45,67 @@ export class GbpError extends Error {
   }
 }
 
-type Location = { profile?: { description?: string }; metadata?: { hasPendingEdits?: boolean } };
+type Category = { name?: string; displayName?: string };
+type Location = {
+  profile?: { description?: string };
+  categories?: { primaryCategory?: Category; additionalCategories?: Category[] };
+  metadata?: { hasPendingEdits?: boolean };
+};
 
-/** The whole allowlist. Each field: the readMask to read it, how to read it,
- * the updateMask to write it, and the PATCH body. */
-export const GBP_WRITABLE: Record<string, { readMask: string; updateMask: string; read: (l: Location) => string; body: (v: string) => Record<string, unknown> }> = {
+/** Additional categories travel as a JSON array of category ids, sorted. */
+function categoryValue(v: string): string[] {
+  try {
+    const a = JSON.parse(v);
+    return Array.isArray(a) ? [...new Set(a.filter((x): x is string => typeof x === "string"))].sort() : [];
+  } catch {
+    return [];
+  }
+}
+
+type FieldSpec = {
+  readMask: string;
+  updateMask: string;
+  /** The field's value as a string (categories: a sorted JSON array of ids). */
+  read: (l: Location) => string;
+  /** Equal values compare equal however they were written. */
+  canon: (v: string) => string;
+  /** The PATCH body, given the value and the profile as just read. */
+  body: (v: string, live: Location) => Record<string, unknown>;
+  /** Anything the write must leave exactly as it was (rule 2). */
+  unchanged?: (before: Location, after: Location) => boolean;
+  label: string;
+};
+
+/** The whole allowlist (rule 2). Each field fixes its own masks and body. */
+export const GBP_WRITABLE: Record<string, FieldSpec> = {
   gbp_description: {
     readMask: "profile,metadata",
     updateMask: "profile.description",
     read: (l) => l.profile?.description ?? "",
+    canon: (v) => v,
     body: (v) => ({ profile: { description: v } }),
+    label: "description",
+  },
+  // Google documents no mask for additional categories alone, so the whole
+  // "categories" object is sent with the primary copied from the profile as read
+  // a moment earlier, and the primary is checked again after the write.
+  gbp_additional_categories: {
+    readMask: "categories,metadata",
+    updateMask: "categories",
+    read: (l) => JSON.stringify((l.categories?.additionalCategories ?? []).map((c) => c.name ?? "").filter(Boolean).sort()),
+    canon: (v) => JSON.stringify(categoryValue(v)),
+    body: (v, live) => {
+      const primary = live.categories?.primaryCategory?.name;
+      if (!primary) throw new GbpError("user", "the profile has no primary category to keep");
+      return {
+        categories: {
+          primaryCategory: { name: primary },
+          additionalCategories: categoryValue(v).map((name) => ({ name })),
+        },
+      };
+    },
+    unchanged: (before, after) => (before.categories?.primaryCategory?.name ?? null) === (after.categories?.primaryCategory?.name ?? null),
+    label: "categories",
   },
 };
 
@@ -109,17 +160,24 @@ async function call(ctx: GbpCtx, method: "GET" | "PATCH", url: string, body?: un
   }
 }
 
-export async function readField(ctx: GbpCtx, locationName: string, field: string): Promise<{ value: string; pending: boolean }> {
+export async function readField(ctx: GbpCtx, locationName: string, field: string): Promise<{ value: string; pending: boolean; location: Location }> {
   const spec = GBP_WRITABLE[field];
   if (!spec) throw new GbpError("user", `${field} is not a writable profile field`);
   if (!validLocationName(locationName)) throw new GbpError("not_found", `bad location name ${locationName}`);
   const l = await call(ctx, "GET", `${baseUrl(ctx)}/v1/${locationName}?readMask=${encodeURIComponent(spec.readMask)}`);
-  return { value: spec.read(l), pending: l.metadata?.hasPendingEdits === true };
+  return { value: spec.read(l), pending: l.metadata?.hasPendingEdits === true, location: l };
 }
 
-async function writeField(ctx: GbpCtx, locationName: string, field: string, value: string): Promise<void> {
+/** Read fresh, write, read back; throws if a protected part moved. */
+async function writeField(ctx: GbpCtx, locationName: string, field: string, value: string): Promise<{ value: string; pending: boolean }> {
   const spec = GBP_WRITABLE[field]!;
-  await call(ctx, "PATCH", `${baseUrl(ctx)}/v1/${locationName}?updateMask=${encodeURIComponent(spec.updateMask)}`, spec.body(value));
+  const before = await readField(ctx, locationName, field);
+  await call(ctx, "PATCH", `${baseUrl(ctx)}/v1/${locationName}?updateMask=${encodeURIComponent(spec.updateMask)}`, spec.body(value, before.location));
+  const after = await readField(ctx, locationName, field);
+  if (spec.unchanged && !spec.unchanged(before.location, after.location)) {
+    throw new GbpError("user", `Google changed a protected part of the profile while saving the ${spec.label}; stop and check the profile by hand`);
+  }
+  return after;
 }
 
 export type ApplyResult = { prior: string; noop: boolean; verified: boolean; pending: boolean };
@@ -138,28 +196,35 @@ export async function applyGbpField(
   savePrior: (prior: string) => Promise<void>,
 ): Promise<ApplyResult> {
   if (!isWritable(field)) throw new GbpError("user", `${field} is not a writable profile field`);
+  const { canon } = GBP_WRITABLE[field];
   let prior = knownPrior;
   if (prior === null) {
     prior = (await readField(ctx, locationName, field)).value;
     await savePrior(prior);
   }
-  if (prior === proposed) return { prior, noop: true, verified: true, pending: false };
+  if (canon(prior) === canon(proposed)) return { prior, noop: true, verified: true, pending: false };
 
-  await writeField(ctx, locationName, field, proposed);
-  const after = await readField(ctx, locationName, field);
-  return { prior, noop: false, verified: after.value === proposed, pending: after.value !== proposed && after.pending };
+  const after = await writeField(ctx, locationName, field, proposed);
+  const verified = canon(after.value) === canon(proposed);
+  return { prior, noop: false, verified, pending: !verified && after.pending };
 }
 
 /** Put `prior` back, unless the profile was changed since we wrote `written`. */
 export async function revertGbpField(ctx: GbpCtx, locationName: string, field: string, written: string, prior: string): Promise<{ noop: boolean }> {
   if (!isWritable(field)) throw new GbpError("user", `${field} is not a writable profile field`);
+  const { canon, label } = GBP_WRITABLE[field];
   const live = await readField(ctx, locationName, field);
-  if (live.value === prior) return { noop: true };
-  // Google may still be reviewing our edit (live shows the old text, which is
+  if (canon(live.value) === canon(prior)) return { noop: true };
+  // Google may still be reviewing our edit (live shows the old value, which is
   // the prior, handled above). Anything that is neither ours nor the prior is
   // someone else's change.
-  if (live.value !== written) {
-    throw new GbpError("drift", "the description was changed on Google since LumiLink published it, so LumiLink won't overwrite it");
+  if (canon(live.value) !== canon(written)) {
+    throw new GbpError(
+      "drift",
+      label === "description"
+        ? "the description was changed on Google since LumiLink published it, so LumiLink won't overwrite it"
+        : `the ${label} were changed on Google since LumiLink published them, so LumiLink won't overwrite them`,
+    );
   }
   await writeField(ctx, locationName, field, prior);
   return { noop: false };
@@ -185,13 +250,22 @@ export function gbpManualInstructions(field: string, proposed: string, reason: G
     reason,
     why,
     steps:
-      field === "gbp_description"
+      field === "gbp_additional_categories"
+        ? [
+            "Search for the business on Google while signed in to an account that manages the profile, or open business.google.com.",
+            "Choose Edit profile, then Business information, then Business category.",
+            "Leave the primary category as it is. Set the additional categories to the list below and save.",
+          ]
+        : field === "gbp_description"
         ? [
             "Search for the business on Google while signed in to an account that manages the profile, or open business.google.com.",
             "Choose Edit profile, then Business information, then Description.",
             "Replace the description with the text below and save. Google may review the change before it shows.",
           ]
         : ["Open the profile on business.google.com and make the change shown below."],
-    copy: { label: field === "gbp_description" ? "Description" : "Value", text: proposed },
+    copy: {
+      label: field === "gbp_description" ? "Description" : field === "gbp_additional_categories" ? "Additional categories (Google category ids)" : "Value",
+      text: field === "gbp_additional_categories" ? categoryValue(proposed).join("\n") || "(none)" : proposed,
+    },
   };
 }

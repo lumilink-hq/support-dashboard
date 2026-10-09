@@ -68,7 +68,7 @@ async function main() {
   ok("cleaned: quotes stripped, blank lines collapsed", paras.ok && !paras.text.startsWith('"') && !paras.text.includes("\n\n\n"), paras);
 
   // --- publishing: allowlist ---------------------------------------------------
-  eq("allowlist: description only", Object.keys(GBP_WRITABLE), ["gbp_description"]);
+  eq("allowlist: description and additional categories only", Object.keys(GBP_WRITABLE), ["gbp_description", "gbp_additional_categories"]);
   for (const f of ["name", "title", "phone", "address", "primary_category", "storefrontAddress", "phoneNumbers", "categories", "gbp_primary_category"]) {
     ok(`allowlist: ${f} is not writable`, !isWritable(f));
   }
@@ -102,9 +102,9 @@ async function main() {
     const r = await applyGbpField(g.ctx, "locations/1", "gbp_description", good, null, async (p) => { saved = p; });
     eq("apply: prior saved before writing", saved, "Old text.");
     eq("apply: result", r, { prior: "Old text.", noop: false, verified: true, pending: false });
-    eq("apply: read, write, read back", g.state.calls.map((c) => c.method), ["GET", "PATCH", "GET"]);
-    eq("apply: exact updateMask", g.state.calls[1].url, "https://fake/v1/locations/1?updateMask=profile.description");
-    eq("apply: body touches only the description", g.state.calls[1].body, { profile: { description: good } });
+    eq("apply: read prior, read fresh, write, read back", g.state.calls.map((c) => c.method), ["GET", "GET", "PATCH", "GET"]);
+    eq("apply: exact updateMask", g.state.calls[2].url, "https://fake/v1/locations/1?updateMask=profile.description");
+    eq("apply: body touches only the description", g.state.calls[2].body, { profile: { description: good } });
   }
   {
     const g = fakeGoogle({ description: "Old text." });
@@ -129,7 +129,7 @@ async function main() {
   {
     const g = fakeGoogle({ description: "Old text.", failFirst: 2 });
     const r = await applyGbpField(g.ctx, "locations/1", "gbp_description", good, null, async () => {});
-    ok("apply: backs off and retries 5xx", r.verified && g.state.calls.length === 5, g.state.calls.length);
+    ok("apply: backs off and retries 5xx", r.verified && g.state.calls.length === 6, g.state.calls.length);
   }
   for (const [status, kind] of [[401, "auth"], [403, "no_access"], [404, "not_found"], [400, "user"]] as const) {
     const g = fakeGoogle({ description: "x", status });
@@ -172,6 +172,78 @@ async function main() {
     const g = fakeGoogle({ description: "Old text." });
     eq("revert: already back (edit never accepted) is a no-op", await revertGbpField(g.ctx, "locations/1", "gbp_description", good, "Old text."), { noop: true });
   }
+
+  // --- additional categories: the primary is never changed --------------------
+  type Cat = { name: string };
+  function fakeCats(opts: { primary: string; additional: string[]; changePrimaryOnWrite?: boolean }) {
+    const state = { primary: opts.primary, additional: [...opts.additional], calls: [] as Call[] };
+    const doFetch = (async (url: string, init: RequestInit) => {
+      const body = init.body ? JSON.parse(String(init.body)) : undefined;
+      state.calls.push({ method: String(init.method), url, body });
+      if (init.method === "PATCH") {
+        state.additional = (body.categories.additionalCategories as Cat[]).map((c) => c.name);
+        state.primary = opts.changePrimaryOnWrite ? "categories/gcid:bank" : body.categories.primaryCategory.name;
+        return new Response("{}", { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          categories: { primaryCategory: { name: state.primary, displayName: "Cannabis store" }, additionalCategories: state.additional.map((name) => ({ name })) },
+        }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+    return { state, ctx: { token: "t", fetch: doFetch, sleep: async () => {}, base: "https://fake" } as GbpCtx };
+  }
+  {
+    const g = fakeCats({ primary: "categories/gcid:cannabis_store", additional: [] });
+    // Postgres writes ["a", "b"] with a space; values compare as sets, not strings.
+    const proposed = '["categories/gcid:medical_marijuana_dispensary", "categories/gcid:cannabis_delivery"]';
+    const r = await applyGbpField(g.ctx, "locations/1", "gbp_additional_categories", proposed, null, async () => {});
+    eq("categories: verified despite different JSON spacing and order", [r.verified, r.prior], [true, "[]"]);
+    const patch = g.state.calls.find((c) => c.method === "PATCH")!;
+    eq("categories: whole-object mask", patch.url, "https://fake/v1/locations/1?updateMask=categories");
+    eq("categories: primary sent back exactly as read", patch.body, {
+      categories: {
+        primaryCategory: { name: "categories/gcid:cannabis_store" },
+        additionalCategories: [{ name: "categories/gcid:cannabis_delivery" }, { name: "categories/gcid:medical_marijuana_dispensary" }],
+      },
+    });
+    eq("categories: primary unchanged", g.state.primary, "categories/gcid:cannabis_store");
+    eq("categories: rollback restores none", await revertGbpField(g.ctx, "locations/1", "gbp_additional_categories", proposed, "[]"), { noop: false });
+    eq("categories: rolled back", g.state.additional, []);
+  }
+  {
+    const g = fakeCats({ primary: "categories/gcid:cannabis_store", additional: [], changePrimaryOnWrite: true });
+    let got = "";
+    try {
+      await applyGbpField(g.ctx, "locations/1", "gbp_additional_categories", '["categories/gcid:cannabis_delivery"]', null, async () => {});
+    } catch (e) {
+      got = e instanceof GbpError ? e.kind : "other";
+    }
+    eq("categories: a moved primary is caught and reported", got, "user");
+  }
+  {
+    const g = fakeCats({ primary: "categories/gcid:cannabis_store", additional: ["categories/gcid:atm"] });
+    let got = "";
+    try {
+      await revertGbpField(g.ctx, "locations/1", "gbp_additional_categories", '["categories/gcid:cannabis_delivery"]', "[]");
+    } catch (e) {
+      got = e instanceof GbpError ? e.kind : "other";
+    }
+    eq("categories: rollback refuses after a hand edit", [got, g.state.additional], ["drift", ["categories/gcid:atm"]]);
+  }
+  {
+    const g = fakeCats({ primary: "", additional: [] });
+    let got = "";
+    try {
+      await applyGbpField(g.ctx, "locations/1", "gbp_additional_categories", '["categories/gcid:cannabis_delivery"]', null, async () => {});
+    } catch (e) {
+      got = e instanceof GbpError ? e.kind : "other";
+    }
+    eq("categories: no primary to keep means no write", [got, g.state.calls.some((c) => c.method === "PATCH")], ["user", false]);
+  }
+  const mc = gbpManualInstructions("gbp_additional_categories", '["categories/gcid:a", "categories/gcid:b"]', "missing_scope");
+  eq("categories: manual steps list the ids, one per line", mc.copy.text, "categories/gcid:a\ncategories/gcid:b");
 
   const m = gbpManualInstructions("gbp_description", good, "missing_scope");
   ok("manual: steps and the text to paste", m.steps.length === 3 && m.copy.text === good && m.copy.label === "Description");

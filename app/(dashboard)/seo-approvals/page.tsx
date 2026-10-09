@@ -57,6 +57,7 @@ const FIELD_LABELS: Record<string, string> = {
   local_business_schema: "LocalBusiness structured data",
   article: "Blog article",
   gbp_description: "Google Business Profile description",
+  gbp_additional_categories: "Google Business Profile categories",
 };
 
 // Only ever link to a web address; the URL comes from our own publish step, but
@@ -131,7 +132,7 @@ function DiffBlock({ diff, field }: { diff: ActionRow["diff"]; field: string | n
       <div>
         <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">Now</p>
         <div className={`${box} bg-red-50 text-red-900`}>
-          {before ? before : <span className="text-gray-400">{field === "gbp_description" ? "No description on the profile yet" : "Nothing on the page yet"}</span>}
+          {before ? before : <span className="text-gray-400">{field === "gbp_description" ? "No description on the profile yet" : field === "gbp_additional_categories" ? "No additional categories" : "Nothing on the page yet"}</span>}
         </div>
       </div>
       <div>

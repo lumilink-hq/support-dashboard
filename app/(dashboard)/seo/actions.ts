@@ -20,6 +20,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isOnlineOnlyRow, parseLocationForm, type LocationRow } from "@/lib/seo-location-form";
 import { JOB_INFO, RUN_NOW_RESULT } from "@/lib/seo-jobs";
 import { LINK_RESULT } from "@/lib/seo-gbp";
+import { decodePick, MAX_ADDITIONAL, type GbpCategory } from "@/lib/gbp-categories";
 import { cleanItem, cleanList, cleanYear, DETAIL_LIMITS, type ListField } from "@/supabase/functions/seo-content/details";
 import { applyAccepted, DETAIL_FLAGS, DETAIL_LISTS, type DetailsForm } from "@/lib/seo-detail-suggestions";
 // The weekly AI-visibility job only ever checks this many active queries; more
@@ -745,4 +746,46 @@ export async function linkGbpLocation(formData: FormData) {
   const result = LINK_RESULT[String(data)] ?? { ok: false, text: "Could not do that." };
   revalidatePath("/seo");
   redirect(result.ok ? back(profile ? result.text : "Unlinked.") : back(undefined, result.text));
+}
+
+const CATEGORY_RESULT: Record<string, { ok: boolean; text: string }> = {
+  ok: { ok: true, text: "Saved. LumiLink updates the profile within about 10 minutes; it's on SEO approvals with Roll back." },
+  unchanged: { ok: true, text: "Those are already the profile's categories." },
+  already_pending: { ok: false, text: "A category change for this profile is still being published. Try again in a few minutes." },
+  not_linked: { ok: false, text: "Choose this location's Business Profile first." },
+  invalid: { ok: false, text: "Pick up to 9 categories from Google's list, not including the primary one." },
+  not_found: { ok: false, text: "That location no longer exists." },
+};
+
+/**
+ * Additional categories on /seo?tab=settings (0081). The person's pick is the
+ * approval (rule 1); propose_seo_gbp_categories checks ownership, the 9-category
+ * limit and that the primary is left alone (rule 2). An empty pick removes
+ * every additional category, so it needs the "clear" box ticked.
+ */
+export async function proposeGbpCategories(formData: FormData) {
+  const location = String(formData.get("location") ?? "");
+  const back = (notice?: string, error?: string) => {
+    const qs = new URLSearchParams();
+    if (location) qs.set("location", location);
+    qs.set("tab", "settings");
+    if (notice) qs.set("notice", notice);
+    if (error) qs.set("error", error);
+    return `/seo?${qs.toString()}#gbp-categories`;
+  };
+  const access = await getSeoAccess();
+  if (!access.allowed) redirect(back(undefined, "Local SEO isn't active on your plan."));
+
+  const picks = formData.getAll("cat").map((v) => decodePick(String(v))).filter((c): c is GbpCategory => !!c);
+  const unique = [...new Map(picks.map((c) => [c.name, c])).values()];
+  if (unique.length === 0 && formData.get("clear") !== "on") redirect(back(undefined, "Tick at least one category, or tick “Remove all additional categories”."));
+  if (unique.length > MAX_ADDITIONAL) redirect(back(undefined, `Google allows up to ${MAX_ADDITIONAL} additional categories.`));
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("propose_seo_gbp_categories", { p_location_id: location, p_categories: unique });
+  if (error) redirect(back(undefined, error.message));
+  const result = CATEGORY_RESULT[String(data)] ?? { ok: false, text: "Could not do that." };
+  revalidatePath("/seo");
+  revalidatePath("/seo-approvals");
+  redirect(result.ok ? back(result.text) : back(undefined, result.text));
 }
