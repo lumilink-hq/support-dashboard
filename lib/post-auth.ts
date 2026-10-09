@@ -23,7 +23,13 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentClientId } from "@/lib/entitlements";
-import { blockingRemaining, readOnboarding, readProfile } from "@/lib/onboarding";
+import { dashboardHome } from "@/lib/catalog";
+import {
+  blockingRemaining,
+  readOnboarding,
+  readProfile,
+  withDerivedSteps,
+} from "@/lib/onboarding";
 
 /** The default post-auth destination, i.e. "the user did not ask for anywhere". */
 export const DEFAULT_LANDING = "/conversations";
@@ -53,18 +59,53 @@ export async function landingPathAfterAuth(requestedNext: string): Promise<strin
       .maybeSingle();
 
     const settings = (data?.settings ?? {}) as Record<string, unknown>;
+    const profile = readProfile(data);
+
+    // Locations added outside the wizard (a hand-run setup script) count:
+    // seo_locations is the only blocking SEO step, and asking for it again
+    // when the rows exist sends a live client back into setup on every sign-in.
+    let seoLocations = 0;
+    if (profile.products.includes("seo")) {
+      const { count } = await supabase
+        .from("seo_locations")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", clientId);
+      seoLocations = count ?? 0;
+    }
+    const state = withDerivedSteps(readOnboarding(settings), { seoLocations });
 
     // BLOCKING steps only. A client who skipped the optional website step is
     // live and working; dragging them back to the wizard every sign-in would be
     // nagging, not onboarding.
-    return blockingRemaining(readOnboarding(settings), readProfile(data)).length > 0
+    return blockingRemaining(state, profile).length > 0
       ? "/onboarding"
-      : requestedNext;
+      : dashboardHome(profile.products);
   } catch (e) {
     // Never let this stand between a user and their dashboard. Landing on
     // /conversations with setup incomplete is the old behaviour; failing to sign
     // in would be new and worse.
     console.error("[post-auth] landing check failed, using default:", e);
     return requestedNext;
+  }
+}
+
+/**
+ * Where "/" and "Go To Dashboard" send a signed-in user: their workspace's
+ * home (lib/catalog.ts dashboardHome). Never the wizard; that is decided once,
+ * at sign-in, above.
+ */
+export async function dashboardHomePath(): Promise<string> {
+  try {
+    const clientId = await getCurrentClientId();
+    if (!clientId) return DEFAULT_LANDING;
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("clients")
+      .select("products")
+      .eq("id", clientId)
+      .maybeSingle();
+    return dashboardHome(readProfile(data).products);
+  } catch {
+    return DEFAULT_LANDING;
   }
 }

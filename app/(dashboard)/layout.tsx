@@ -54,11 +54,13 @@ export default async function DashboardLayout({
   const access: ProductAccess = {
     voice: {
       usable: voiceUsable,
+      inPlan: products.includes("voice"),
       state: voiceState,
       addHref: addProductHref("voice", products),
     },
     seo: {
       usable: seo.allowed,
+      inPlan: products.includes("seo"),
       state: seo.state,
       addHref: addProductHref("seo", products),
     },

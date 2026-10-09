@@ -12,13 +12,18 @@ import type { FeatureState } from "@/lib/entitlements";
 
 /**
  * What the layout decided about each product for this tenant. `usable` opens
- * the product's pages; otherwise the section collapses to one row pointing at
- * `addHref` (checkout, or the product page where checkout can't work yet —
- * see addProductHref in lib/catalog.ts).
+ * the product's pages; otherwise, if the workspace has set the product up
+ * (`inPlan`), the section collapses to one row pointing at `addHref`
+ * (checkout, or the product page where checkout can't work yet — see
+ * addProductHref in lib/catalog.ts).
+ *
+ * A product the workspace neither uses nor has set up isn't shown at all
+ * (user, 2026-10-09): an SEO-only client like PACKS shouldn't have a
+ * Phone Agent section in its nav. Adding one goes through Plans & billing.
  */
 export type ProductAccess = Record<
   ProductKey,
-  { usable: boolean; state: FeatureState; addHref: string }
+  { usable: boolean; inPlan: boolean; state: FeatureState; addHref: string }
 >;
 
 // The one row a product without usable access collapses to.
@@ -46,8 +51,9 @@ export function Sidebar({
     .filter((h) => pathname === h || pathname.startsWith(h + "/"))
     .sort((a, b) => b.length - a.length)[0];
 
-  // Products the tenant can use first, then the ones it can add.
-  const products = [...PRODUCTS].sort(
+  // Products the tenant can use first, then the ones it has set up but can't
+  // use yet. Products it has nothing to do with are left out.
+  const products = PRODUCTS.filter((p) => access[p.key].usable || access[p.key].inPlan).sort(
     (a, b) => Number(access[b.key].usable) - Number(access[a.key].usable),
   );
 

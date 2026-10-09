@@ -109,6 +109,16 @@ export function addProductHref(key: ProductKey, products: ProductKey[]): string 
   return key === "voice" ? "/plans" : "/billing#seo";
 }
 
+/**
+ * A signed-in workspace's home page: the first page of the first product it
+ * has set up. An SEO-only workspace (PACKS) lands on /seo, not on an empty
+ * conversations list for a phone agent it never bought.
+ */
+export function dashboardHome(products: ProductKey[]): string {
+  const product = PRODUCTS.find((p) => products.includes(p.key)) ?? PRODUCTS[0];
+  return product.pages[0].href;
+}
+
 export function productByKey(key: ProductKey): Product {
   const p = PRODUCTS.find((x) => x.key === key);
   if (!p) throw new Error(`Unknown product: ${key}`);

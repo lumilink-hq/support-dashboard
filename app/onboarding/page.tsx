@@ -32,7 +32,9 @@ import {
   readOnboarding,
   readProfile,
   stepsFor,
+  withDerivedSteps,
 } from "@/lib/onboarding";
+import { dashboardHome } from "@/lib/catalog";
 import {
   acknowledgeNumber,
   addService,
@@ -104,10 +106,6 @@ export default async function OnboardingPage({
 
   const settings = (client?.settings ?? {}) as Record<string, unknown>;
   const profile = readProfile(client);
-  const state = readOnboarding(settings);
-  const steps = stepsFor(profile);
-  const { done, total, percent } = progress(state, profile);
-  const blocking = blockingRemaining(state, profile);
   const hasVoice = profile.products.includes("voice");
   // SEO onboarding runs BEFORE checkout (the seat count is the location
   // count), unlike the phone agent's, which runs after. So an SEO client can
@@ -132,6 +130,17 @@ export default async function OnboardingPage({
           .order("created_at"),
       ])
     : [{ data: [] }, { data: [] }];
+
+  // SEO rows that already exist count as those steps done, so a workspace set
+  // up by hand isn't walked through them again (withDerivedSteps).
+  const state = withDerivedSteps(readOnboarding(settings), {
+    seoLocations: isSeo ? seoLocationIds.length : 0,
+    seoKeywords: seoKeywords?.length ?? 0,
+    seoCompetitors: seoCompetitors?.length ?? 0,
+  });
+  const steps = stepsFor(profile);
+  const { done, total, percent } = progress(state, profile);
+  const blocking = blockingRemaining(state, profile);
 
   // Requested step, else resume, else the last step so a returning client sees
   // a finished wizard rather than being bounced somewhere arbitrary.
@@ -160,7 +169,7 @@ export default async function OnboardingPage({
             </p>
           </div>
           <Link
-            href={hasVoice ? "/conversations" : "/settings"}
+            href={dashboardHome(profile.products)}
             className="shrink-0 text-sm text-gray-500 underline"
           >
             Skip For Now

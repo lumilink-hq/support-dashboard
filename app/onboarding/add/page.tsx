@@ -16,7 +16,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentClientId, STARTER_PLAN } from "@/lib/entitlements";
-import { productByKey, type ProductKey } from "@/lib/catalog";
+import { dashboardHome, productByKey, type ProductKey } from "@/lib/catalog";
 import { INDUSTRY_OPTIONS, readProfile } from "@/lib/onboarding";
 import { seoPlanByKey } from "@/lib/seo-pricing";
 import { addProduct } from "../actions";
@@ -72,7 +72,7 @@ export default async function AddProductPage({
   const product = productByKey(key);
   const details = DETAILS[key];
   const needsIndustry = key === "voice" && !profile.industry;
-  const backHref = profile.products.includes("voice") ? "/conversations" : "/settings";
+  const backHref = dashboardHome(profile.products);
 
   return (
     <main className="min-h-full bg-gray-50 py-10">

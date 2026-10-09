@@ -18,7 +18,7 @@ import { PRODUCTS, SOLUTIONS } from "@/lib/catalog";
 // eight flat links, mixing industries with a product, and wrapped at ~800px.
 //
 // "Home" ISN'T ALWAYS "/". app/page.tsx redirects a signed-in visitor to
-// /conversations, and a hash is dropped in that redirect, so "/#how" for a
+// the dashboard, and a hash is dropped in that redirect, so "/#how" for a
 // signed-in visitor silently lands them in the dashboard. "/home" is the same
 // content with no redirect (see its own file comment), so any link to "/"
 // goes through homeHref(), which uses "/home" whenever there's a session.
@@ -259,8 +259,10 @@ export async function MarketingShell({
 
           <div className="flex items-center gap-3">
             {signedIn ? (
+              // "/" redirects a signed-in user to their workspace's home
+              // (/seo for an SEO-only client), so the shell needn't look it up.
               <Link
-                href="/conversations"
+                href="/"
                 className="whitespace-nowrap rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
               >
                 Go To Dashboard

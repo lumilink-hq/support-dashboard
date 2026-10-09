@@ -252,6 +252,35 @@ export function readOnboarding(settings: unknown): OnboardingState {
   return { started_at: o.started_at, completed_at: o.completed_at ?? null, steps: o.steps ?? {} };
 }
 
+/**
+ * What the workspace already has, counted from its tables. A workspace set up
+ * by hand (PACKS: scripts/setup-packs-seo.sql) has locations, keywords and
+ * competitors without ever clicking through the wizard, and asking for them
+ * again on every sign-in is noise.
+ */
+export type OnboardingFacts = {
+  seoLocations?: number;
+  seoKeywords?: number;
+  seoCompetitors?: number;
+};
+
+/** Mark the SEO steps done when their rows already exist. */
+export function withDerivedSteps(
+  state: OnboardingState,
+  facts: OnboardingFacts,
+): OnboardingState {
+  const steps = { ...(state.steps ?? {}) };
+  const derived: [StepKey, number | undefined][] = [
+    ["seo_locations", facts.seoLocations],
+    ["seo_keywords", facts.seoKeywords],
+    ["seo_competitors", facts.seoCompetitors],
+  ];
+  for (const [key, count] of derived) {
+    if (count && !isStepDone(state, key)) steps[key] = { done: true };
+  }
+  return { ...state, steps };
+}
+
 export function isStepDone(state: OnboardingState, key: StepKey): boolean {
   const s = state.steps?.[key];
   return Boolean(s?.done || s?.skipped);

@@ -10,8 +10,8 @@
 --   2. If the output looks right, set v_dry_run := false and run it again.
 --
 -- WHAT IT DOES
---   * PACKS workspace (signed up as emmanuel@packsglobal.com): adds 'seo' to
---     products, an active trial SEO entitlement for 4 locations, brand term
+--   * PACKS workspace (signed up as emmanuel@packsglobal.com): sets products
+--     to SEO only (PACKS doesn't use the phone agent; 2026-10-09), an active trial SEO entitlement for 4 locations, brand term
 --     'packs' and $2 per click, and the 5 AI queries (active).
 --   * 4 locations on https://www.packsclub.com, each with 3 keywords (local
 --     phrase, plus "dispensary near me" and "packs dispensary" on the map
@@ -55,7 +55,9 @@ begin
     raise exception 'PACKS already has SEO locations; this script only sets up an empty workspace';
   end if;
 
-  update clients set products = array(select distinct unnest(products || array['seo'])) where id = v_packs;
+  -- SEO only, not appended: signup defaults products to {voice}, and keeping
+  -- it gave PACKS the Phone Agent pages and its onboarding steps (2026-10-09).
+  update clients set products = array['seo'] where id = v_packs;
 
   insert into entitlements (client_id, feature, status, source, seat_count, started_at, activated_at)
   values (v_packs, 'seo', 'active', 'trial', 4, now(), now());

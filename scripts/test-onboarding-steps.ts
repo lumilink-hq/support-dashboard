@@ -11,8 +11,15 @@
 // call-out fees.
 // =============================================================================
 
-import { readProfile, stepsFor, blockingRemaining, type StepKey } from "../lib/onboarding.ts";
-import { addProductHref } from "../lib/catalog.ts";
+import {
+  readProfile,
+  stepsFor,
+  blockingRemaining,
+  firstIncompleteStep,
+  withDerivedSteps,
+  type StepKey,
+} from "../lib/onboarding.ts";
+import { addProductHref, dashboardHome } from "../lib/catalog.ts";
 
 let failures = 0;
 
@@ -71,6 +78,24 @@ ok("SEO not set up -> add flow", addProductHref("seo", ["voice"]) === "/onboardi
 ok("SEO set up, unpaid -> SEO checkout", addProductHref("seo", ["voice", "seo"]) === "/billing#seo");
 ok("phone not set up -> add flow", addProductHref("voice", ["seo"]) === "/onboarding/add?product=voice");
 ok("phone set up, unpaid -> plans", addProductHref("voice", ["voice"]) === "/plans");
+
+console.log("SEO-only workspace (PACKS)");
+const packs = { industry: "ecommerce" as const, products: ["seo" as const] };
+ok("no phone steps", keys(packs).every((k) => k.startsWith("seo_")), keys(packs));
+const handSetUp = withDerivedSteps({}, { seoLocations: 4, seoKeywords: 12, seoCompetitors: 16 });
+ok("existing locations clear the blocking step", blockingRemaining(handSetUp, packs).length === 0);
+ok("existing rows finish the wizard", firstIncompleteStep(handSetUp, packs) === null);
+const noRows = withDerivedSteps({}, { seoLocations: 0 });
+ok("no locations still blocks", same(blockingRemaining(noRows, packs).map((s) => s.key), ["seo_locations"]));
+ok(
+  "a skipped step stays skipped",
+  withDerivedSteps({ steps: { seo_keywords: { skipped: true } } }, { seoKeywords: 3 }).steps?.seo_keywords?.skipped === true,
+);
+
+console.log("dashboardHome");
+ok("SEO-only lands on /seo", dashboardHome(["seo"]) === "/seo");
+ok("phone client lands on conversations", dashboardHome(["voice"]) === "/conversations");
+ok("both lands on conversations", dashboardHome(["voice", "seo"]) === "/conversations");
 
 if (failures) {
   console.log(`\n${failures} test(s) failed.`);

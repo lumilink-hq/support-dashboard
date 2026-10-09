@@ -19,6 +19,7 @@ import { createClient } from "@/lib/supabase/server";
 import { JsonLd } from "@/components/json-ld";
 import { homeJsonLd } from "@/lib/structured-data";
 import { withSeoOverrides } from "@/lib/seo-overrides";
+import { dashboardHomePath } from "@/lib/post-auth";
 
 export const metadata: Metadata = withSeoOverrides("/", {
   ...LANDING_METADATA,
@@ -39,7 +40,8 @@ export default async function Home() {
     signedIn = false;
   }
 
-  if (signedIn) redirect("/conversations");
+  // The workspace's own home: /seo for an SEO-only client, not /conversations.
+  if (signedIn) redirect(await dashboardHomePath());
 
   return (
     <>
