@@ -143,9 +143,11 @@ export default async function SettingsPage({
         <section className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-gray-900">Google account</h2>
           <p className="mt-0.5 text-xs text-gray-500">
-            Connects Search Console so we can read indexing and ranking data,
-            and, if you add it, your Google Business Profile so we can read
-            views, calls, direction requests and reviews.
+            One connection for both: Search Console, so we can read indexing
+            and ranking data, and Google Business Profile, so we can read
+            views, calls, direction requests and reviews. Use a Google account
+            that has access to your Search Console property and manages all of
+            your Business Profiles.
           </p>
           <div className="mt-4">
             {!isGoogleOAuthConfigured() ? (
@@ -184,12 +186,12 @@ export default async function SettingsPage({
                   <p className="mt-0.5 text-xs text-gray-500">
                     {hasBusinessProfileScope(googleConnection.granted_scopes)
                       ? "Connected. Profiles are listed under Local SEO > Settings, where you match each one to a location."
-                      : "Not added yet. Sign in with a Google account that is an owner or manager of your profiles."}
+                      : "Not allowed yet. Click Add Business Profile and leave the Business Profile box ticked on Google's screen. Use a Google account that is an owner or manager of every one of your profiles."}
                   </p>
                 </div>
                 {canEdit && !hasBusinessProfileScope(googleConnection.granted_scopes) ? (
                   <a
-                    href="/api/oauth/google/connect?scope=business_profile"
+                    href="/api/oauth/google/connect"
                     className="shrink-0 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800"
                   >
                     Add Business Profile

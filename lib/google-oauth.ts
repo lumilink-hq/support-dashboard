@@ -1,10 +1,10 @@
 // lib/google-oauth.ts — per-tenant Google OAuth (module 2, plan.md).
 //
-// INCREMENTAL SCOPES BY DESIGN. "Connect Google" requests the Search Console
-// scope only (GOOGLE_OAUTH_SCOPES_INITIAL). "Connect Business Profile"
-// (/api/oauth/google/connect?scope=business_profile, module 3; the API grant
-// landed 2026-10-09) requests GOOGLE_OAUTH_SCOPES_BUSINESS_PROFILE on top, so
-// a client who only wants Search Console is never asked for profile access. The DB side already
+// ONE CONSENT FOR BOTH. "Connect Google" requests the Search Console scope
+// (GOOGLE_OAUTH_SCOPES_INITIAL) and Business Profile
+// (GOOGLE_OAUTH_SCOPES_BUSINESS_PROFILE; the API grant landed 2026-10-09)
+// together. Google lets the person untick either one; granted_scopes records
+// what they actually allowed. The DB side already
 // handles this: store_google_oauth_tokens (0046) UNIONS granted_scopes
 // rather than overwriting, so the second grant doesn't drop the first.
 //

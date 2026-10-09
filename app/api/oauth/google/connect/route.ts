@@ -19,11 +19,12 @@ import {
 
 export const GOOGLE_OAUTH_STATE_COOKIE = "google_oauth_state";
 
-// ?scope=business_profile asks for Business Profile on top of Search Console
-// (module 3). include_granted_scopes keeps what was granted before, and
-// store_google_oauth_tokens (0046) unions the scopes, so nothing is lost.
-export async function GET(request: Request) {
-  const wantsBusinessProfile = new URL(request.url).searchParams.get("scope") === "business_profile";
+// One consent asks for Search Console AND Business Profile (2026-10-09: both
+// are read with the same Google login, and asking twice confused people).
+// Google lets the person untick either; the dashboard then offers
+// "Add Business Profile" again. include_granted_scopes keeps what was granted
+// before, and store_google_oauth_tokens unions the scopes.
+export async function GET() {
   if (!isGoogleOAuthConfigured()) {
     return NextResponse.redirect(
       new URL("/settings?error=" + encodeURIComponent("Google connect isn't configured yet."), process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
@@ -39,9 +40,7 @@ export async function GET(request: Request) {
   }
 
   const state = randomBytes(24).toString("hex");
-  const scopes = wantsBusinessProfile
-    ? [...GOOGLE_OAUTH_SCOPES_INITIAL, ...GOOGLE_OAUTH_SCOPES_BUSINESS_PROFILE]
-    : GOOGLE_OAUTH_SCOPES_INITIAL;
+  const scopes = [...GOOGLE_OAUTH_SCOPES_INITIAL, ...GOOGLE_OAUTH_SCOPES_BUSINESS_PROFILE];
   const authUrl = buildGoogleAuthUrl({ scopes, state });
 
   const response = NextResponse.redirect(authUrl);

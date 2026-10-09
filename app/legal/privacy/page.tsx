@@ -161,12 +161,12 @@ export default function PrivacyPage() {
           BEFORE they go live. */}
       <Clause heading="Information From Your Google Account">
         <p>
-          If you connect your Google account in Settings, we ask Google for two
-          things: your Google account&rsquo;s email address, so we can show you
-          which account is connected, and <strong>read-only</strong> access to
-          Google Search Console for your website. If you also add Google
-          Business Profile, we ask Google for access to the Business Profiles
-          your account manages.
+          If you connect your Google account in Settings, we ask Google for
+          three things: your Google account&rsquo;s email address, so we can
+          show you which account is connected; <strong>read-only</strong>
+          access to Google Search Console for your website; and access to the
+          Google Business Profiles your account manages. Google&rsquo;s
+          consent screen lets you leave Business Profile out.
         </p>
         <p>
           We use Search Console for one purpose: checking whether Google has
