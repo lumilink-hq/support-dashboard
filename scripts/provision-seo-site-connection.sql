@@ -11,27 +11,43 @@
 -- gets its OWN custom app in the client's Shopify admin, never a widened version
 -- of the order token.
 --
--- 1. In the client's Shopify admin: Settings > Apps and sales channels > Develop
---    apps > Create an app ("LumiLink SEO"). Configure the Admin API scopes:
+-- 1. Create the app IN THE CLIENT'S OWN Shopify organization (their login, not
+--    ours). Since 2026-01-01 Shopify no longer lets a store create legacy custom
+--    apps in the admin; new apps are made in the Dev Dashboard:
+--      Shopify admin > Settings > Apps > Develop apps > Build apps in Dev
+--      Dashboard (or dev.shopify.com/dashboard) > Create app > "Start from Dev
+--      Dashboard", name it "LumiLink SEO".
+--    In the app's version settings, select the Admin API scopes:
 --        write_products         (products and collections)
 --        write_content          (pages and blog articles)
 --    (write_online_store_pages also satisfies pages, but articles need
---    write_content, so grant write_content.) Install the app and copy the Admin
---    API access token (shpat_...). Shopify shows it once.
+--    write_content.) Release the version, then Install it on the store.
+--    From the app's Settings, copy the Client ID and Client secret.
+--    The client credentials grant LumiLink uses only works when the app and the
+--    store are in the same organization, which is why the client creates it.
 --
--- 2. Store the token in Vault. The secret is JSON with an access_token key.
+--    A LEGACY custom app made before 2026-01-01 with those scopes also works:
+--    use its permanent Admin API token (shpat_...) instead.
+--
+-- 2. Store the credential in Vault. Dev Dashboard app:
 select vault.create_secret(
-  '{"access_token":"<shpat_...>"}',
+  '{"client_id":"<client id>","client_secret":"<client secret>"}',
   '<slug>-seo-shopify'
 );
+--    or, for a legacy app:  '{"access_token":"<shpat_...>"}'
 
--- 3. Connect it to the LOCATION. One row per location; several locations of one
---    store each get their own row pointing at the same Vault secret.
+-- 3. Connect it to the client's locations. Every location needs its own row
+--    (each store's drafts publish through its own location), all pointing at
+--    the same Vault secret. This connects every active location of the client
+--    at once; no location ids needed. Find the slug with:
+--      select slug, name from clients order by name;
 with conn as (
   insert into seo_site_connections (client_id, location_id, shop_domain)
   select l.client_id, l.id, '<store>.myshopify.com'
     from seo_locations l
-   where l.id = '<location uuid>'
+    join clients c on c.id = l.client_id
+   where c.slug = '<slug>' and l.is_active
+  on conflict (location_id) do nothing
   returning id
 )
 insert into seo_site_credentials (connection_id, credentials_ref)
@@ -41,5 +57,8 @@ select id, '<slug>-seo-shopify' from conn;
 --    runs within the hour, reads the granted scopes and the store's primary
 --    domain, and sets status to healthy or degraded. To check it right away:
 --      select run_due_seo_site_jobs();
-select location_id, shop_domain, status, granted_scopes, primary_domain, last_error
-  from seo_site_connections where location_id = '<location uuid>';
+select l.name, x.shop_domain, x.status, x.granted_scopes, x.primary_domain, x.last_error
+  from seo_site_connections x
+  join seo_locations l on l.id = x.location_id
+  join clients c on c.id = x.client_id
+ where c.slug = '<slug>';

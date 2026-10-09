@@ -127,6 +127,68 @@ function userErrorsOf(payload: { userErrors?: { field?: string[]; message: strin
 // Heartbeat
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// Credentials
+// -----------------------------------------------------------------------------
+
+/**
+ * The Vault secret's two shapes. Legacy custom apps (made in the Shopify admin
+ * before 2026-01-01) have a permanent token: {"access_token": "shpat_..."}.
+ * Apps made in the Dev Dashboard since then have no permanent token, only a
+ * client id and secret, exchanged for a 24-hour token with the client
+ * credentials grant. That grant only works when the app and the store belong
+ * to the same Shopify organization, so the client creates the app, not us.
+ */
+export type ShopifyCredential =
+  | { kind: "token"; token: string }
+  | { kind: "client_credentials"; clientId: string; clientSecret: string };
+
+export function parseShopifyCredential(secret: string | null): ShopifyCredential | null {
+  if (!secret) return null;
+  try {
+    const p = JSON.parse(secret);
+    if (typeof p?.access_token === "string" && p.access_token) return { kind: "token", token: p.access_token };
+    if (typeof p?.client_id === "string" && p.client_id && typeof p?.client_secret === "string" && p.client_secret) {
+      return { kind: "client_credentials", clientId: p.client_id, clientSecret: p.client_secret };
+    }
+  } catch {
+    // not JSON
+  }
+  return null;
+}
+
+/** Exchanges a Dev Dashboard app's client id and secret for an access token. */
+export async function exchangeClientCredentials(
+  shop: string,
+  cred: { clientId: string; clientSecret: string },
+  doFetch: typeof fetch,
+): Promise<{ token: string; expiresAt: number }> {
+  let res: Response;
+  try {
+    res = await doFetch(`https://${shop}/admin/oauth/access_token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "client_credentials", client_id: cred.clientId, client_secret: cred.clientSecret }),
+    });
+  } catch (e) {
+    throw new ShopifyError("transient", `token exchange failed: ${String(e)}`);
+  }
+  const text = await res.text().catch(() => "");
+  if (res.status === 400 || res.status === 401 || res.status === 403) {
+    throw new ShopifyError("auth", `token exchange refused (${res.status}): ${text.slice(0, 200)}`);
+  }
+  if (!res.ok) throw new ShopifyError("transient", `token exchange ${res.status}: ${text.slice(0, 200)}`);
+  let body: { access_token?: string; expires_in?: number };
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new ShopifyError("transient", "token exchange returned non-JSON");
+  }
+  if (!body.access_token) throw new ShopifyError("auth", "token exchange returned no access_token");
+  const ttl = typeof body.expires_in === "number" && body.expires_in > 0 ? body.expires_in : 3600;
+  return { token: body.access_token, expiresAt: Date.now() + ttl * 1000 };
+}
+
 export async function checkConnection(ctx: Ctx): Promise<{ scopes: string[]; primaryHost: string | null }> {
   const data = await gql<{
     shop: { primaryDomain?: { host?: string } | null };

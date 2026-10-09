@@ -19,6 +19,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { isOnlineOnlyRow, parseLocationForm, type LocationRow } from "@/lib/seo-location-form";
 import { JOB_INFO, RUN_NOW_RESULT } from "@/lib/seo-jobs";
+import { LINK_RESULT } from "@/lib/seo-gbp";
 import { cleanItem, cleanList, cleanYear, DETAIL_LIMITS, type ListField } from "@/supabase/functions/seo-content/details";
 import { applyAccepted, DETAIL_FLAGS, DETAIL_LISTS, type DetailsForm } from "@/lib/seo-detail-suggestions";
 // The weekly AI-visibility job only ever checks this many active queries; more
@@ -710,4 +711,35 @@ export async function runSeoJobNow(formData: FormData) {
   revalidatePath("/seo");
   const when = data === "ok" ? ` It starts ${JOB_INFO[job]?.soon ?? "within the hour"}.` : "";
   redirect(result.ok ? back(`${label}: ${result.text}${when}`) : back(undefined, `${label}: ${result.text}`));
+}
+
+/**
+ * "This location's Business Profile" on /seo?tab=settings. link_seo_gbp_location
+ * (0076) checks both ids belong to the caller's client, keeps the link
+ * one-to-one, and queues the sync. An empty profile unlinks.
+ */
+export async function linkGbpLocation(formData: FormData) {
+  const location = String(formData.get("location") ?? "");
+  const profile = String(formData.get("profile") ?? "").trim();
+  const previous = String(formData.get("previous") ?? "").trim();
+  const back = (notice?: string, error?: string) => {
+    const qs = new URLSearchParams();
+    if (location) qs.set("location", location);
+    qs.set("tab", "settings");
+    if (notice) qs.set("notice", notice);
+    if (error) qs.set("error", error);
+    return `/seo?${qs.toString()}#gbp`;
+  };
+
+  const access = await getSeoAccess();
+  if (!access.allowed) redirect(back(undefined, "Local SEO isn't active on your plan."));
+  if (!profile && !previous) redirect(back(undefined, "Choose a profile."));
+  const supabase = await createClient();
+  const { data, error } = profile
+    ? await supabase.rpc("link_seo_gbp_location", { p_location_name: profile, p_location_id: location })
+    : await supabase.rpc("link_seo_gbp_location", { p_location_name: previous, p_location_id: null });
+  if (error) redirect(back(undefined, error.message));
+  const result = LINK_RESULT[String(data)] ?? { ok: false, text: "Could not do that." };
+  revalidatePath("/seo");
+  redirect(result.ok ? back(profile ? result.text : "Unlinked.") : back(undefined, result.text));
 }

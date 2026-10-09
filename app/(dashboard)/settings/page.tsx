@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { disconnectGoogleAccount, updateClientSettings } from "./actions";
 import { CopyField } from "@/components/copy-field";
-import { isGoogleOAuthConfigured } from "@/lib/google-oauth";
+import { hasBusinessProfileScope, isGoogleOAuthConfigured } from "@/lib/google-oauth";
 import type { ClientRow, GoogleOAuthConnectionRow } from "@/lib/types";
 import { readProfile } from "@/lib/onboarding";
 
@@ -143,9 +143,9 @@ export default async function SettingsPage({
         <section className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-gray-900">Google account</h2>
           <p className="mt-0.5 text-xs text-gray-500">
-            Connects Search Console so we can read indexing and ranking data.
-            Business Profile access is added later, once Google approves it —
-            you won&apos;t need to reconnect for that.
+            Connects Search Console so we can read indexing and ranking data,
+            and, if you add it, your Google Business Profile so we can read
+            views, calls, direction requests and reviews.
           </p>
           <div className="mt-4">
             {!isGoogleOAuthConfigured() ? (
@@ -153,6 +153,7 @@ export default async function SettingsPage({
                 Google connect isn&apos;t configured on this environment yet.
               </p>
             ) : googleConnection && googleConnection.status !== "revoked" ? (
+              <div className="space-y-3">
               <div className="flex items-center justify-between gap-3 rounded-md border border-gray-200 p-3">
                 <div>
                   <p className="text-sm text-gray-900">
@@ -176,6 +177,25 @@ export default async function SettingsPage({
                     </button>
                   </form>
                 ) : null}
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-md border border-gray-200 p-3">
+                <div>
+                  <p className="text-sm text-gray-900">Google Business Profile</p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    {hasBusinessProfileScope(googleConnection.granted_scopes)
+                      ? "Connected. Profiles are listed under Local SEO > Settings, where you match each one to a location."
+                      : "Not added yet. Sign in with a Google account that is an owner or manager of your profiles."}
+                  </p>
+                </div>
+                {canEdit && !hasBusinessProfileScope(googleConnection.granted_scopes) ? (
+                  <a
+                    href="/api/oauth/google/connect?scope=business_profile"
+                    className="shrink-0 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800"
+                  >
+                    Add Business Profile
+                  </a>
+                ) : null}
+              </div>
               </div>
             ) : (
               <div>

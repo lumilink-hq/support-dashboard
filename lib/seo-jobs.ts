@@ -27,6 +27,7 @@ export const JOB_INFO: Record<string, { label: string; what: string; order: numb
   seo_keyword_research: { label: "Keyword research", what: "Search volumes and related searches. Monthly.", order: 8 },
   seo_competitor_gaps: { label: "Competitor gaps", what: "Searches your competitors rank for and you don't. Monthly, or soon after you add a competitor.", order: 9 },
   seo_link_opportunities: { label: "Link opportunities", what: "Sites that link to your competitors but not to you. Monthly, or soon after you add a competitor.", order: 10 },
+  seo_gbp_sync: { label: "Business Profile", what: "Views, calls, direction requests and reviews from Google Business Profile. Daily.", order: 11, soon: "within 15 minutes" },
 };
 
 /** The messages request_seo_run_now() can return, as a notice or an error. */

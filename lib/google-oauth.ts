@@ -1,11 +1,10 @@
 // lib/google-oauth.ts — per-tenant Google OAuth (module 2, plan.md).
 //
-// INCREMENTAL SCOPES BY DESIGN. Search Console needs no special API grant;
-// Business Profile does (plan.md: up to 14 days, quota is zero until
-// granted). So the initial "Connect Google" flow only ever requests the
-// Search Console scope — GOOGLE_OAUTH_SCOPES_INITIAL — and a later,
-// separate flow (built once the grant lands, Phase 4 / module 11's finish)
-// requests GOOGLE_OAUTH_SCOPES_BUSINESS_PROFILE on top. The DB side already
+// INCREMENTAL SCOPES BY DESIGN. "Connect Google" requests the Search Console
+// scope only (GOOGLE_OAUTH_SCOPES_INITIAL). "Connect Business Profile"
+// (/api/oauth/google/connect?scope=business_profile, module 3; the API grant
+// landed 2026-10-09) requests GOOGLE_OAUTH_SCOPES_BUSINESS_PROFILE on top, so
+// a client who only wants Search Console is never asked for profile access. The DB side already
 // handles this: store_google_oauth_tokens (0046) UNIONS granted_scopes
 // rather than overwriting, so the second grant doesn't drop the first.
 //
@@ -23,6 +22,10 @@ export const GOOGLE_OAUTH_SCOPES_INITIAL = [
 export const GOOGLE_OAUTH_SCOPES_BUSINESS_PROFILE = [
   "https://www.googleapis.com/auth/business.manage",
 ];
+
+export function hasBusinessProfileScope(scopes: string[] | null | undefined): boolean {
+  return (scopes ?? []).some((s) => s.endsWith("/business.manage"));
+}
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";

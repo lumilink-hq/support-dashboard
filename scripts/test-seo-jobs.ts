@@ -71,8 +71,8 @@ console.log("\ndescribeJob");
 console.log("\ncatalogue");
 const sorted = sortJobs([row({ job_type: "seo_link_opportunities" }), row({ job_type: "unknown_x" }), row({ job_type: "seo_crawl" })]);
 ok("sorted by the card's order, unknown last", sorted.map((r) => r.job_type).join() === "seo_crawl,seo_link_opportunities,unknown_x");
-// Must match 0073's seo_run_now_jobs() allowlist.
-const allowlist = ["seo_crawl", "seo_technical_audit", "seo_draft", "seo_content", "seo_competitor_gaps", "seo_link_opportunities", "seo_rank_submit", "seo_ai_visibility", "seo_keyword_research", "seo_search_console"];
+// Must match seo_run_now_jobs() (0073, plus seo_gbp_sync from 0076).
+const allowlist = ["seo_crawl", "seo_technical_audit", "seo_draft", "seo_content", "seo_competitor_gaps", "seo_link_opportunities", "seo_rank_submit", "seo_ai_visibility", "seo_keyword_research", "seo_search_console", "seo_gbp_sync"];
 ok("every allowlisted job has a label", allowlist.every((j) => JOB_INFO[j]), allowlist.filter((j) => !JOB_INFO[j]));
 ok("no label for a job outside the allowlist", Object.keys(JOB_INFO).every((j) => allowlist.includes(j)));
 ok("every RPC result has a message", ["ok", "already_due", "running", "cooldown", "unknown_job", "not_found"].every((k) => RUN_NOW_RESULT[k]));

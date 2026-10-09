@@ -35,8 +35,11 @@
 // Env: SUPABASE_URL, SUPABASE_SECRET_KEYS (["default"] = service role),
 //      VOICE_TOOL_SECRET.
 // The Shopify credential comes from Vault via get_seo_site_credentials (0055):
-// JSON {"access_token": "shpat_..."} for a custom app with write_products and
-// write_content (or write_online_store_pages).
+// JSON {"access_token": "shpat_..."} for a legacy custom app, or
+// {"client_id": "...", "client_secret": "..."} for a Dev Dashboard app (the only
+// kind Shopify lets a store create since 2026-01-01; exchanged for a 24-hour
+// token per run). Either needs write_products and write_content (or
+// write_online_store_pages).
 // =============================================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
@@ -53,7 +56,17 @@ import {
   type ConnectionFacts,
   type ManualReason,
 } from "./lib.ts";
-import { applyChange, checkConnection, deleteArticle, publishArticle, revertChange, ShopifyError, type Ctx } from "./shopify.ts";
+import {
+  applyChange,
+  checkConnection,
+  deleteArticle,
+  exchangeClientCredentials,
+  parseShopifyCredential,
+  publishArticle,
+  revertChange,
+  ShopifyError,
+  type Ctx,
+} from "./shopify.ts";
 import { checkRepo, deleteFile, GithubError, readFile, writeFile, type GhCtx } from "./github.ts";
 import {
   articleFile,
@@ -145,10 +158,32 @@ async function loadCreds(locationId: string): Promise<SiteCreds | null> {
   return (data as SiteCreds | null) ?? null;
 }
 
-function makeCtx(creds: SiteCreds): Ctx | null {
-  const token = tokenFrom(creds.credentials);
-  if (!token) return null;
-  return { shop: creds.shop_domain, token, fetch, sleep };
+// Dev Dashboard apps' 24-hour tokens, kept for the life of this instance.
+const exchangedTokens = new Map<string, { token: string; expiresAt: number }>();
+
+/** Why the last makeCtx returned null, for the heartbeat's last_error. */
+let lastCredError = "the Vault credential is missing or is not JSON with an access_token or a client_id and client_secret";
+
+async function makeCtx(creds: SiteCreds): Promise<Ctx | null> {
+  const cred = parseShopifyCredential(creds.credentials);
+  if (!cred) {
+    lastCredError = "the Vault credential is missing or is not JSON with an access_token or a client_id and client_secret";
+    return null;
+  }
+  if (cred.kind === "token") return { shop: creds.shop_domain, token: cred.token, fetch, sleep };
+
+  const key = `${creds.shop_domain}:${cred.clientId}`;
+  const cached = exchangedTokens.get(key);
+  if (cached && cached.expiresAt > Date.now() + 5 * 60_000) return { shop: creds.shop_domain, token: cached.token, fetch, sleep };
+  try {
+    const fresh = await exchangeClientCredentials(creds.shop_domain, cred, fetch);
+    exchangedTokens.set(key, fresh);
+    return { shop: creds.shop_domain, token: fresh.token, fetch, sleep };
+  } catch (e) {
+    lastCredError = e instanceof Error ? e.message : String(e);
+    console.error(`seo-publish ${creds.shop_domain}: ${lastCredError}`);
+    return null;
+  }
 }
 
 function makeGhCtx(creds: SiteCreds): GhCtx | null {
@@ -189,13 +224,13 @@ async function runCheck(locationId: string, clientId: string): Promise<Record<st
     return { status: "no_connection" };
   }
   if (isGithub(creds)) return await runCheckGithub(creds, locationId, clientId);
-  const ctx = makeCtx(creds);
+  const ctx = await makeCtx(creds);
   const now = new Date().toISOString();
 
   if (!ctx) {
     await markConnection(creds.connection_id, {
       status: "error",
-      last_error: "the Vault credential is missing or is not JSON with an access_token",
+      last_error: lastCredError,
       last_checked_at: now,
     });
     await settle(clientId, locationId, "seo_site_check", false, "bad_credential", CHECK_BASE_INTERVAL_MINUTES);
@@ -259,7 +294,7 @@ async function publishOne(action: ActionRow, creds: SiteCreds | null): Promise<"
     return "manual";
   }
 
-  const ctx = creds ? makeCtx(creds) : null;
+  const ctx = creds ? await makeCtx(creds) : null;
   if (!ctx) {
     await toManual(action, "no_site_connection");
     return "manual";
@@ -356,7 +391,7 @@ async function rollbackOne(action: ActionRow, creds: SiteCreds | null): Promise<
   const prior = priorFromPublishResult(action.publish_result);
   const ref = action.resource_ref;
   const written = (action.publish_result as { written?: string } | null)?.written;
-  const ctx = creds ? makeCtx(creds) : null;
+  const ctx = creds ? await makeCtx(creds) : null;
 
   if (!prior || !ref?.resource_id || !ref.key || written === undefined) {
     await keep("LumiLink has no record of what the page held before, so it can't safely restore it.");
@@ -453,7 +488,7 @@ async function publishArticleOne(action: ActionRow, creds: SiteCreds | null): Pr
     ? { status: creds.status, granted_scopes: creds.granted_scopes ?? [], shop_domain: creds.shop_domain, primary_domain: creds.primary_domain }
     : null;
   const decision = decideArticle(conn);
-  const ctx = creds ? makeCtx(creds) : null;
+  const ctx = creds ? await makeCtx(creds) : null;
   if (decision.mode === "manual" || !ctx) {
     await toManualArticle(action, article, decision.mode === "manual" ? decision.reason : "no_site_connection", decision.mode === "manual" ? decision.detail : undefined);
     return "manual";
@@ -524,7 +559,7 @@ async function rollbackArticle(
 ): Promise<"rolled_back" | "kept" | "retry"> {
   const id = action.resource_ref?.article_id;
   const written = (action.publish_result as { written?: { title?: string; body_html?: string } } | null)?.written;
-  const ctx = creds ? makeCtx(creds) : null;
+  const ctx = creds ? await makeCtx(creds) : null;
 
   if (!id || !written?.title || written.body_html === undefined) {
     await keep("LumiLink has no record of what it published, so it can't safely delete it.");

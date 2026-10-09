@@ -97,10 +97,13 @@ import {
   removeAiQuery,
   removeCompetitor,
   removeKeyword,
+  linkGbpLocation,
   runSeoJobNow,
   setKeywordGeoGrid,
   updateLocationSettings,
 } from "./actions";
+import { gbpState, listingLabel, ratingLine, reviewsNote, type GbpListingRow, type GbpSyncRow } from "@/lib/seo-gbp";
+import { hasBusinessProfileScope } from "@/lib/google-oauth";
 import { describeJob, JOB_INFO, sortJobs, type JobStatusRow } from "@/lib/seo-jobs";
 
 type Loc = {
@@ -433,6 +436,7 @@ export default async function SeoPortalPage({
     kwRes, trendRes, radiusRes, connRes, compRes, backlinkRes, metricRes, shippedRes, queryRes, mentionRes, pendingRes,
     propRes, dailyRes, kwCountRes, settingsRes, milestoneRes, entRes, googleRes, publishedRes, metricLatestRes,
     kwStatsRes, suggestionRes, gapRes, crawlRunRes, findingRes, sovRes, linkRes, detailsRes, detailSuggestionRes,
+    gbpSyncRes, gbpListingRes, gbpReviewRes, gbpFindingRes,
   ] = await Promise.all([
     supabase.from("seo_keywords").select("id, keyword, is_geo_grid_enabled").eq("location_id", loc.id).eq("is_active", true).order("keyword"),
     supabase.from("seo_rank_trend").select("rank_type, check_date, avg_position").eq("location_id", loc.id).gte("check_date", since200).order("check_date"),
@@ -458,7 +462,7 @@ export default async function SeoPortalPage({
     supabase.from("seo_client_settings").select("value_per_click_cents").maybeSingle(),
     supabase.from("seo_milestones").select("occurred_on, label").order("occurred_on"),
     supabase.from("entitlements").select("started_at").eq("feature", "seo").order("started_at").limit(1).maybeSingle(),
-    supabase.from("google_oauth_connections").select("connected_at, status").maybeSingle(),
+    supabase.from("google_oauth_connections").select("connected_at, status, granted_scopes").maybeSingle(),
     supabase.from("seo_actions").select("action_type, target_url, apply_mode, publish_result, proposed_value, published_at").in("location_id", siteIds).eq("status", "published").gte("published_at", since16m).order("published_at").limit(1000),
     supabase.from("seo_metrics_daily").select("metric_date").eq("location_id", loc.id).order("metric_date", { ascending: false }).limit(1).maybeSingle(),
     // Module 22: volume and difficulty per phrase (per client, so every
@@ -506,6 +510,22 @@ export default async function SeoPortalPage({
       .order("field")
       .order("value")
       .limit(60),
+    // Module 3: Google Business Profile — sync state, every profile the
+    // client's Google login manages (for the link picker), this location's
+    // latest reviews and its open profile findings.
+    supabase.from("seo_gbp_sync").select("status, locations_count, last_synced_at, last_error").maybeSingle(),
+    supabase
+      .from("seo_gbp_locations")
+      .select("location_name, title, address_text, store_code, linked_location_id, link_source, average_rating, total_review_count, reviews_status, metrics_through, metrics_error, maps_uri, new_review_uri")
+      .order("title")
+      .limit(500),
+    supabase
+      .from("seo_gbp_reviews")
+      .select("review_id, reviewer_name, star_rating, comment, created_at_google, reply_comment")
+      .eq("location_id", loc.id)
+      .order("created_at_google", { ascending: false, nullsFirst: false })
+      .limit(5),
+    supabase.from("seo_findings").select("finding_type, severity, title").eq("location_id", loc.id).eq("module", "gbp_profile").eq("status", "open").limit(50),
   ]);
 
   const keywords = (kwRes.data ?? []) as Keyword[];
@@ -683,6 +703,18 @@ export default async function SeoPortalPage({
 
   const radius = describeRadius(loc, geoKeywords.length, (radiusRes.data as GeoRadiusRow | null) ?? null);
   const gbp = profileMetrics(metrics);
+  const gbpListings = (gbpListingRes.data ?? []) as GbpListingRow[];
+  const gbpView = gbpState({
+    hasScope: googleRes.data?.status === "connected" && hasBusinessProfileScope(googleRes.data?.granted_scopes as string[] | null),
+    sync: (gbpSyncRes.data as GbpSyncRow | null) ?? null,
+    listings: gbpListings,
+    locationId: loc.id,
+  });
+  const gbpLinked = gbpView.kind === "linked" ? gbpView.listing : null;
+  const gbpReviews = (gbpReviewRes.data ?? []) as { review_id: string; reviewer_name: string | null; star_rating: number | null; comment: string | null; created_at_google: string | null; reply_comment: string | null }[];
+  const gbpFindings = ((gbpFindingRes.data ?? []) as { finding_type: string; severity: string; title: string }[]).sort(
+    (a, b) => ["critical", "warning", "info"].indexOf(a.severity) - ["critical", "warning", "info"].indexOf(b.severity),
+  );
   const ai = aiSummary(mentions);
   const sov = shareOfVoice((sovRes.data ?? []) as SovRow[]);
   const respondingPlatforms = new Set(mentions.map((m) => m.platform).filter((p) => p !== "google" && p !== "chat_gpt"));
@@ -1460,12 +1492,39 @@ export default async function SeoPortalPage({
             </form>
           </Card>
 
-          <Card title="Google Business Profile" note="Views, calls and direction requests from your profile, last 60 days.">
-            {!gbp.available ? (
+          <Card title="Google Business Profile" id="gbp-profile" note="Views, calls and direction requests from your profile, last 60 days, plus reviews and what the profile is missing.">
+            {gbpView.kind === "message" ? (
               <Empty>
-                Connect your Google Business Profile to see how many people view, call and ask for directions. {gbp.reason}
+                {gbpView.text}{" "}
+                {gbpView.action === "connect" ? (
+                  <a href="/settings" className="underline">Open Settings</a>
+                ) : gbpView.action === "link" ? (
+                  <a href={`/seo?location=${loc.id}&tab=settings#gbp`} className="underline">Choose the profile</a>
+                ) : null}
               </Empty>
             ) : (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+                  <p className="text-gray-900">
+                    <span className="font-medium">{listingLabel(gbpView.listing)}</span>
+                    {gbpView.listing.maps_uri ? (
+                      <>
+                        {" "}
+                        <a href={safeUrl(gbpView.listing.maps_uri) ?? undefined} target="_blank" rel="noreferrer" className="text-xs underline">
+                          View on Google Maps
+                        </a>
+                      </>
+                    ) : null}
+                  </p>
+                  {ratingLine(gbpView.listing) ? <p className="font-semibold text-gray-900">{ratingLine(gbpView.listing)}</p> : null}
+                </div>
+                {!gbp.available ? (
+                  <Empty>
+                    {gbpView.listing.metrics_error
+                      ? "Google didn't return views, calls or direction requests for this profile. This usually means the profile isn't verified yet. The next sync tries again."
+                      : "Views, calls and direction requests arrive with the first sync, six months back."}
+                  </Empty>
+                ) : (
               <>
                 <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {Object.entries(METRIC_LABELS)
@@ -1488,6 +1547,54 @@ export default async function SeoPortalPage({
                     }))}
                 />
               </>
+                )}
+
+                {gbpFindings.length > 0 ? (
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Profile issues</h3>
+                    <ul className="mt-2 space-y-1 text-sm">
+                      {gbpFindings.map((f) => (
+                        <li key={f.finding_type} className="flex items-start gap-2">
+                          <span
+                            aria-hidden
+                            className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${f.severity === "critical" ? "bg-red-500" : f.severity === "warning" ? "bg-amber-500" : "bg-gray-300"}`}
+                          />
+                          <span className="text-gray-800">{f.title}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Latest reviews</h3>
+                  {reviewsNote(gbpView.listing) ? (
+                    <p className="mt-2 text-sm text-gray-500">{reviewsNote(gbpView.listing)}</p>
+                  ) : gbpReviews.length === 0 ? (
+                    <p className="mt-2 text-sm text-gray-500">No reviews yet.</p>
+                  ) : (
+                    <ul className="mt-2 divide-y divide-gray-100 text-sm">
+                      {gbpReviews.map((r) => (
+                        <li key={r.review_id} className="py-2">
+                          <p className="flex flex-wrap items-baseline gap-2">
+                            <span className="font-medium text-gray-900">{r.star_rating ? `${"★".repeat(r.star_rating)}${"☆".repeat(5 - r.star_rating)}` : "No rating"}</span>
+                            <span className="text-xs text-gray-500">
+                              {r.reviewer_name ?? "Anonymous"}
+                              {r.created_at_google ? `, ${dayLabel(r.created_at_google.slice(0, 10))}` : ""}
+                            </span>
+                            {r.reply_comment ? (
+                              <span className="text-xs text-green-700">Replied</span>
+                            ) : (
+                              <span className="text-xs text-amber-700">No reply</span>
+                            )}
+                          </p>
+                          {r.comment ? <p className="mt-0.5 line-clamp-3 text-gray-700">{r.comment}</p> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
             )}
           </Card>
         </div>
@@ -1752,7 +1859,7 @@ export default async function SeoPortalPage({
                 <li><strong className="text-gray-900">Search Console traffic.</strong> {searchStateMessage(searchState, site, dataThrough)}</li>
               ) : null}
               {!gbp.available ? (
-                <li><strong className="text-gray-900">Google Business Profile actions.</strong> Calls, direction requests and website clicks from your profile, once Google grants profile access.</li>
+                <li><strong className="text-gray-900">Google Business Profile actions.</strong> Calls, direction requests and website clicks from your profile. {gbpView.kind === "message" ? gbpView.text : "They arrive with the first sync."}</li>
               ) : null}
               <li><strong className="text-gray-900">Google Analytics.</strong> Visits, engagement and sales from search traffic. Search clicks alone don&apos;t measure customers.</li>
               {respondingPlatforms.size === 0 ? (
@@ -1846,6 +1953,50 @@ export default async function SeoPortalPage({
                 Save settings
               </button>
             </form>
+          </Card>
+
+          <Card
+            title="Google Business Profile"
+            id="gbp"
+            note="Which of your Google Business Profiles is this location. Matching profiles are linked automatically when the address and phone agree; pick here when they don't."
+          >
+            {gbpListings.length === 0 ? (
+              <Empty>
+                {gbpView.kind === "message" ? gbpView.text : "No profiles listed yet."}{" "}
+                {gbpView.kind === "message" && gbpView.action === "connect" ? <a href="/settings" className="underline">Open Settings</a> : null}
+              </Empty>
+            ) : (
+              <form action={linkGbpLocation} className="space-y-3 text-sm">
+                <input type="hidden" name="location" value={loc.id} />
+                <input type="hidden" name="previous" value={gbpLinked?.location_name ?? ""} />
+                <label className="block">
+                  <span className="text-gray-700">Profile</span>
+                  <select
+                    name="profile"
+                    defaultValue={gbpLinked?.location_name ?? ""}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5"
+                  >
+                    <option value="">Not linked</option>
+                    {gbpListings.map((l) => (
+                      <option key={l.location_name} value={l.location_name}>
+                        {listingLabel(l)}
+                        {l.linked_location_id && l.linked_location_id !== loc.id ? " (linked to another location)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {gbpLinked ? (
+                  <p className="text-xs text-gray-500">
+                    {gbpLinked.link_source === "auto" ? "Linked automatically: the address and phone matched." : "Linked by hand."}
+                    {gbpLinked.metrics_through ? ` Performance data through ${dayLabel(gbpLinked.metrics_through)}.` : ""}
+                  </p>
+                ) : null}
+                <p className="text-xs text-gray-500">Choosing a profile that is linked to another location moves it here.</p>
+                <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
+                  Save profile
+                </button>
+              </form>
+            )}
           </Card>
 
           <Card

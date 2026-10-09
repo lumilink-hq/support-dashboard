@@ -32,8 +32,10 @@ import {
   checkConnection,
   chooseBlog,
   deleteArticle,
+  exchangeClientCredentials,
   gql,
   listBlogs,
+  parseShopifyCredential,
   publishArticle,
   readArticle,
   readOverride,
@@ -54,6 +56,10 @@ function ok(label: string, cond: boolean, got?: unknown) {
     failed++;
     console.log(`  FAIL ${label}${got === undefined ? "" : `  (got: ${JSON.stringify(got)})`}`);
   }
+}
+
+function eq(label: string, got: unknown, want: unknown) {
+  ok(label, JSON.stringify(got) === JSON.stringify(want), got);
 }
 
 async function rejects(p: Promise<unknown>): Promise<ShopifyError | Error | null> {
@@ -669,6 +675,38 @@ console.log("full round trip");
       ok("readArticle returns null for something that isn't an article", (await readArticle(s.ctx(), "gid://shopify/Product/1")) === null);
       ok("listBlogs returns the store's blogs", (await listBlogs(s.ctx())).length === 1);
     }
+  }
+
+  // Credentials: legacy token vs Dev Dashboard client credentials.
+  {
+    eq("cred: legacy token", parseShopifyCredential('{"access_token":"shpat_x"}'), { kind: "token", token: "shpat_x" });
+    eq("cred: client credentials", parseShopifyCredential('{"client_id":"id","client_secret":"sec"}'), { kind: "client_credentials", clientId: "id", clientSecret: "sec" });
+    eq("cred: token wins when both are present", parseShopifyCredential('{"access_token":"t","client_id":"id","client_secret":"s"}')?.kind, "token");
+    eq("cred: secret missing", parseShopifyCredential('{"client_id":"id"}'), null);
+    eq("cred: not JSON", parseShopifyCredential("shpat_x"), null);
+    eq("cred: null", parseShopifyCredential(null), null);
+
+    let seen: { url: string; body: string } | null = null;
+    const okFetch = (async (url: string, init: RequestInit) => {
+      seen = { url, body: String(init.body) };
+      return new Response(JSON.stringify({ access_token: "tok", scope: "write_products", expires_in: 86399 }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const before = Date.now();
+    const got = await exchangeClientCredentials("packs.myshopify.com", { clientId: "id", clientSecret: "sec" }, okFetch);
+    eq("exchange: token", got.token, "tok");
+    ok("exchange: expiry about 24 h out", got.expiresAt >= before + 86_000_000 && got.expiresAt <= Date.now() + 86_400_000);
+    eq("exchange: url", seen!.url, "https://packs.myshopify.com/admin/oauth/access_token");
+    ok("exchange: grant type in body", seen!.body.includes("grant_type=client_credentials") && seen!.body.includes("client_secret=sec"));
+
+    const refused = (async () => new Response('{"error":"invalid_client"}', { status: 400 })) as unknown as typeof fetch;
+    let kind = "";
+    try { await exchangeClientCredentials("packs.myshopify.com", { clientId: "id", clientSecret: "bad" }, refused); } catch (e) { kind = (e as ShopifyError).kind; }
+    eq("exchange: a bad secret is an auth error", kind, "auth");
+
+    const down = (async () => new Response("oops", { status: 503 })) as unknown as typeof fetch;
+    kind = "";
+    try { await exchangeClientCredentials("packs.myshopify.com", { clientId: "id", clientSecret: "sec" }, down); } catch (e) { kind = (e as ShopifyError).kind; }
+    eq("exchange: a 5xx is transient", kind, "transient");
   }
 
 console.log(`\n${passed} passed, ${failed} failed`);

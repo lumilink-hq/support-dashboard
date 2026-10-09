@@ -155,15 +155,18 @@ export default function PrivacyPage() {
       </Clause>
 
       {/* Google OAuth verification reads this clause. It covers only the
-          scopes the app requests today (lib/google-oauth.ts). When the
-          Business Profile flow ships (plan.md Phase 4), add what it reads and
-          writes here BEFORE requesting business.manage in production. */}
+          scopes the app requests today (lib/google-oauth.ts). Business
+          Profile is read-only today (module 3, seo-gbp-sync). When profile
+          edits or review replies ship (module 4), add what they write here
+          BEFORE they go live. */}
       <Clause heading="Information From Your Google Account">
         <p>
           If you connect your Google account in Settings, we ask Google for two
           things: your Google account&rsquo;s email address, so we can show you
           which account is connected, and <strong>read-only</strong> access to
-          Google Search Console for your website.
+          Google Search Console for your website. If you also add Google
+          Business Profile, we ask Google for access to the Business Profiles
+          your account manages.
         </p>
         <p>
           We use Search Console for one purpose: checking whether Google has
@@ -172,6 +175,15 @@ export default function PrivacyPage() {
           page is indexed, when Google last crawled it, and any reason it gave
           for leaving it out. Problems appear as findings in your dashboard. We
           cannot change anything in your Search Console account.
+        </p>
+        <p>
+          We use Business Profile to report on your listings. Once a day we
+          read each profile&rsquo;s details (name, address, phone, website,
+          categories, hours and description), its daily views, calls,
+          direction requests and website clicks, and its reviews and your
+          replies to them. We keep that information to show it in your
+          dashboard and reports, and to point out what a profile is missing.
+          We do not change your profiles or post replies.
         </p>
         <p>
           Your Google access token is stored in a dedicated secrets vault,
