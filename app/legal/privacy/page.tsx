@@ -14,13 +14,14 @@ import {
   LEGAL_ENTITY,
   LegalPage,
 } from "@/components/marketing/legal";
+import { withSeoOverrides } from "@/lib/seo-overrides";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeoOverrides("/legal/privacy", {
   title: "Privacy Policy | LumiLink",
   description:
     "What LumiLink collects across the phone agent, website chat and SEO + AI Search, including connected Google data: why, how long we keep it, and who sees it.",
   alternates: { canonical: "/legal/privacy" },
-};
+});
 
 /**
  * Every third party that genuinely processes customer data. Keep this list

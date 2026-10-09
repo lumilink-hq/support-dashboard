@@ -7,13 +7,14 @@ import { MarketingShell } from "@/components/marketing/shell";
 import { Eyebrow, Section } from "@/components/marketing/blocks";
 import { safeNextPath } from "@/lib/route-access";
 import { submitContact } from "./actions";
+import { withSeoOverrides } from "@/lib/seo-overrides";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeoOverrides("/contact", {
   title: "Contact LumiLink",
   description:
     "New here and want more than the self-serve plans cover, or already a customer with a question? Tell us what's going on.",
   alternates: { canonical: "/contact" },
-};
+});
 
 export default async function ContactPage({
   searchParams,

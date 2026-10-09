@@ -13,11 +13,12 @@ import {
   ECOMMERCE_METADATA,
   EcommerceSolution,
 } from "@/components/marketing/ecommerce";
+import { withSeoOverrides } from "@/lib/seo-overrides";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeoOverrides("/solutions/ecommerce", {
   ...ECOMMERCE_METADATA,
   alternates: { canonical: "/solutions/ecommerce" },
-};
+});
 
 export default function EcommerceSolutionPage() {
   return <EcommerceSolution />;

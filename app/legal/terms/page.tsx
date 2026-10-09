@@ -15,13 +15,14 @@ import {
   LegalPage,
 } from "@/components/marketing/legal";
 import { STARTER_PLAN } from "@/lib/entitlements";
+import { withSeoOverrides } from "@/lib/seo-overrides";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeoOverrides("/legal/terms", {
   title: "Terms Of Service | LumiLink",
   description:
     "The terms you agree to when you subscribe to LumiLink: what we provide, what you're responsible for, billing, cancellation and liability.",
   alternates: { canonical: "/legal/terms" },
-};
+});
 
 export default function TermsPage() {
   return (

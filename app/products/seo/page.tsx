@@ -9,11 +9,12 @@ import type { Metadata } from "next";
 import { SEO_METADATA, SeoSolution } from "@/components/marketing/seo";
 import { JsonLd } from "@/components/json-ld";
 import { seoServiceJsonLd } from "@/lib/structured-data";
+import { withSeoOverrides } from "@/lib/seo-overrides";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeoOverrides("/products/seo", {
   ...SEO_METADATA,
   alternates: { canonical: "/products/seo" },
-};
+});
 
 export default function SeoSolutionPage() {
   return (

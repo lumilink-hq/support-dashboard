@@ -18,11 +18,12 @@ import { Landing, LANDING_METADATA } from "@/components/marketing/landing";
 import { createClient } from "@/lib/supabase/server";
 import { JsonLd } from "@/components/json-ld";
 import { homeJsonLd } from "@/lib/structured-data";
+import { withSeoOverrides } from "@/lib/seo-overrides";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeoOverrides("/", {
   ...LANDING_METADATA,
   alternates: { canonical: "/" },
-};
+});
 
 export default async function Home() {
   // A Supabase outage must not take the marketing site down with it: on error

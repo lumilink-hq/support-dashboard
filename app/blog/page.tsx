@@ -9,16 +9,17 @@ import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
 import { Eyebrow, Section } from "@/components/marketing/blocks";
 import { formatPostDate, getAllPosts } from "@/lib/blog";
+import { withSeoOverrides } from "@/lib/seo-overrides";
 
 export function generateMetadata(): Metadata {
   const hasPosts = getAllPosts().length > 0;
-  return {
+  return withSeoOverrides("/blog", {
     title: "Blog | LumiLink",
     description:
       "Practical guides on answering every customer, getting found on Google and showing up in AI search, for service businesses and online stores.",
     alternates: { canonical: "/blog" },
     ...(hasPosts ? {} : { robots: { index: false, follow: true } }),
-  };
+  });
 }
 
 export default function BlogIndexPage() {

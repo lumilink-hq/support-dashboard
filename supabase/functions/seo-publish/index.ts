@@ -25,6 +25,13 @@
 // unresolvable page, or a field the API can't write all become 'manual_required'
 // with step-by-step instructions, never a silent drop.
 //
+// GITHUB (2026-10-09, 0075): a connection with platform 'github' publishes to a
+// Next.js site's repository instead (github.ts / github-lib.ts): articles become
+// content/blog/<slug>.html and titles/descriptions entries in
+// content/seo-overrides.json, each one commit. Same rules: only approved
+// actions, prior state recorded before the write, drift refuses a rollback,
+// anything it can't do goes manual. Built for LumiLink's own site.
+//
 // Env: SUPABASE_URL, SUPABASE_SECRET_KEYS (["default"] = service role),
 //      VOICE_TOOL_SECRET.
 // The Shopify credential comes from Vault via get_seo_site_credentials (0055):
@@ -41,11 +48,27 @@ import {
   decideArticle,
   manualInstructions,
   priorFromPublishResult,
+  slugify,
   type ArticleProposal,
   type ConnectionFacts,
   type ManualReason,
 } from "./lib.ts";
 import { applyChange, checkConnection, deleteArticle, publishArticle, revertChange, ShopifyError, type Ctx } from "./shopify.ts";
+import { checkRepo, deleteFile, GithubError, readFile, writeFile, type GhCtx } from "./github.ts";
+import {
+  articleFile,
+  blogPath,
+  decideGithub,
+  githubManualInstructions,
+  OVERRIDES_FILE,
+  parseOverrides,
+  revertOverride,
+  serializeOverrides,
+  setOverride,
+  utcDate,
+  type GithubManualReason,
+  type OverrideKey,
+} from "./github-lib.ts";
 // The uniqueness rules are module 16's; publishing re-runs them, so it reuses them
 // rather than keeping a second copy that could drift. (Bundled with this function
 // at deploy time; verified with the edge-runtime bundle.)
@@ -80,6 +103,9 @@ function json(payload: unknown, status = 200) {
 
 type SiteCreds = {
   connection_id: string;
+  platform?: "shopify" | "github"; // 0075; absent before it, meaning shopify
+  repo?: string | null; // github: owner/name
+  branch?: string | null; // github: the branch the site deploys from
   shop_domain: string;
   primary_domain: string | null;
   status: string;
@@ -98,8 +124,9 @@ type ActionRow = {
   target_url: string | null;
   apply_mode: string | null;
   proposed_value: { value?: string } | null;
-  resource_ref: { resource_id?: string; key?: string; kind?: string; article_id?: string; blog_handle?: string } | null;
+  resource_ref: { resource_id?: string; key?: string; kind?: string; article_id?: string; blog_handle?: string; path?: string; sha?: string } | null;
   publish_result: Record<string, unknown> | null;
+  approved_at?: string | null;
 };
 
 function tokenFrom(secret: string | null): string | null {
@@ -123,6 +150,14 @@ function makeCtx(creds: SiteCreds): Ctx | null {
   if (!token) return null;
   return { shop: creds.shop_domain, token, fetch, sleep };
 }
+
+function makeGhCtx(creds: SiteCreds): GhCtx | null {
+  const token = tokenFrom(creds.credentials);
+  if (!token || !creds.repo) return null;
+  return { repo: creds.repo, branch: creds.branch || "main", token, fetch, sleep, apiBase: Deno.env.get("SEO_GITHUB_API_URL") || undefined };
+}
+
+const isGithub = (creds: SiteCreds | null) => creds?.platform === "github";
 
 async function settle(clientId: string, locationId: string, jobType: string, success: boolean, error: string | null, base: number) {
   const { error: jobError } = await supabase.rpc("complete_job_attempt", {
@@ -153,6 +188,7 @@ async function runCheck(locationId: string, clientId: string): Promise<Record<st
     await settle(clientId, locationId, "seo_site_check", true, null, CHECK_BASE_INTERVAL_MINUTES);
     return { status: "no_connection" };
   }
+  if (isGithub(creds)) return await runCheckGithub(creds, locationId, clientId);
   const ctx = makeCtx(creds);
   const now = new Date().toISOString();
 
@@ -522,10 +558,280 @@ async function rollbackArticle(
   }
 }
 
+// -----------------------------------------------------------------------------
+// GitHub (0075): a Next.js site's repository
+// -----------------------------------------------------------------------------
+
+async function runCheckGithub(creds: SiteCreds, locationId: string, clientId: string): Promise<Record<string, unknown>> {
+  const now = new Date().toISOString();
+  const ctx = makeGhCtx(creds);
+  if (!ctx) {
+    await markConnection(creds.connection_id, { status: "error", last_error: "the Vault credential is missing, or the connection has no repo", last_checked_at: now });
+    await settle(clientId, locationId, "seo_site_check", false, "bad_credential", CHECK_BASE_INTERVAL_MINUTES);
+    return { status: "error", error: "bad_credential" };
+  }
+  try {
+    const { push } = await checkRepo(ctx);
+    const status = push ? "healthy" : "degraded";
+    await markConnection(creds.connection_id, {
+      status,
+      granted_scopes: push ? ["contents:write"] : ["contents:read"],
+      last_checked_at: now,
+      last_healthy_at: now,
+      last_error: push ? null : "the token can read the repository but not push to it",
+    });
+    await settle(clientId, locationId, "seo_site_check", true, null, CHECK_BASE_INTERVAL_MINUTES);
+    return { status };
+  } catch (e) {
+    const err = e instanceof GithubError ? e : new GithubError("transient", e instanceof Error ? e.message : String(e));
+    const status = err.kind === "auth" ? "revoked" : "error";
+    await markConnection(creds.connection_id, { status, last_error: err.message, last_checked_at: now });
+    await settle(clientId, locationId, "seo_site_check", status === "revoked", status === "revoked" ? null : err.message, CHECK_BASE_INTERVAL_MINUTES);
+    return { status, error: err.message };
+  }
+}
+
+async function toManualGithub(action: ActionRow, reason: GithubManualReason) {
+  const instructions = githubManualInstructions(
+    { target_field: action.target_field, target_url: action.target_url, proposed: String(action.proposed_value?.value ?? "") },
+    reason,
+  );
+  const { error } = await supabase
+    .from("seo_actions")
+    .update({ status: "manual_required", apply_mode: "manual", manual_instructions: instructions, error: null })
+    .eq("id", action.id);
+  if (error) console.error(`seo-publish: marking ${action.id} manual failed: ${error.message}`);
+}
+
+/** An article as the exact file to add, for when the publisher can't. */
+async function toManualArticleGithub(action: ActionRow, file: string, path: string, why: string) {
+  const { error } = await supabase
+    .from("seo_actions")
+    .update({
+      status: "manual_required",
+      apply_mode: "manual",
+      error: null,
+      manual_instructions: {
+        reason: "no_site_connection",
+        why,
+        steps: [`Add a file at ${path} in the site's repository with exactly the text below.`, "Commit and push; the post is live a couple of minutes after the deploy."],
+        copy: { label: path, text: file },
+      },
+    })
+    .eq("id", action.id);
+  if (error) console.error(`seo-publish: marking article ${action.id} manual failed: ${error.message}`);
+}
+
+/** Map a GithubError onto the action, the same way the Shopify paths do. */
+async function githubFailure(action: ActionRow, creds: SiteCreds, e: unknown, onManual: (reason: GithubManualReason) => Promise<void>): Promise<"manual" | "retry"> {
+  if (e instanceof GithubError && (e.kind === "auth" || e.kind === "scope")) {
+    if (e.kind === "auth") await markConnection(creds.connection_id, { status: "revoked", last_error: e.message, last_checked_at: new Date().toISOString() });
+    await onManual("connection_revoked");
+    return "manual";
+  }
+  const message = e instanceof Error ? e.message : String(e);
+  console.error(`seo-publish github ${action.id}: ${message}`);
+  await supabase.from("seo_actions").update({ status: "approved", error: message }).eq("id", action.id);
+  return "retry";
+}
+
+const siteHosts = (creds: SiteCreds) => [creds.primary_domain, creds.shop_domain].filter((h): h is string => !!h);
+
+async function publishOverrideGithub(action: ActionRow, creds: SiteCreds): Promise<"published" | "manual" | "retry" | "skipped"> {
+  const { data: claimed, error: claimErr } = await supabase.rpc("claim_seo_action", { p_action_id: action.id, p_kind: "publish" });
+  if (claimErr) throw new Error(`claim failed: ${claimErr.message}`);
+  if (!claimed) return "skipped";
+
+  const decision = decideGithub(action, { status: creds.status, site_hosts: siteHosts(creds) });
+  const ctx = makeGhCtx(creds);
+  if (decision.mode === "manual" || !ctx) {
+    await toManualGithub(action, decision.mode === "manual" ? decision.reason : "no_site_connection");
+    return "manual";
+  }
+  const proposed = String(action.proposed_value?.value ?? "");
+  if (!proposed) {
+    await supabase.from("seo_actions").update({ status: "failed", error: "the draft has no proposed value" }).eq("id", action.id);
+    return "skipped";
+  }
+
+  try {
+    // Read-modify-write on one shared file: a concurrent commit makes the sha
+    // stale (409/422), so re-read and try again.
+    for (let attempt = 1; ; attempt++) {
+      const file = await readFile(ctx, OVERRIDES_FILE);
+      const current = parseOverrides(file?.text ?? null);
+      const { next, prior } = setOverride(current, decision.path, decision.key, proposed);
+      const recorded = { id: null, value: prior, recorded_at: new Date().toISOString() };
+      // RULE 3: what was there before is stored before the write.
+      const { error: prErr } = await supabase
+        .from("seo_actions")
+        .update({ publish_result: { ...(action.publish_result ?? {}), previous_override: recorded } })
+        .eq("id", action.id);
+      if (prErr) throw new Error(`could not record the prior state: ${prErr.message}`);
+
+      let commit: string | null = null;
+      const noop = prior === proposed;
+      if (!noop) {
+        try {
+          commit = (await writeFile(ctx, OVERRIDES_FILE, serializeOverrides(next), `SEO: ${decision.key} for ${decision.path} (approved draft ${action.id})`, file?.sha ?? null)).commit;
+        } catch (e) {
+          if (e instanceof GithubError && e.kind === "conflict" && attempt < 3) continue;
+          throw e;
+        }
+      }
+      const now = new Date().toISOString();
+      const { error: upErr } = await supabase
+        .from("seo_actions")
+        .update({
+          status: "published",
+          apply_mode: "api",
+          published_at: now,
+          error: null,
+          resource_ref: { platform: "github", kind: "override", path: decision.path, key: decision.key },
+          publish_result: { previous_override: recorded, written: proposed, verified: true, noop, commit },
+        })
+        .eq("id", action.id);
+      if (upErr) throw new Error(`the change was committed but recording it failed: ${upErr.message}`);
+      if (action.finding_id) await supabase.from("seo_findings").update({ status: "resolved", resolved_at: now }).eq("id", action.finding_id);
+      return "published";
+    }
+  } catch (e) {
+    return await githubFailure(action, creds, e, (reason) => toManualGithub(action, reason));
+  }
+}
+
+async function publishArticleGithub(action: ActionRow, creds: SiteCreds): Promise<"published" | "manual" | "retry" | "skipped"> {
+  const { data: claimed, error: claimErr } = await supabase.rpc("claim_seo_action", { p_action_id: action.id, p_kind: "publish" });
+  if (claimErr) throw new Error(`claim failed: ${claimErr.message}`);
+  if (!claimed) return "skipped";
+
+  const article = articleFromProposal(action.proposed_value);
+  if (!article) {
+    await supabase.from("seo_actions").update({ status: "failed", error: "the draft is malformed and can't be published" }).eq("id", action.id);
+    return "skipped";
+  }
+  // The approval date, not today's: a retry tomorrow must produce the same file.
+  const date = utcDate(action.approved_at ? new Date(action.approved_at) : new Date());
+  const text = articleFile({ ...article, date });
+  const base = slugify(article.title);
+
+  const ctx = makeGhCtx(creds);
+  if (!ctx || creds.status === "revoked") {
+    await toManualArticleGithub(action, text, blogPath(base), ctx ? GITHUB_WHY_REVOKED : "This site isn't connected to LumiLink for publishing yet.");
+    return "manual";
+  }
+
+  const blocked = await uniquenessBlock(action);
+  if (blocked) {
+    await supabase.from("seo_actions").update({ status: "failed", error: `Not published: ${blocked}` }).eq("id", action.id);
+    return "skipped";
+  }
+
+  try {
+    // First free slug; a file that already holds exactly this article is ours
+    // from an earlier attempt, so adopt it rather than publish a second copy.
+    let slug = base;
+    let sha: string | null = null;
+    let adopted = false;
+    for (let i = 1; i < 100; i++) {
+      slug = i === 1 ? base : `${base}-${i}`;
+      const existing = await readFile(ctx, blogPath(slug));
+      if (!existing) break;
+      if (existing.text === text) {
+        sha = existing.sha;
+        adopted = true;
+        break;
+      }
+    }
+    const path = blogPath(slug);
+    let commit: string | null = null;
+    if (!adopted) {
+      const w = await writeFile(ctx, path, text, `SEO: publish article "${article.title}" (approved draft ${action.id})`, null);
+      sha = w.sha;
+      commit = w.commit;
+    }
+    const host = creds.primary_domain ?? creds.shop_domain;
+    const now = new Date().toISOString();
+    const { error: upErr } = await supabase
+      .from("seo_actions")
+      .update({
+        status: "published",
+        apply_mode: "api",
+        published_at: now,
+        error: null,
+        target_url: `https://${host}/blog/${slug}`,
+        resource_ref: { platform: "github", kind: "article", path, sha },
+        publish_result: { written: { title: article.title, body_html: article.body_html }, verified: true, adopted, commit, image_error: null, meta_verified: true },
+      })
+      .eq("id", action.id);
+    if (upErr) throw new Error(`the article was committed but recording it failed: ${upErr.message}`);
+    return "published";
+  } catch (e) {
+    return await githubFailure(action, creds, e, () => toManualArticleGithub(action, text, blogPath(base), GITHUB_WHY_REVOKED));
+  }
+}
+
+const GITHUB_WHY_REVOKED = "LumiLink's access to the site's GitHub repository was revoked or has expired.";
+
+async function rollbackGithub(action: ActionRow, creds: SiteCreds): Promise<"rolled_back" | "kept" | "retry" | "skipped"> {
+  const { data: claimed, error: claimErr } = await supabase.rpc("claim_seo_action", { p_action_id: action.id, p_kind: "rollback" });
+  if (claimErr) throw new Error(`claim failed: ${claimErr.message}`);
+  if (!claimed) return "skipped";
+
+  const keep = async (message: string) => {
+    await supabase.from("seo_actions").update({ status: "published", error: `Rollback not done: ${message}` }).eq("id", action.id);
+    return "kept" as const;
+  };
+  const done = async () => {
+    await supabase.from("seo_actions").update({ status: "rolled_back", rolled_back_at: new Date().toISOString(), error: null }).eq("id", action.id);
+    return "rolled_back" as const;
+  };
+  const ref = action.resource_ref;
+  const ctx = makeGhCtx(creds);
+  if (!ctx || creds.status === "revoked") return await keep("LumiLink no longer has working access to the repository.");
+
+  try {
+    if (ref?.kind === "article" && ref.path && ref.sha) {
+      const file = await readFile(ctx, ref.path);
+      if (!file) return await done(); // already removed by hand
+      if (file.sha !== ref.sha) return await keep("the article file was edited after LumiLink published it, so it was left as it is.");
+      await deleteFile(ctx, ref.path, file.sha, `SEO: roll back article ${ref.path} (draft ${action.id})`);
+      return await done();
+    }
+    if (ref?.kind === "override" && ref.path && ref.key) {
+      const written = (action.publish_result as { written?: string } | null)?.written;
+      const prior = priorFromPublishResult(action.publish_result);
+      if (written === undefined || !prior) return await keep("LumiLink has no record of what the page held before, so it can't safely restore it.");
+      for (let attempt = 1; ; attempt++) {
+        const file = await readFile(ctx, OVERRIDES_FILE);
+        const r = revertOverride(parseOverrides(file?.text ?? null), ref.path, ref.key as OverrideKey, written, prior.value);
+        if (r === "drift") return await keep("the title or description was changed after LumiLink set it, so it was left as it is.");
+        try {
+          await writeFile(ctx, OVERRIDES_FILE, serializeOverrides(r.next), `SEO: roll back ${ref.key} for ${ref.path} (draft ${action.id})`, file?.sha ?? null);
+        } catch (e) {
+          if (e instanceof GithubError && e.kind === "conflict" && attempt < 3) continue;
+          throw e;
+        }
+        return await done();
+      }
+    }
+    return await keep("LumiLink has no record of what it published, so it can't safely undo it.");
+  } catch (e) {
+    if (e instanceof GithubError && (e.kind === "auth" || e.kind === "scope")) {
+      if (e.kind === "auth") await markConnection(creds.connection_id, { status: "revoked", last_error: e.message, last_checked_at: new Date().toISOString() });
+      return await keep("LumiLink's access to the repository was revoked.");
+    }
+    const message = e instanceof Error ? e.message : String(e);
+    console.error(`seo-publish github rollback ${action.id}: ${message}`);
+    await supabase.from("seo_actions").update({ status: "rollback_requested", error: message }).eq("id", action.id);
+    return "retry";
+  }
+}
+
 async function runPublish(locationId: string, clientId: string): Promise<Record<string, unknown>> {
   const { data: actions, error } = await supabase
     .from("seo_actions")
-    .select("id, client_id, location_id, finding_id, action_type, status, target_field, target_url, apply_mode, proposed_value, resource_ref, publish_result, updated_at")
+    .select("id, client_id, location_id, finding_id, action_type, status, target_field, target_url, apply_mode, proposed_value, resource_ref, publish_result, approved_at, updated_at")
     .eq("location_id", locationId)
     .in("status", ["approved", "rollback_requested", "publishing", "rolling_back"])
     .order("created_at", { ascending: true })
@@ -545,11 +851,17 @@ async function runPublish(locationId: string, clientId: string): Promise<Record<
       continue;
     }
     const isRollback = a.status === "rollback_requested" || a.status === "rolling_back";
-    const outcome = isRollback
-      ? await rollbackOne(a, creds)
-      : a.action_type === "content_publish"
-        ? await publishArticleOne(a, creds)
-        : await publishOne(a, creds);
+    const outcome = isGithub(creds)
+      ? isRollback
+        ? await rollbackGithub(a, creds!)
+        : a.action_type === "content_publish"
+          ? await publishArticleGithub(a, creds!)
+          : await publishOverrideGithub(a, creds!)
+      : isRollback
+        ? await rollbackOne(a, creds)
+        : a.action_type === "content_publish"
+          ? await publishArticleOne(a, creds)
+          : await publishOne(a, creds);
     tally[outcome as keyof typeof tally]++;
   }
 

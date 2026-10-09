@@ -8,13 +8,14 @@ import { ClosingCta, Section } from "@/components/marketing/blocks";
 import { MarketingShell } from "@/components/marketing/shell";
 import { formatPostDate, getPost } from "@/lib/blog";
 import { blogPostingJsonLd } from "@/lib/structured-data";
+import { withSeoOverrides } from "@/lib/seo-overrides";
 
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = getPost((await params).slug);
   if (!post) return {};
-  return {
+  return withSeoOverrides(`/blog/${post.slug}`, {
     title: `${post.title} | LumiLink`,
     description: post.description,
     alternates: { canonical: `/blog/${post.slug}` },
@@ -27,7 +28,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       ...(post.updated ? { modifiedTime: post.updated } : {}),
       ...(post.image ? { images: [{ url: post.image, alt: post.imageAlt ?? "" }] } : {}),
     },
-  };
+  });
 }
 
 export default async function BlogPostPage({ params }: Props) {

@@ -47,15 +47,16 @@ import { availableAddons } from "@/lib/addons";
 import { productByKey } from "@/lib/catalog";
 import { PLAN_TIERS } from "@/lib/entitlements";
 import { seoPlanByKey } from "@/lib/seo-pricing";
+import { withSeoOverrides } from "@/lib/seo-overrides";
 
 const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeoOverrides("/pricing", {
   title: "Pricing | LumiLink",
   description:
     "Every plan, add-on and product in one place: the AI phone agent, website chat, extra lines and locations, and SEO + AI search.",
   alternates: { canonical: "/pricing" },
-};
+});
 
 export default async function PricingPage() {
   const addons = availableAddons();

@@ -5,11 +5,12 @@
 
 import type { Metadata } from "next";
 import { SERVICE_METADATA, ServiceSolution } from "@/components/marketing/service";
+import { withSeoOverrides } from "@/lib/seo-overrides";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withSeoOverrides("/solutions/service", {
   ...SERVICE_METADATA,
   alternates: { canonical: "/solutions/service" },
-};
+});
 
 export default function ServiceSolutionPage() {
   return <ServiceSolution />;
