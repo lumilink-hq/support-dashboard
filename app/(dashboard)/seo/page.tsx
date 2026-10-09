@@ -1396,7 +1396,9 @@ export default async function SeoPortalPage({
             id="location-details"
             note="Weekly articles can only say what's true about this location. Without these details they stay general; with them they can name the places you serve and the facts you confirm here."
           >
-            <form action={saveLocationDetails} className="space-y-4 text-sm">
+            {/* Keyed by location: the switcher is a soft navigation, and without a fresh form
+                the inputs keep the last location's values (defaultValue only applies on mount). */}
+            <form key={loc.id} action={saveLocationDetails} className="space-y-4 text-sm">
               <input type="hidden" name="location" value={loc.id} />
               {detailSuggestions.length > 0 ? (
                 <div className="rounded-md border border-blue-100 bg-blue-50/60 p-3">
@@ -1877,7 +1879,7 @@ export default async function SeoPortalPage({
             id="location-settings"
             note="What the SEO engine knows about this location. The audit, drafts and articles all read from here."
           >
-            <form action={updateLocationSettings} className="group space-y-4 text-sm">
+            <form key={loc.id} action={updateLocationSettings} className="group space-y-4 text-sm">
               <input type="hidden" name="location" value={loc.id} />
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="block">
@@ -1966,7 +1968,7 @@ export default async function SeoPortalPage({
                 {gbpView.kind === "message" && gbpView.action === "connect" ? <a href="/settings" className="underline">Open Settings</a> : null}
               </Empty>
             ) : (
-              <form action={linkGbpLocation} className="space-y-3 text-sm">
+              <form key={loc.id} action={linkGbpLocation} className="space-y-3 text-sm">
                 <input type="hidden" name="location" value={loc.id} />
                 <input type="hidden" name="previous" value={gbpLinked?.location_name ?? ""} />
                 <label className="block">
