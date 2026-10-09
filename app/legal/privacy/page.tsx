@@ -164,7 +164,7 @@ export default function PrivacyPage() {
           If you connect your Google account in Settings, we ask Google for
           three things: your Google account&rsquo;s email address, so we can
           show you which account is connected;{" "}
-          <strong>read-only</strong> access to Google Search Console for your website; and access to the
+          <strong>read-only</strong>{" "}access to Google Search Console for your website; and access to the
           Google Business Profiles your account manages. Google&rsquo;s
           consent screen lets you leave Business Profile out.
         </p>
