@@ -3,6 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentClientId } from "@/lib/entitlements";
+import { editArticle, editPageFix } from "@/lib/seo-draft-edit";
+import { saveDraftEdit } from "@/lib/services/seo-draft-edits";
+import type { LocationDetails } from "@/supabase/functions/seo-content/details";
+
+/** A reason or note with a decision (0074): one line, at most 500 characters. */
+function cleanNote(raw: FormDataEntryValue | null): string | null {
+  const s = String(raw ?? "").replace(/\s+/g, " ").trim().slice(0, 500);
+  return s || null;
+}
 
 function backTo(filter: string, error?: string) {
   const status = filter || "pending_approval";
@@ -37,12 +47,17 @@ async function decide(formData: FormData, next: "approved" | "rejected") {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data, error } = await supabase
-    .from("seo_actions")
-    .update({ status: next })
-    .eq("id", id)
-    .eq("status", "pending_approval")
-    .select("id");
+  const note = cleanNote(formData.get("note"));
+  const write = (withNote: boolean) =>
+    supabase
+      .from("seo_actions")
+      .update(withNote && note ? { status: next, decision_note: note } : { status: next })
+      .eq("id", id)
+      .eq("status", "pending_approval")
+      .select("id");
+  let { data, error } = await write(true);
+  // Before 0074 there's no decision_note column (42703): decide without it.
+  if (error?.code === "42703") ({ data, error } = await write(false));
 
   if (error) redirect(backTo(filter, error.message));
   if (!data || data.length === 0) {
@@ -100,4 +115,71 @@ export async function requestRollback(formData: FormData) {
 /** "I applied this by hand." A claim, not proof: the next crawl confirms it. */
 export async function confirmManualApply(formData: FormData) {
   await callRpc(formData, "confirm_seo_manual_apply");
+}
+
+/**
+ * Edit a waiting draft before approving it (0074). The row is read under the
+ * tenant's own RLS (so it must be theirs and still waiting), the new text goes
+ * through the same checks as the model's output (lib/seo-draft-edit.ts), and
+ * only then is it written, by lib/services/seo-draft-edits.ts. The engine's
+ * first version is kept in original_value. The draft stays waiting: editing
+ * is not approving.
+ */
+export async function editDraft(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const filter = String(formData.get("filter") ?? "pending_approval");
+  if (!id) redirect(backTo(filter, "Missing draft id."));
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  const clientId = await getCurrentClientId();
+  if (!clientId) redirect("/login");
+
+  const { data: row } = await supabase
+    .from("seo_actions")
+    .select("id, action_type, target_field, location_id, proposed_value, previous_value, diff, original_value")
+    .eq("id", id)
+    .eq("status", "pending_approval")
+    .maybeSingle();
+  if (!row) redirect(backTo(filter, "That draft is no longer waiting for approval."));
+
+  const pv = (row.proposed_value ?? {}) as Record<string, unknown>;
+  const original = row.original_value ?? row.proposed_value;
+  let saved: Awaited<ReturnType<typeof saveDraftEdit>>;
+
+  if (row.action_type === "content_publish") {
+    const { data: loc } = await supabase.from("seo_locations").select("city").eq("id", row.location_id).maybeSingle();
+    const { data: details } = await supabase
+      .from("seo_location_details")
+      .select("service_areas, landmarks, services, year_founded, licensed, insured, bonded, certifications, family_owned, locally_owned, free_estimates, guarantee, awards")
+      .eq("location_id", row.location_id)
+      .maybeSingle();
+    const r = editArticle(
+      { title: String(formData.get("title") ?? ""), meta: String(formData.get("meta") ?? ""), body: String(formData.get("body") ?? "") },
+      { keyword: String(pv.keyword ?? ""), city: (loc?.city as string | null) ?? null, details: (details as LocationDetails | null) ?? null },
+    );
+    if (!r.ok) redirect(backTo(filter, `Not saved: ${r.reason}.`));
+    saved = await saveDraftEdit(id, clientId, user.id, {
+      proposed_value: { ...pv, title: r.title, meta_description: r.meta_description, body_html: r.body_html, blocks: r.blocks, word_count: r.word_count },
+      original_value: original,
+    });
+  } else {
+    const previous = ((row.previous_value as { value?: string | null } | null)?.value ?? null) as string | null;
+    const r = editPageFix(String(row.target_field ?? ""), String(formData.get("value") ?? ""), previous);
+    if (!r.ok) redirect(backTo(filter, `Not saved: ${r.reason}.`));
+    const diff = (row.diff ?? {}) as Record<string, unknown>;
+    saved = await saveDraftEdit(id, clientId, user.id, {
+      proposed_value: { ...pv, value: r.text },
+      diff: { ...diff, after: r.text },
+      original_value: original,
+    });
+  }
+
+  if (saved === "gone") redirect(backTo(filter, "That draft is no longer waiting for approval."));
+  if (typeof saved === "object") redirect(backTo(filter, `Not saved: ${saved.error}`));
+  revalidatePath("/seo-approvals");
+  redirect(backTo(filter));
 }

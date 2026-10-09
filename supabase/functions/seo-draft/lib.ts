@@ -212,7 +212,9 @@ export function validateDraft(
   let text = raw.trim();
   // A model that wraps its answer in quotes despite being told not to is
   // harmless; a model that wraps it in a code fence or adds a label isn't.
-  if (/^(["'“])(.*)(["'”])$/s.test(text)) text = text.slice(1, -1).trim();
+  // [\s\S] rather than the /s flag: the Next app imports this file too
+  // (lib/seo-draft-edit.ts) and its tsconfig targets ES2017.
+  if (/^(["'“])([\s\S]*)(["'”])$/.test(text)) text = text.slice(1, -1).trim();
 
   if (text === INSUFFICIENT_FACTS) return { ok: false, reason: "model reported insufficient facts" };
   if (!text) return { ok: false, reason: "empty draft" };

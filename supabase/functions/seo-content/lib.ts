@@ -575,21 +575,48 @@ export function plainText(html: string): string {
 
 export type ArticleVerdict = { ok: true; article: Article; image_brief: string; alt: string } | { ok: false; reason: string };
 
-export function validateArticle(
-  parsed: ParsedOutput,
-  ctx: { keyword: string; city: string | null; details?: LocationDetails | null; thisYear?: number },
-): ArticleVerdict {
-  const bad = (reason: string): ArticleVerdict => ({ ok: false, reason });
-  const { title, meta, alt, image_brief, html } = parsed;
+export type ArticleCtx = { keyword: string; city: string | null; details?: LocationDetails | null; thisYear?: number };
 
-  const len = (s: string, l: { min: number; max: number }) => s.length >= l.min && s.length <= l.max;
-  if (!len(title, LIMITS.title)) return bad(`title is ${title.length} characters, needs ${LIMITS.title.min}-${LIMITS.title.max}`);
-  if (!len(meta, LIMITS.meta)) return bad(`meta description is ${meta.length} characters, needs ${LIMITS.meta.min}-${LIMITS.meta.max}`);
-  if (!len(alt, LIMITS.alt)) return bad(`alt text is ${alt.length} characters, needs ${LIMITS.alt.min}-${LIMITS.alt.max}`);
-  if (!len(image_brief, LIMITS.image_brief)) return bad(`image description is ${image_brief.length} characters, needs ${LIMITS.image_brief.min}-${LIMITS.image_brief.max}`);
-  for (const [label, s] of [["title", title], ["meta description", meta], ["alt text", alt], ["image description", image_brief]] as const) {
-    if (/[<>\n]/.test(s)) return bad(`${label} contains markup or a line break`);
-    if (URL_LIKE.test(s)) return bad(`${label} contains a URL`);
+const lenOk = (s: string, l: { min: number; max: number }) => s.length >= l.min && s.length <= l.max;
+
+/** One line of copy: no markup, no line break, no URL. null when fine. */
+function lineProblem(label: string, s: string): string | null {
+  if (/[<>\n]/.test(s)) return `${label} contains markup or a line break`;
+  if (URL_LIKE.test(s)) return `${label} contains a URL`;
+  return null;
+}
+
+export function validateArticle(parsed: ParsedOutput, ctx: ArticleCtx): ArticleVerdict {
+  const bad = (reason: string): ArticleVerdict => ({ ok: false, reason });
+  const { alt, image_brief } = parsed;
+  if (!lenOk(alt, LIMITS.alt)) return bad(`alt text is ${alt.length} characters, needs ${LIMITS.alt.min}-${LIMITS.alt.max}`);
+  if (!lenOk(image_brief, LIMITS.image_brief)) return bad(`image description is ${image_brief.length} characters, needs ${LIMITS.image_brief.min}-${LIMITS.image_brief.max}`);
+  for (const [label, s] of [["alt text", alt], ["image description", image_brief]] as const) {
+    const p = lineProblem(label, s);
+    if (p) return bad(p);
+  }
+  const body = validateArticleBody(parsed, ctx);
+  return body.ok ? { ok: true, image_brief, alt, article: body.article } : body;
+}
+
+/**
+ * Everything validateArticle checks except the image fields: title, meta
+ * description and body. Also used when a person edits a drafted article on
+ * /seo-approvals (lib/seo-draft-edit.ts), so an edit is held to the same rules
+ * as the model.
+ */
+export function validateArticleBody(
+  parsed: Pick<ParsedOutput, "title" | "meta" | "html">,
+  ctx: ArticleCtx,
+): { ok: true; article: Article } | { ok: false; reason: string } {
+  const bad = (reason: string) => ({ ok: false as const, reason });
+  const { title, meta, html } = parsed;
+
+  if (!lenOk(title, LIMITS.title)) return bad(`title is ${title.length} characters, needs ${LIMITS.title.min}-${LIMITS.title.max}`);
+  if (!lenOk(meta, LIMITS.meta)) return bad(`meta description is ${meta.length} characters, needs ${LIMITS.meta.min}-${LIMITS.meta.max}`);
+  for (const [label, s] of [["title", title], ["meta description", meta]] as const) {
+    const p = lineProblem(label, s);
+    if (p) return bad(p);
   }
 
   const markup = checkMarkup(html);
@@ -633,8 +660,6 @@ export function validateArticle(
 
   return {
     ok: true,
-    image_brief,
-    alt,
     article: { title, meta_description: meta, html, text, word_count: wordCount, blocks: blocksFromHtml(html) },
   };
 }

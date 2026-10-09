@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { humanize, timeAgo } from "@/lib/format";
 import { SeoLocked } from "@/components/seo/locked";
 import { getSeoAccess } from "@/lib/seo-access";
-import { approveDraft, confirmManualApply, rejectDraft, requestRollback } from "./actions";
+import { approveDraft, confirmManualApply, editDraft, rejectDraft, requestRollback } from "./actions";
+import { EDITABLE_FIELDS, htmlToEditText } from "@/lib/seo-draft-edit";
 
 // Each tab is one or more statuses. "In progress" groups everything the backend
 // is between approval and done, so a person isn't asked to watch four states.
@@ -80,6 +81,8 @@ type ArticleProposal = {
   word_count?: number;
   local_details_used?: string[]; // module 28; absent on drafts made before it
   blocks?: Block[];
+  body_html?: string;
+  value?: string; // a page fix's proposed text
   image?: { url: string; alt: string } | null;
   image_error?: string | null;
   uniqueness?: { compared?: number; max_overlap?: number; max_similarity?: number; warn?: boolean } | null;
@@ -101,13 +104,15 @@ type ActionRow = {
   drafted_by: string | null;
   created_at: string;
   published_at: string | null;
+  decision_note: string | null; // 0074
+  edited_at: string | null; // 0074
   seo_locations: { name: string } | null;
 };
 
 type ConnectionRow = { status: string; shop_domain: string; last_error: string | null; seo_locations: { name: string } | null };
 
 const COLUMNS =
-  "id, action_type, proposed_value, publish_result, status, target_field, target_url, diff, apply_mode, manual_instructions, error, drafted_by, created_at, published_at, seo_locations(name)";
+  "id, action_type, proposed_value, publish_result, status, target_field, target_url, diff, apply_mode, manual_instructions, error, drafted_by, created_at, published_at, decision_note, edited_at, seo_locations(name)";
 
 function DiffBlock({ diff, field }: { diff: ActionRow["diff"]; field: string | null }) {
   const before = diff?.before ?? null;
@@ -238,6 +243,60 @@ function ManualBlock({ m, id, filter }: { m: ManualInstructions; id: string; fil
   );
 }
 
+/**
+ * "Edit before approving" (0074). Saving runs the same checks as the model's
+ * output and keeps the draft waiting; approving is still a separate click.
+ * Structured data isn't editable here (it's built from the location's own
+ * details, not written).
+ */
+function EditDraft({ item, filter }: { item: ActionRow; filter: Filter }) {
+  const isArticle = item.action_type === "content_publish";
+  const editable = isArticle ? !!item.proposed_value?.body_html : (EDITABLE_FIELDS as readonly string[]).includes(item.target_field ?? "");
+  if (!editable) return null;
+  const pv = item.proposed_value ?? {};
+  const input = "mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm";
+  return (
+    <details className="mt-3 rounded-md border border-gray-200">
+      <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-gray-700">Edit before approving</summary>
+      <form action={editDraft} className="space-y-3 border-t border-gray-200 p-3 text-sm">
+        <input type="hidden" name="id" value={item.id} />
+        <input type="hidden" name="filter" value={filter} />
+        {isArticle ? (
+          <>
+            <label className="block">
+              <span className="text-gray-700">Headline</span>
+              <input name="title" required defaultValue={pv.title ?? ""} className={input} />
+            </label>
+            <label className="block">
+              <span className="text-gray-700">Meta description</span>
+              <textarea name="meta" required rows={2} defaultValue={pv.meta_description ?? ""} className={input} />
+            </label>
+            <label className="block">
+              <span className="text-gray-700">Article</span>
+              <textarea name="body" required rows={18} defaultValue={htmlToEditText(pv.body_html ?? "")} className={`${input} font-mono text-xs leading-relaxed`} />
+              <span className="mt-1 block text-xs text-gray-500">
+                Blank line between paragraphs. &ldquo;## &rdquo; starts a section heading, &ldquo;### &rdquo; a subheading,
+                &ldquo;- &rdquo; a bullet, &ldquo;1. &rdquo; a numbered step; **bold** and *italic*. No links or phone numbers.
+              </span>
+            </label>
+          </>
+        ) : (
+          <label className="block">
+            <span className="text-gray-700">Proposed text</span>
+            <input name="value" required defaultValue={item.diff?.after ?? pv.value ?? ""} className={input} />
+          </label>
+        )}
+        <p className="text-xs text-gray-500">
+          Your edit is checked the same way as our drafts (length, no links or phone numbers, nothing we can&apos;t back up). Saving doesn&apos;t approve it.
+        </p>
+        <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
+          Save edit
+        </button>
+      </form>
+    </details>
+  );
+}
+
 export default async function SeoApprovalsPage({
   searchParams,
 }: {
@@ -253,13 +312,19 @@ export default async function SeoApprovalsPage({
 
   const supabase = await createClient();
 
-  let q = supabase
-    .from("seo_actions")
-    .select(COLUMNS)
-    // Oldest first: the draft that has waited longest sits at the top.
-    .order("created_at", { ascending: true });
-  if (active !== "all") q = q.in("status", FILTER_STATUSES[active]);
-  const { data, error } = await q;
+  const load = (columns: string) => {
+    let q = supabase
+      .from("seo_actions")
+      .select(columns)
+      // Oldest first: the draft that has waited longest sits at the top.
+      .order("created_at", { ascending: true });
+    if (active !== "all") q = q.in("status", FILTER_STATUSES[active]);
+    return q;
+  };
+  let { data, error } = await load(COLUMNS);
+  // Until 0074 is applied there's no decision_note / edited_at (42703,
+  // undefined column): load without them rather than show no drafts at all.
+  if (error?.code === "42703") ({ data, error } = await load(COLUMNS.replace(", decision_note, edited_at", "")));
   const items = (data ?? []) as unknown as ActionRow[];
 
   // Tab badges: what actually needs a person.
@@ -365,6 +430,7 @@ export default async function SeoApprovalsPage({
                 <span className="text-xs text-gray-400">
                   {item.diff?.scope === "site" ? "Whole website · " : item.seo_locations?.name ? `${item.seo_locations.name} · ` : ""}
                   drafted {timeAgo(item.created_at)}
+                  {item.edited_at ? ` · edited ${timeAgo(item.edited_at)}` : ""}
                   {item.published_at ? ` · live ${timeAgo(item.published_at)}` : ""}
                 </span>
               </div>
@@ -392,8 +458,19 @@ export default async function SeoApprovalsPage({
                 <p className="mt-2 text-sm text-red-700">{item.error}</p>
               ) : null}
 
+              {item.decision_note && item.status !== "pending_approval" ? (
+                <p className="mt-2 text-sm text-gray-700">
+                  <span className="font-medium text-gray-900">{item.status === "rejected" ? "Reason: " : "Note: "}</span>
+                  {item.decision_note}
+                </p>
+              ) : null}
+
               {item.status === "pending_approval" ? (
-                <div className="mt-3 flex gap-2">
+                <EditDraft item={item} filter={active} />
+              ) : null}
+
+              {item.status === "pending_approval" ? (
+                <div className="mt-3 flex flex-wrap items-start gap-2">
                   <form action={approveDraft}>
                     <input type="hidden" name="id" value={item.id} />
                     <input type="hidden" name="filter" value={active} />
@@ -404,9 +481,17 @@ export default async function SeoApprovalsPage({
                       Approve
                     </button>
                   </form>
-                  <form action={rejectDraft}>
+                  <form action={rejectDraft} className="flex min-w-0 flex-1 flex-wrap gap-2">
                     <input type="hidden" name="id" value={item.id} />
                     <input type="hidden" name="filter" value={active} />
+                    <label className="sr-only" htmlFor={`note-${item.id}`}>Reason for rejecting (optional)</label>
+                    <input
+                      id={`note-${item.id}`}
+                      name="note"
+                      maxLength={500}
+                      placeholder="Reason (optional)"
+                      className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm sm:max-w-sm"
+                    />
                     <button
                       type="submit"
                       className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
