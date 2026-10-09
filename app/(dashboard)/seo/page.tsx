@@ -104,6 +104,7 @@ import {
 } from "./actions";
 import { gbpState, listingLabel, ratingLine, reviewsNote, type GbpListingRow, type GbpSyncRow } from "@/lib/seo-gbp";
 import { hasBusinessProfileScope } from "@/lib/google-oauth";
+import { shopifyCard, shopifyConnectUrl, type ShopifyConnectInfo, type SiteConnection } from "@/lib/seo-shopify";
 import { describeJob, JOB_INFO, sortJobs, type JobStatusRow } from "@/lib/seo-jobs";
 
 type Loc = {
@@ -441,7 +442,7 @@ export default async function SeoPortalPage({
     supabase.from("seo_keywords").select("id, keyword, is_geo_grid_enabled").eq("location_id", loc.id).eq("is_active", true).order("keyword"),
     supabase.from("seo_rank_trend").select("rank_type, check_date, avg_position").eq("location_id", loc.id).gte("check_date", since200).order("check_date"),
     supabase.from("seo_geo_radius").select("keywords_checked, last_check_date, winnable_radius_km, grid_spacing_km").eq("location_id", loc.id).maybeSingle(),
-    supabase.from("seo_site_connections").select("status, shop_domain, last_error").eq("location_id", loc.id).maybeSingle(),
+    supabase.from("seo_site_connections").select("platform, status, shop_domain, last_error, granted_scopes").eq("location_id", loc.id).maybeSingle(),
     supabase.from("seo_competitors").select("id, domain, label").eq("location_id", loc.id).eq("is_active", true).order("domain"),
     supabase.from("seo_backlink_snapshots").select("snapshot_date, referring_domains_count, total_backlinks, gained_count, lost_count").eq("location_id", loc.id).order("snapshot_date", { ascending: false }).limit(12),
     supabase.from("seo_metrics_daily").select("metric_date, metrics").eq("location_id", loc.id).gte("metric_date", daysAgo(60)).order("metric_date"),
@@ -555,7 +556,7 @@ export default async function SeoPortalPage({
   const aiQueries = (queryRes.data ?? []) as AiQuery[];
   const mentions = (mentionRes.data ?? []) as Mention[];
   const competitors = (compRes.data ?? []) as Competitor[];
-  const conn = connRes.data as { status: string; shop_domain: string; last_error: string | null } | null;
+  const conn = connRes.data as SiteConnection | null;
   const queued = pendingRes.count ?? 0;
   const centsPerClick = (settingsRes.data?.value_per_click_cents as number | undefined) ?? 200;
   const published = (publishedRes.data ?? []) as (Shipped & { published_at: string })[];
@@ -753,6 +754,14 @@ export default async function SeoPortalPage({
   // Settings tab only: when each job last ran and Run now (0073).
   const jobs: JobStatusRow[] =
     tab === "settings" ? sortJobs(((await supabase.rpc("seo_job_status", { p_location_id: loc.id })).data ?? []) as JobStatusRow[]) : [];
+  // Settings tab only: Connect Shopify (0077).
+  const shopify =
+    tab === "settings"
+      ? shopifyCard({
+          info: (((await supabase.rpc("seo_shopify_connect_info")).data ?? []) as ShopifyConnectInfo[])[0] ?? null,
+          conn,
+        })
+      : { kind: "hidden" as const };
   const now = new Date();
 
   const kwTile = summary?.tiles.find((t) => t.key === "keywords");
@@ -1956,6 +1965,26 @@ export default async function SeoPortalPage({
               </button>
             </form>
           </Card>
+
+          {shopify.kind !== "hidden" ? (
+            <Card title="Shopify store" id="shopify" note="Where approved fixes and articles are published. LumiLink can only change the pages, products and articles it has drafted and you approved.">
+              <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                <p className={shopify.kind !== "not_registered" && shopify.tone === "warn" ? "text-amber-800" : "text-gray-700"}>{shopify.text}</p>
+                {shopify.kind === "connect" || shopify.kind === "connected" ? (
+                  <a
+                    href={shopifyConnectUrl(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "", shopify.shop)}
+                    className={
+                      shopify.kind === "connect"
+                        ? "whitespace-nowrap rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800"
+                        : "whitespace-nowrap rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    }
+                  >
+                    {shopify.kind === "connect" ? "Connect Shopify" : "Reconnect"}
+                  </a>
+                ) : null}
+              </div>
+            </Card>
+          ) : null}
 
           <Card
             title="Google Business Profile"

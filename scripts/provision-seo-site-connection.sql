@@ -2,6 +2,11 @@
 -- provision-seo-site-connection.sql — operator runbook for connecting a client's
 -- Shopify store to LumiLink for SEO publishing (module 5, migration 0055).
 --
+-- SUPERSEDED FOR CLIENT STORES (2026-10-09): use provision-seo-shopify-app.sql
+-- (Connect Shopify, 0077). This manual path only works with a legacy shpat_
+-- token, or a Dev Dashboard app owned by the STORE'S OWN Shopify organization;
+-- an app LumiLink creates gets "shop_not_permitted".
+--
 -- This is a TEMPLATE. Replace every <placeholder>, then run it in the SQL editor
 -- (or `supabase db execute`). Never paste a real token into chat, a ticket, or a
 -- file that is committed.
