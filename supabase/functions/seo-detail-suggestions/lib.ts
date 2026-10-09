@@ -396,6 +396,23 @@ export function finalSuggestions(all: Suggestion[], saved: LocationDetails | nul
   return [...out.values()].slice(0, MAX_PER_LOCATION);
 }
 
+export type OpenRow = { field: string; value: string; quote: string; source_url: string; method: Method };
+
+/**
+ * Should an open suggestion this run didn't produce stay? The model doesn't
+ * list the same items every run, so a model suggestion stays while its quote
+ * is still on its page and it still passes every check (a rule tightened
+ * since, like "no licence numbers from the model", removes it). Pattern and
+ * JSON-LD ones are exact: if this run didn't find them, they're gone. Anything
+ * now in the saved details goes either way.
+ */
+export function keepOpen(row: OpenRow, ctx: CheckContext, saved: LocationDetails | null, now = new Date()): boolean {
+  if (row.method !== "model") return false;
+  const s: Suggestion = { field: row.field as SuggestField, value: row.value, quote: row.quote, source_url: row.source_url, method: "model" };
+  if (alreadySaved(s, saved)) return false;
+  return checkCandidate({ field: row.field, value: row.value, quote: row.quote, source_url: row.source_url }, ctx, now).ok;
+}
+
 /** Distinctive words of a location's name: "PACKS SGV – El Monte" minus the
  * brand ("PACKS") gives ["sgv", "monte"]. */
 export function nameWords(name: string | null, brand: string | null): string[] {

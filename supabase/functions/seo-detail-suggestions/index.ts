@@ -19,8 +19,10 @@
 //
 // WRITES ONLY SUGGESTIONS (seo_detail_suggestions, status 'open'). A person
 // ticks them in /seo and confirms; nothing here touches seo_location_details.
-// Open suggestions the site no longer supports are removed; accepted and
-// dismissed ones are kept, so a dismissal sticks.
+// The model doesn't list the same items every run, so an open model
+// suggestion stays until its quote leaves its page (or a rule now rejects
+// it); an exact (licence / JSON-LD) one goes as soon as a run doesn't find
+// it. Accepted and dismissed ones are kept, so a dismissal sticks.
 //
 // COST BOUND. One model call per location per crawl (weekly), effort low, a
 // few thousand tokens in. A location with no kept page text costs nothing.
@@ -43,6 +45,9 @@ import {
   finalSuggestions,
   licencesByAddress,
   licenceSuggestions,
+  keepOpen,
+  MAX_PER_LOCATION,
+  type OpenRow,
   nameWords,
   OUTPUT_SCHEMA,
   parseModelOutput,
@@ -148,7 +153,7 @@ async function suggestForSite(primary: Member, members: Member[], brand: string 
   const ids = group.members.map((m) => m.id);
   const [{ data: detailRows }, { data: existing }] = await Promise.all([
     supabase.from("seo_location_details").select("*").in("location_id", ids),
-    supabase.from("seo_detail_suggestions").select("location_id, field, value, status").in("location_id", ids),
+    supabase.from("seo_detail_suggestions").select("location_id, field, value, status, quote, source_url, method").in("location_id", ids),
   ]);
   const savedBy = new Map(((detailRows ?? []) as (LocationDetails & { location_id: string })[]).map((d) => [d.location_id, d]));
 
@@ -166,18 +171,18 @@ async function suggestForSite(primary: Member, members: Member[], brand: string 
     found.push(...(licencesByStore.get(m.id) ?? []));
 
     const pages = [...(storePage ? [storePage] : []), ...factPages];
+    const ctx = {
+      pages: new Map(pages.map((p) => [p.url, p])),
+      storeUrl: storePage?.url ?? null,
+      shared: group.shared,
+      city: m.city,
+      nameWords: nameWords(m.name, brand),
+    };
     let dropped = 0;
     let modelError: string | null = null;
     if (anthropic && pages.length) {
       try {
         const raw = await askModel(m, pages);
-        const ctx = {
-          pages: new Map(pages.map((p) => [p.url, p])),
-          storeUrl: storePage?.url ?? null,
-          shared: group.shared,
-          city: m.city,
-          nameWords: nameWords(m.name, brand),
-        };
         for (const c of parseModelOutput(raw)) {
           const r = checkCandidate(c, ctx);
           if (r.ok) found.push(r.s);
@@ -190,13 +195,18 @@ async function suggestForSite(primary: Member, members: Member[], brand: string 
       }
     }
 
-    const mine = ((existing ?? []) as { location_id: string; field: string; value: string; status: string }[]).filter((e) => e.location_id === m.id);
+    const mine = ((existing ?? []) as (OpenRow & { location_id: string; status: string })[]).filter((e) => e.location_id === m.id);
     const decided = new Set(mine.filter((e) => e.status !== "open").map(suggestionKey));
-    const final = finalSuggestions(found, savedBy.get(m.id) ?? null, decided);
+    const saved = savedBy.get(m.id) ?? null;
+    const final = finalSuggestions(found, saved, decided);
     const keep = new Set(final.map(suggestionKey));
 
-    // Open suggestions the site no longer supports go; the rest are refreshed.
-    const stale = mine.filter((e) => e.status === "open" && !keep.has(suggestionKey(e)));
+    // An open suggestion this run didn't produce stays while the site still
+    // says it (keepOpen); otherwise it goes. Kept ones count toward the cap.
+    const notFound = mine.filter((e) => e.status === "open" && !keep.has(suggestionKey(e)));
+    const carried = notFound.filter((e) => keepOpen(e, ctx, saved)).slice(0, Math.max(0, MAX_PER_LOCATION - final.length));
+    const carriedKeys = new Set(carried.map(suggestionKey));
+    const stale = notFound.filter((e) => !carriedKeys.has(suggestionKey(e)));
     for (const s of stale) {
       await supabase.from("seo_detail_suggestions").delete().eq("location_id", m.id).eq("field", s.field).eq("value", s.value).eq("status", "open");
     }
@@ -209,7 +219,7 @@ async function suggestForSite(primary: Member, members: Member[], brand: string 
       );
       if (error) throw new Error(`writing suggestions failed: ${error.message}`);
     }
-    results[m.id] = { store_page: storePage?.url ?? null, suggested: final.length, dropped, removed: stale.length, model_error: modelError };
+    results[m.id] = { store_page: storePage?.url ?? null, suggested: final.length, kept: carried.length, dropped, removed: stale.length, model_error: modelError };
   }
   return { status: modelFailures ? "partial" : "ok", pages: rows.length, locations: results, model_failures: modelFailures };
 }
