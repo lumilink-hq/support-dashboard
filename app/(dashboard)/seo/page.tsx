@@ -98,6 +98,7 @@ import {
   removeCompetitor,
   removeKeyword,
   setKeywordGeoGrid,
+  updateLocationSettings,
 } from "./actions";
 
 type Loc = {
@@ -108,6 +109,12 @@ type Loc = {
   search_console_site_url: string | null;
   website_url: string | null;
   store_page_url: string | null;
+  phone_number: string | null;
+  address_line1: string | null;
+  city: string | null;
+  region: string | null;
+  postal_code: string | null;
+  country_code: string | null;
 };
 type Keyword = { id: string; keyword: string; is_geo_grid_enabled: boolean };
 type Shipped = {
@@ -383,7 +390,7 @@ export default async function SeoPortalPage({
 
   const { data: locData } = await supabase
     .from("seo_locations")
-    .select("id, name, lat, lng, search_console_site_url, website_url, store_page_url")
+    .select("id, name, lat, lng, search_console_site_url, website_url, store_page_url, phone_number, address_line1, city, region, postal_code, country_code")
     .eq("is_active", true)
     .order("name", { ascending: true });
   const locations = (locData ?? []) as Loc[];
@@ -1746,6 +1753,93 @@ export default async function SeoPortalPage({
               ) : null}
             </ul>
           </Story>
+        </div>
+      ) : null}
+
+      {tab === "settings" ? (
+        <div className="space-y-4">
+          <Card
+            title="Location settings"
+            id="location-settings"
+            note="What the SEO engine knows about this location. The audit, drafts and articles all read from here."
+          >
+            <form action={updateLocationSettings} className="group space-y-4 text-sm">
+              <input type="hidden" name="location" value={loc.id} />
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block">
+                  <span className="text-gray-700">Name</span>
+                  <input name="name" required maxLength={120} defaultValue={loc.name} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5" />
+                </label>
+                <label className="block">
+                  <span className="text-gray-700">Phone</span>
+                  <input name="phone_number" type="tel" defaultValue={loc.phone_number ?? ""} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5" />
+                </label>
+                <label className="block">
+                  <span className="text-gray-700">Website</span>
+                  <input name="website_url" defaultValue={loc.website_url ?? ""} placeholder="acme.com" className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5" />
+                </label>
+                <label className="block">
+                  <span className="text-gray-700">Search Console property</span>
+                  <input name="search_console_site_url" defaultValue={loc.search_console_site_url ?? ""} placeholder="sc-domain:acme.com" className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5" />
+                  <span className="mt-1 block text-xs text-gray-500">As Search Console names it: sc-domain:acme.com, or https://www.acme.com/.</span>
+                </label>
+                <label className="block md:col-span-2">
+                  <span className="text-gray-700">Store page (optional)</span>
+                  <input name="store_page_url" defaultValue={loc.store_page_url ?? ""} placeholder="acme.com/locations/tulsa" className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5" />
+                  <span className="mt-1 block text-xs text-gray-500">Only when several locations share one website: this location&apos;s own page on it.</span>
+                </label>
+              </div>
+
+              <label className="flex items-start gap-2 rounded-md border border-gray-200 p-3">
+                <input
+                  id="online-only"
+                  type="checkbox"
+                  name="online_only"
+                  defaultChecked={!loc.address_line1?.trim() && !loc.city?.trim()}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium text-gray-900">Online only: no storefront and no service area</span>
+                  <span className="mt-0.5 block text-xs text-gray-600">
+                    For a software company or an online store. The audit asks for Organization structured data instead of LocalBusiness,
+                    and articles name no city. Saving with this ticked clears the address.
+                  </span>
+                </span>
+              </label>
+
+              <fieldset className="rounded-md border border-gray-200 p-3 group-has-[#online-only:checked]:hidden">
+                <legend className="px-1 text-xs font-medium text-gray-700">Address</legend>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="block md:col-span-2">
+                    <span className="text-gray-700">Street address</span>
+                    <input name="address_line1" defaultValue={loc.address_line1 ?? ""} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5" />
+                    <span className="mt-1 block text-xs text-gray-500">Leave blank for a service-area business that visits customers.</span>
+                  </label>
+                  <label className="block">
+                    <span className="text-gray-700">City</span>
+                    <input name="city" defaultValue={loc.city ?? ""} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5" />
+                  </label>
+                  <label className="block">
+                    <span className="text-gray-700">State or region</span>
+                    <input name="region" defaultValue={loc.region ?? ""} placeholder="CA" className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5" />
+                  </label>
+                  <label className="block">
+                    <span className="text-gray-700">ZIP or postal code</span>
+                    <input name="postal_code" defaultValue={loc.postal_code ?? ""} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5" />
+                  </label>
+                </div>
+              </fieldset>
+
+              <label className="block w-32">
+                <span className="text-gray-700">Country</span>
+                <input name="country_code" maxLength={3} defaultValue={loc.country_code ?? ""} placeholder="US" className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 uppercase" />
+              </label>
+
+              <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
+                Save settings
+              </button>
+            </form>
+          </Card>
         </div>
       ) : null}
     </div>

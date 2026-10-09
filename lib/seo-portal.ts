@@ -173,7 +173,7 @@ export function cleanDomain(raw: string): string | null {
 // Module 21: the tabbed layout, content output and article results
 // -----------------------------------------------------------------------------
 
-export const SEO_TABS = ["overview", "keywords", "ai", "map", "links", "work"] as const;
+export const SEO_TABS = ["overview", "keywords", "ai", "map", "links", "work", "settings"] as const;
 export type SeoTab = (typeof SEO_TABS)[number];
 
 export const SEO_TAB_LABELS: Record<SeoTab, string> = {
@@ -183,6 +183,8 @@ export const SEO_TAB_LABELS: Record<SeoTab, string> = {
   map: "Map & locations",
   links: "Links",
   work: "Work & next",
+  // Location settings and job status (2026-10-09).
+  settings: "Settings",
 };
 
 /** An unknown or missing ?tab= is the Overview, never an error page. */

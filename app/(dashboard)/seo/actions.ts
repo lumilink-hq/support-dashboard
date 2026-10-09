@@ -17,6 +17,7 @@ import {
   QUERY_MIN,
 } from "@/lib/seo-portal";
 import { createClient } from "@/lib/supabase/server";
+import { isOnlineOnlyRow, parseLocationForm, type LocationRow } from "@/lib/seo-location-form";
 import { cleanItem, cleanList, cleanYear, DETAIL_LIMITS, type ListField } from "@/supabase/functions/seo-content/details";
 import { applyAccepted, DETAIL_FLAGS, DETAIL_LISTS, type DetailsForm } from "@/lib/seo-detail-suggestions";
 // The weekly AI-visibility job only ever checks this many active queries; more
@@ -630,4 +631,53 @@ function competitorBack(location: string, error?: string) {
   if (error) qs.set("error", error);
   const s = qs.toString();
   return `/seo${s ? `?${s}` : ""}#competitors`;
+}
+
+/**
+ * Edit a location after onboarding (/seo?tab=settings). The tenant policy on
+ * seo_locations (0042) confines the update to the caller's own rows; the row
+ * is read under RLS first so a forged id gets a message, not a silent no-op.
+ * Validation and the "what changed" logic live in lib/seo-location-form.ts.
+ */
+export async function updateLocationSettings(formData: FormData) {
+  const location = String(formData.get("location") ?? "");
+  const back = (notice?: string, error?: string) => {
+    const qs = new URLSearchParams();
+    if (location) qs.set("location", location);
+    qs.set("tab", "settings");
+    if (notice) qs.set("notice", notice);
+    if (error) qs.set("error", error);
+    return `/seo?${qs.toString()}#location-settings`;
+  };
+
+  const access = await getSeoAccess();
+  if (!access.allowed) redirect(back(undefined, "Local SEO isn't active on your plan."));
+  const supabase = await createClient();
+
+  const { data: current } = await supabase
+    .from("seo_locations")
+    .select("name, website_url, store_page_url, search_console_site_url, phone_number, address_line1, city, region, postal_code, country_code")
+    .eq("id", location)
+    .maybeSingle();
+  if (!current) redirect(back(undefined, "That location no longer exists."));
+
+  const result = parseLocationForm((k) => String(formData.get(k) ?? ""), current as LocationRow);
+  if (!result.ok) redirect(back(undefined, result.error));
+  if (result.changed.length === 0) redirect(back("Nothing changed."));
+
+  const { data, error } = await supabase.from("seo_locations").update(result.update).eq("id", location).select("id");
+  if (error) redirect(back(undefined, error.message));
+  if (!data || data.length === 0) redirect(back(undefined, "That location no longer exists."));
+
+  const notes = ["Saved."];
+  if (isOnlineOnlyRow(result.update)) {
+    if (!isOnlineOnlyRow(current as LocationRow)) {
+      notes.push("This location is now online only: the audit asks for Organization structured data and new articles name no city.");
+    }
+  } else if ("lat" in result.update) {
+    notes.push("The address changed, so the map position will be looked up again within the hour.");
+  }
+  if (result.changed.includes("website_url")) notes.push("The next weekly site audit will crawl the new website.");
+  revalidatePath("/seo");
+  redirect(back(notes.join(" ")));
 }
