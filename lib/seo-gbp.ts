@@ -25,10 +25,13 @@ export type GbpListingRow = {
   new_review_uri: string | null;
 };
 
+/** Store codes longer than this are machine ids (PACKS Hollywood's is 20 digits), not labels a person reads. */
+export const STORE_CODE_MAX = 12;
+
 /** "PACKS Fullerton (FUL), 1500 N Harbor Blvd, Fullerton, CA 92835" */
 export function listingLabel(l: Pick<GbpListingRow, "title" | "store_code" | "address_text" | "location_name">): string {
   const name = l.title ?? l.location_name;
-  const code = l.store_code ? ` (${l.store_code})` : "";
+  const code = l.store_code && l.store_code.length <= STORE_CODE_MAX ? ` (${l.store_code})` : "";
   return l.address_text ? `${name}${code}, ${l.address_text}` : `${name}${code}`;
 }
 
