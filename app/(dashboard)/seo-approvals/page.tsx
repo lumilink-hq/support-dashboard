@@ -56,6 +56,7 @@ const FIELD_LABELS: Record<string, string> = {
   h1: "Main heading (H1)",
   local_business_schema: "LocalBusiness structured data",
   article: "Blog article",
+  gbp_description: "Google Business Profile description",
 };
 
 // Only ever link to a web address; the URL comes from our own publish step, but
@@ -117,17 +118,20 @@ const COLUMNS =
 function DiffBlock({ diff, field }: { diff: ActionRow["diff"]; field: string | null }) {
   const before = diff?.before ?? null;
   const after = diff?.after ?? "";
-  // Structured data is a JSON document; everything else is one line of copy.
+  // Structured data is a JSON document; a profile description has paragraphs;
+  // everything else is one line of copy.
   const mono = field === "local_business_schema";
   const box = mono
     ? "whitespace-pre-wrap break-words rounded-md p-3 font-mono text-xs"
-    : "rounded-md p-3 text-sm";
+    : field === "gbp_description"
+      ? "whitespace-pre-wrap break-words rounded-md p-3 text-sm"
+      : "rounded-md p-3 text-sm";
   return (
     <div className="mt-3 grid gap-2 md:grid-cols-2">
       <div>
         <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">Now</p>
         <div className={`${box} bg-red-50 text-red-900`}>
-          {before ? before : <span className="text-gray-400">Nothing on the page yet</span>}
+          {before ? before : <span className="text-gray-400">{field === "gbp_description" ? "No description on the profile yet" : "Nothing on the page yet"}</span>}
         </div>
       </div>
       <div>
@@ -251,7 +255,8 @@ function ManualBlock({ m, id, filter }: { m: ManualInstructions; id: string; fil
  */
 function EditDraft({ item, filter }: { item: ActionRow; filter: Filter }) {
   const isArticle = item.action_type === "content_publish";
-  const editable = isArticle ? !!item.proposed_value?.body_html : (EDITABLE_FIELDS as readonly string[]).includes(item.target_field ?? "");
+  const isGbp = item.target_field === "gbp_description";
+  const editable = isArticle ? !!item.proposed_value?.body_html : isGbp || (EDITABLE_FIELDS as readonly string[]).includes(item.target_field ?? "");
   if (!editable) return null;
   const pv = item.proposed_value ?? {};
   const input = "mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm";
@@ -280,6 +285,14 @@ function EditDraft({ item, filter }: { item: ActionRow; filter: Filter }) {
               </span>
             </label>
           </>
+        ) : isGbp ? (
+          <label className="block">
+            <span className="text-gray-700">Description</span>
+            <textarea name="value" required rows={8} maxLength={750} defaultValue={item.diff?.after ?? pv.value ?? ""} className={input} />
+            <span className="mt-1 block text-xs text-gray-500">
+              250 to 750 characters. Blank line between paragraphs. Google doesn&apos;t allow links, phone numbers, prices or offers here.
+            </span>
+          </label>
         ) : (
           <label className="block">
             <span className="text-gray-700">Proposed text</span>
@@ -359,7 +372,7 @@ export default async function SeoApprovalsPage({
         </span>
       </div>
       <p className="mt-1 text-sm text-gray-500">
-        Changes we drafted for your site. Nothing goes live until you approve it.
+        Changes we drafted for your website and Google Business Profile. Nothing goes live until you approve it.
       </p>
 
       {connectionProblems.map((c) => (

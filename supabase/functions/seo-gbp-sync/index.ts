@@ -415,13 +415,16 @@ async function auditListing(clientId: string, l: Listing, seo: SeoLoc | undefine
   }
   const findings = auditProfile({ gbp: l, seo: seo ?? null, reviews, now: new Date() });
 
-  // A finding someone dismissed or acted on isn't re-reported as new.
+  // A finding someone dismissed isn't re-reported. An 'actioned' one (a draft
+  // was written for it, module 4) is: if the draft is rejected or rolled back
+  // the problem is still there, and seo_draft_targets' windows decide when to
+  // draft again.
   const { data: closed } = await supabase
     .from("seo_findings")
     .select("finding_type")
     .eq("location_id", l.linked_location_id)
     .eq("module", "gbp_profile")
-    .in("status", ["dismissed", "actioned"]);
+    .eq("status", "dismissed");
   const skip = new Set(((closed ?? []) as { finding_type: string }[]).map((f) => f.finding_type));
 
   const { error: delErr } = await supabase

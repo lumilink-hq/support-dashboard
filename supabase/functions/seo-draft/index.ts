@@ -61,6 +61,8 @@ import {
   type LocationFacts,
 } from "./lib.ts";
 import { draftFactsFor, type SiteGroup, siteGroup, type SiteMember } from "../seo-crawl/stores.ts";
+import { buildGbpPayload, GBP_DRAFTABLE, GBP_SYSTEM_PROMPT, gbpIdempotencyKey, validateGbpDescription } from "./gbp.ts";
+import type { LocationDetails } from "../seo-content/details.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const rawSecrets = Deno.env.get("SUPABASE_SECRET_KEYS");
@@ -105,12 +107,12 @@ async function reserveBudget(): Promise<void> {
   throw new Error("anthropic vendor budget stayed exhausted");
 }
 
-async function callModel(userPayload: string): Promise<string> {
+async function callModel(userPayload: string, system: string = SYSTEM_PROMPT): Promise<string> {
   await reserveBudget();
   const res = await anthropic!.messages.create({
     model: MODEL,
     max_tokens: 1024,
-    system: SYSTEM_PROMPT,
+    system,
     output_config: { effort: "low" },
     messages: [{ role: "user", content: userPayload }],
   });
@@ -257,19 +259,107 @@ async function draftLocation(loc: DraftLocation, group: SiteGroup<DraftLocation>
     }
   }
 
+  // ---- Module 4: the Google Business Profile description -------------------
+  const gbp = await draftGbpDescription(loc, covered);
+  out.drafted += gbp.drafted;
+  out.skipped += gbp.skipped;
+  out.failed += gbp.failed;
+
+  return out;
+}
+
+/**
+ * One description draft per linked profile, when the GBP sync reported it
+ * missing or short. The model sees LumiLink's own facts only (seo-draft/gbp.ts
+ * header); Google's current description is stored for the approver as the
+ * "before" and never sent.
+ */
+async function draftGbpDescription(loc: DraftLocation, covered: Set<string>): Promise<Outcome> {
+  const out: Outcome = { drafted: 0, skipped: 0, failed: 0 };
+  const { data: findings, error: fErr } = await supabase
+    .from("seo_findings")
+    .select("id, finding_type, severity, target_url, details, detected_at")
+    .eq("location_id", loc.id)
+    .eq("module", "gbp_profile")
+    .eq("status", "open")
+    .in("finding_type", Object.keys(GBP_DRAFTABLE));
+  if (fErr) throw new Error(`loading profile findings failed: ${fErr.message}`);
+  const open = (findings ?? []) as FindingRow[];
+  if (open.length === 0) return out;
+
+  const finding = open[0];
+  const target = finding.target_url ?? "";
+  if (Object.keys(GBP_DRAFTABLE).some((t) => covered.has(`${target}|${t}`)) || covered.has(`${target}|gbp_description`)) {
+    out.skipped++;
+    await markActioned(open.map((f) => f.id));
+    return out;
+  }
+  if (!anthropic) throw new Error("ANTHROPIC_API_KEY is not set");
+
+  const [{ data: listing }, { data: details }] = await Promise.all([
+    supabase.from("seo_gbp_locations").select("description").eq("linked_location_id", loc.id).maybeSingle(),
+    supabase
+      .from("seo_location_details")
+      .select("service_areas, landmarks, services, year_founded, licensed, insured, bonded, certifications, family_owned, locally_owned, free_estimates, guarantee, awards")
+      .eq("location_id", loc.id)
+      .maybeSingle(),
+  ]);
+  const previous = (listing?.description as string | null) ?? null;
+  const d = (details as LocationDetails | null) ?? null;
+
+  let text: string;
+  try {
+    text = await callModel(buildGbpPayload({ name: loc.name, city: loc.city, region: loc.region }, d), GBP_SYSTEM_PROMPT);
+  } catch (e) {
+    console.error(`seo-draft ${loc.id} gbp finding ${finding.id}: model call failed: ${e instanceof Error ? e.message : e}`);
+    out.failed++;
+    return out;
+  }
+  const verdict = validateGbpDescription(text, previous, d, loc.name);
+  if (!verdict.ok) {
+    console.log(`seo-draft ${loc.id} gbp finding ${finding.id}: draft rejected by validator: ${verdict.reason}`);
+    out.skipped++;
+    return out;
+  }
+
+  const ok = await insertAction(loc, finding, {
+    field: "gbp_description",
+    previous,
+    after: verdict.text,
+    targetUrl: finding.target_url,
+    draftedBy: MODEL,
+    scope: "store",
+    actionType: "gbp_field_update",
+    key: gbpIdempotencyKey(finding.id),
+  });
+  if (ok) {
+    out.drafted++;
+    await markActioned(open.map((f) => f.id));
+  } else {
+    out.failed++;
+  }
   return out;
 }
 
 async function insertAction(
   loc: { id: string; client_id: string },
   finding: FindingRow,
-  d: { field: string; previous: string | null; after: string; targetUrl: string | null; draftedBy: string; scope: "site" | "store" },
+  d: {
+    field: string;
+    previous: string | null;
+    after: string;
+    targetUrl: string | null;
+    draftedBy: string;
+    scope: "site" | "store";
+    actionType?: "onpage_fix" | "gbp_field_update";
+    key?: string;
+  },
 ): Promise<boolean> {
   const { error } = await supabase.from("seo_actions").insert({
     client_id: loc.client_id,
     location_id: loc.id,
     finding_id: finding.id,
-    action_type: "onpage_fix",
+    action_type: d.actionType ?? "onpage_fix",
     target_field: d.field,
     finding_type: finding.finding_type,
     target_url: d.targetUrl,
@@ -278,7 +368,7 @@ async function insertAction(
     // scope 'site': the approvals queue labels it "Whole website", not a store.
     diff: { ...buildDiff(d.field as never, d.previous, d.after), scope: d.scope },
     status: "pending_approval",
-    idempotency_key: idempotencyKey(finding.id),
+    idempotency_key: d.key ?? idempotencyKey(finding.id),
     drafted_by: d.draftedBy,
   });
   if (!error) return true;

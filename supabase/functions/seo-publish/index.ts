@@ -68,6 +68,7 @@ import {
   type Ctx,
 } from "./shopify.ts";
 import { checkRepo, deleteFile, GithubError, readFile, writeFile, type GhCtx } from "./github.ts";
+import { applyGbpField, GbpError, gbpManualInstructions, isWritable, revertGbpField, type GbpCtx, type GbpManualReason } from "./gbp.ts";
 import {
   articleFile,
   blogPath,
@@ -426,6 +427,143 @@ async function rollbackOne(action: ActionRow, creds: SiteCreds | null): Promise<
   }
 }
 
+
+// -----------------------------------------------------------------------------
+// Google Business Profile edits (module 4, seo-publish/gbp.ts)
+// -----------------------------------------------------------------------------
+
+type GbpTarget = { ctx: GbpCtx; locationName: string } | { reason: GbpManualReason; detail?: string };
+
+/** The linked profile and a usable Google token for this action's location. */
+async function gbpTarget(action: ActionRow): Promise<GbpTarget> {
+  const [{ data: listing }, { data: conn }, { data: tok }] = await Promise.all([
+    supabase.from("seo_gbp_locations").select("location_name").eq("linked_location_id", action.location_id).maybeSingle(),
+    supabase.from("google_oauth_connections").select("status, granted_scopes").eq("client_id", action.client_id).maybeSingle(),
+    supabase.from("google_oauth_tokens").select("access_token_cache, access_token_expires_at").eq("client_id", action.client_id).maybeSingle(),
+  ]);
+  if (!listing?.location_name) return { reason: "resource_not_found", detail: "no Business Profile is linked to this location" };
+  if (!conn || conn.status === "revoked") return { reason: "connection_revoked" };
+  if (!((conn.granted_scopes ?? []) as string[]).some((s) => s.endsWith("/business.manage"))) return { reason: "no_site_connection" };
+  const fresh = tok?.access_token_cache && (!tok.access_token_expires_at || new Date(tok.access_token_expires_at).getTime() > Date.now() + 60_000);
+  if (!fresh) return { reason: "connection_revoked", detail: "the cached Google token is stale; it refreshes every 15 minutes" };
+  return {
+    ctx: { token: tok!.access_token_cache as string, fetch, sleep, base: Deno.env.get("GBP_INFO_API_BASE") || undefined },
+    locationName: listing.location_name as string,
+  };
+}
+
+async function toManualGbp(action: ActionRow, reason: GbpManualReason, detail?: string) {
+  const instructions = gbpManualInstructions(action.target_field ?? "", String(action.proposed_value?.value ?? ""), reason, detail);
+  const { error } = await supabase
+    .from("seo_actions")
+    .update({ status: "manual_required", apply_mode: "manual", manual_instructions: instructions, error: null })
+    .eq("id", action.id);
+  if (error) console.error(`seo-publish: marking ${action.id} manual failed: ${error.message}`);
+}
+
+async function publishGbpOne(action: ActionRow): Promise<"published" | "manual" | "retry" | "skipped"> {
+  // Rule 2: refuse anything off the allowlist before claiming or calling Google.
+  if (!isWritable(action.target_field)) {
+    await supabase.from("seo_actions").update({ status: "failed", error: `${action.target_field} can't be written to a Business Profile` }).eq("id", action.id);
+    return "skipped";
+  }
+  const { data: claimed, error: claimErr } = await supabase.rpc("claim_seo_action", { p_action_id: action.id, p_kind: "publish" });
+  if (claimErr) throw new Error(`claim failed: ${claimErr.message}`);
+  if (!claimed) return "skipped";
+
+  const proposed = String(action.proposed_value?.value ?? "");
+  if (!proposed) {
+    await supabase.from("seo_actions").update({ status: "failed", error: "the draft has no proposed value" }).eq("id", action.id);
+    return "skipped";
+  }
+  const target = await gbpTarget(action);
+  if ("reason" in target) {
+    await toManualGbp(action, target.reason, target.detail);
+    return "manual";
+  }
+
+  const savedPrior = (action.publish_result as { previous_profile_value?: string } | null)?.previous_profile_value;
+  try {
+    const r = await applyGbpField(target.ctx, target.locationName, action.target_field!, proposed, typeof savedPrior === "string" ? savedPrior : null, async (prior) => {
+      const { error } = await supabase
+        .from("seo_actions")
+        .update({ publish_result: { ...(action.publish_result ?? {}), previous_profile_value: prior } })
+        .eq("id", action.id);
+      if (error) throw new Error(`could not record the prior state: ${error.message}`);
+    });
+    const now = new Date().toISOString();
+    const { error: upErr } = await supabase
+      .from("seo_actions")
+      .update({
+        status: "published",
+        apply_mode: "api",
+        published_at: now,
+        error: r.pending ? "Google is reviewing this change; it can take a few days to show on the profile." : null,
+        resource_ref: { platform: "gbp", location_name: target.locationName, field: action.target_field },
+        publish_result: { previous_profile_value: r.prior, written: proposed, verified: r.verified, pending: r.pending, noop: r.noop },
+      })
+      .eq("id", action.id);
+    if (upErr) throw new Error(`the change was applied but recording it failed: ${upErr.message}`);
+    if (action.finding_id) await supabase.from("seo_findings").update({ status: "resolved", resolved_at: now }).eq("id", action.finding_id);
+    return "published";
+  } catch (e) {
+    if (e instanceof GbpError) {
+      if (e.kind === "auth") {
+        await toManualGbp(action, "connection_revoked");
+        return "manual";
+      }
+      if (e.kind === "no_access") {
+        await toManualGbp(action, "missing_scope");
+        return "manual";
+      }
+      if (e.kind === "not_found") {
+        await toManualGbp(action, "resource_not_found");
+        return "manual";
+      }
+      if (e.kind === "user") {
+        await toManualGbp(action, "resource_lookup_failed", e.message);
+        return "manual";
+      }
+    }
+    const message = e instanceof Error ? e.message : String(e);
+    console.error(`seo-publish gbp ${action.id}: ${message}`);
+    await supabase.from("seo_actions").update({ status: "approved", error: message }).eq("id", action.id);
+    return "retry";
+  }
+}
+
+async function rollbackGbpOne(action: ActionRow): Promise<"rolled_back" | "kept" | "retry" | "skipped"> {
+  const { data: claimed, error: claimErr } = await supabase.rpc("claim_seo_action", { p_action_id: action.id, p_kind: "rollback" });
+  if (claimErr) throw new Error(`claim failed: ${claimErr.message}`);
+  if (!claimed) return "skipped";
+  const keep = async (message: string) => {
+    await supabase.from("seo_actions").update({ status: "published", error: `Rollback not done: ${message}` }).eq("id", action.id);
+  };
+  const pr = (action.publish_result ?? {}) as { previous_profile_value?: string; written?: string };
+  if (typeof pr.previous_profile_value !== "string" || typeof pr.written !== "string") {
+    await keep("LumiLink has no record of what the profile said before, so it can't safely restore it.");
+    return "kept";
+  }
+  const target = await gbpTarget(action);
+  if ("reason" in target) {
+    await keep("LumiLink no longer has working access to this Business Profile.");
+    return "kept";
+  }
+  try {
+    await revertGbpField(target.ctx, target.locationName, action.target_field ?? "", pr.written, pr.previous_profile_value);
+    await supabase.from("seo_actions").update({ status: "rolled_back", rolled_back_at: new Date().toISOString(), error: null }).eq("id", action.id);
+    return "rolled_back";
+  } catch (e) {
+    if (e instanceof GbpError && e.kind !== "transient") {
+      await keep(e.message);
+      return "kept";
+    }
+    const message = e instanceof Error ? e.message : String(e);
+    console.error(`seo-publish gbp rollback ${action.id}: ${message}`);
+    await supabase.from("seo_actions").update({ status: "rollback_requested", error: message }).eq("id", action.id);
+    return "retry";
+  }
+}
 
 // -----------------------------------------------------------------------------
 // Articles (module 16)
@@ -886,6 +1024,12 @@ async function runPublish(locationId: string, clientId: string): Promise<Record<
       continue;
     }
     const isRollback = a.status === "rollback_requested" || a.status === "rolling_back";
+    // Module 4: profile edits go to Google, whatever the website runs on.
+    if (a.action_type === "gbp_field_update") {
+      const o = isRollback ? await rollbackGbpOne(a) : await publishGbpOne(a);
+      tally[o as keyof typeof tally]++;
+      continue;
+    }
     const outcome = isGithub(creds)
       ? isRollback
         ? await rollbackGithub(a, creds!)

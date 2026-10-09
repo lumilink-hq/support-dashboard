@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentClientId } from "@/lib/entitlements";
 import { editArticle, editPageFix } from "@/lib/seo-draft-edit";
+import { validateGbpDescription } from "@/supabase/functions/seo-draft/gbp";
 import { saveDraftEdit } from "@/lib/services/seo-draft-edits";
 import type { LocationDetails } from "@/supabase/functions/seo-content/details";
 
@@ -164,6 +165,26 @@ export async function editDraft(formData: FormData) {
     if (!r.ok) redirect(backTo(filter, `Not saved: ${r.reason}.`));
     saved = await saveDraftEdit(id, clientId, user.id, {
       proposed_value: { ...pv, title: r.title, meta_description: r.meta_description, body_html: r.body_html, blocks: r.blocks, word_count: r.word_count },
+      original_value: original,
+    });
+  } else if (row.action_type === "gbp_field_update" && row.target_field === "gbp_description") {
+    // Module 4: held to the drafting rules (seo-draft/gbp.ts), claims backed
+    // by the location's own vouched details, the same as the model's draft.
+    const previous = ((row.previous_value as { value?: string | null } | null)?.value ?? null) as string | null;
+    const [{ data: loc }, { data: details }] = await Promise.all([
+      supabase.from("seo_locations").select("name").eq("id", row.location_id).maybeSingle(),
+      supabase
+        .from("seo_location_details")
+        .select("service_areas, landmarks, services, year_founded, licensed, insured, bonded, certifications, family_owned, locally_owned, free_estimates, guarantee, awards")
+        .eq("location_id", row.location_id)
+        .maybeSingle(),
+    ]);
+    const r = validateGbpDescription(String(formData.get("value") ?? ""), previous, (details as LocationDetails | null) ?? null, (loc?.name as string | null) ?? null);
+    if (!r.ok) redirect(backTo(filter, `Not saved: ${r.reason.replace(/^description /, "it ")}.`));
+    const diff = (row.diff ?? {}) as Record<string, unknown>;
+    saved = await saveDraftEdit(id, clientId, user.id, {
+      proposed_value: { ...pv, value: r.text },
+      diff: { ...diff, after: r.text },
       original_value: original,
     });
   } else {
