@@ -396,12 +396,14 @@ export async function saveLocationDetails(formData: FormData) {
   if (!loc) redirect(back(undefined, "That location no longer exists."));
 
   // Module 30: suggestions found on the website and left ticked. Read under
-  // RLS, so only this client's own open suggestions for this location count.
+  // RLS, so only this client's own suggestions for this location count.
+  // Already-accepted ones count too: a double-clicked Save sends the same form
+  // twice, and the second must not drop what the first just accepted.
   const acceptIds = formData.getAll("accept").map(String).filter(Boolean).slice(0, 100);
   const { data: acceptedRows } = acceptIds.length
-    ? await supabase.from("seo_detail_suggestions").select("id, field, value").in("id", acceptIds).eq("location_id", location).eq("status", "open")
+    ? await supabase.from("seo_detail_suggestions").select("id, field, value, status").in("id", acceptIds).eq("location_id", location).in("status", ["open", "accepted"])
     : { data: [] };
-  const accepted = (acceptedRows ?? []) as { id: string; field: string; value: string }[];
+  const accepted = (acceptedRows ?? []) as { id: string; field: string; value: string; status: string }[];
   const form = applyAccepted(
     {
       lists: Object.fromEntries(DETAIL_LISTS.map((f) => [f, String(formData.get(f) ?? "")])) as DetailsForm["lists"],
@@ -445,8 +447,9 @@ export async function saveLocationDetails(formData: FormData) {
   };
   const { error } = await supabase.from("seo_location_details").upsert(row, { onConflict: "location_id" });
   if (error) redirect(back(undefined, error.message));
-  if (accepted.length) {
-    await supabase.rpc("decide_seo_detail_suggestions", { p_location_id: location, p_ids: accepted.map((a) => a.id), p_status: "accepted" });
+  const newlyAccepted = accepted.filter((a) => a.status === "open");
+  if (newlyAccepted.length) {
+    await supabase.rpc("decide_seo_detail_suggestions", { p_location_id: location, p_ids: newlyAccepted.map((a) => a.id), p_status: "accepted" });
   }
 
   revalidatePath("/seo");
