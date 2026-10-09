@@ -18,6 +18,7 @@ import {
 } from "@/lib/seo-portal";
 import { createClient } from "@/lib/supabase/server";
 import { isOnlineOnlyRow, parseLocationForm, type LocationRow } from "@/lib/seo-location-form";
+import { JOB_INFO, RUN_NOW_RESULT } from "@/lib/seo-jobs";
 import { cleanItem, cleanList, cleanYear, DETAIL_LIMITS, type ListField } from "@/supabase/functions/seo-content/details";
 import { applyAccepted, DETAIL_FLAGS, DETAIL_LISTS, type DetailsForm } from "@/lib/seo-detail-suggestions";
 // The weekly AI-visibility job only ever checks this many active queries; more
@@ -680,4 +681,33 @@ export async function updateLocationSettings(formData: FormData) {
   if (result.changed.includes("website_url")) notes.push("The next weekly site audit will crawl the new website.");
   revalidatePath("/seo");
   redirect(back(notes.join(" ")));
+}
+
+/**
+ * "Run now" on /seo?tab=settings. request_seo_run_now (0073) checks ownership,
+ * the allowlist and the cooldown, and only moves the job's next_run_at: the
+ * job's own cron tick does the work, with every existing guard.
+ */
+export async function runSeoJobNow(formData: FormData) {
+  const location = String(formData.get("location") ?? "");
+  const job = String(formData.get("job") ?? "");
+  const back = (notice?: string, error?: string) => {
+    const qs = new URLSearchParams();
+    if (location) qs.set("location", location);
+    qs.set("tab", "settings");
+    if (notice) qs.set("notice", notice);
+    if (error) qs.set("error", error);
+    return `/seo?${qs.toString()}#jobs`;
+  };
+
+  const access = await getSeoAccess();
+  if (!access.allowed) redirect(back(undefined, "Local SEO isn't active on your plan."));
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("request_seo_run_now", { p_location_id: location, p_job_type: job });
+  if (error) redirect(back(undefined, error.message));
+  const result = RUN_NOW_RESULT[String(data)] ?? { ok: false, text: "Could not do that." };
+  const label = JOB_INFO[job]?.label ?? job;
+  revalidatePath("/seo");
+  const when = data === "ok" ? ` It starts ${JOB_INFO[job]?.soon ?? "within the hour"}.` : "";
+  redirect(result.ok ? back(`${label}: ${result.text}${when}`) : back(undefined, `${label}: ${result.text}`));
 }

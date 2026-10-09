@@ -97,9 +97,11 @@ import {
   removeAiQuery,
   removeCompetitor,
   removeKeyword,
+  runSeoJobNow,
   setKeywordGeoGrid,
   updateLocationSettings,
 } from "./actions";
+import { describeJob, JOB_INFO, sortJobs, type JobStatusRow } from "@/lib/seo-jobs";
 
 type Loc = {
   id: string;
@@ -715,6 +717,11 @@ export default async function SeoPortalPage({
     if (over.keyword) qs.set("keyword", over.keyword);
     return `/seo?${qs.toString()}`;
   };
+
+  // Settings tab only: when each job last ran and Run now (0073).
+  const jobs: JobStatusRow[] =
+    tab === "settings" ? sortJobs(((await supabase.rpc("seo_job_status", { p_location_id: loc.id })).data ?? []) as JobStatusRow[]) : [];
+  const now = new Date();
 
   const kwTile = summary?.tiles.find((t) => t.key === "keywords");
   const latestBacklink = backlinks.length ? backlinks[backlinks.length - 1] : null;
@@ -1839,6 +1846,53 @@ export default async function SeoPortalPage({
                 Save settings
               </button>
             </form>
+          </Card>
+
+          <Card
+            title="Jobs"
+            id="jobs"
+            note="Everything runs on its own schedule. Run now moves a job to the next scheduled check; each can be run early once per cooldown to keep vendor costs down."
+          >
+            {jobs.length === 0 ? (
+              <Empty>Job status isn&apos;t available yet.</Empty>
+            ) : (
+              <ul className="divide-y divide-gray-100 text-sm">
+                {jobs.map((j) => {
+                  const v = describeJob(j, now);
+                  const info = JOB_INFO[j.job_type];
+                  return (
+                    <li key={j.job_type} className="flex flex-wrap items-start justify-between gap-3 py-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-2 font-medium text-gray-900">
+                          <span
+                            aria-hidden
+                            className={`h-2 w-2 shrink-0 rounded-full ${
+                              v.state === "failing" ? "bg-red-500" : v.state === "running" ? "bg-blue-500" : v.state === "ok" ? "bg-green-500" : "bg-gray-300"
+                            }`}
+                          />
+                          {info?.label ?? j.job_type}
+                          {j.scope === "client" ? <span className="text-xs font-normal text-gray-500">all locations</span> : null}
+                        </p>
+                        {info ? <p className="mt-0.5 text-xs text-gray-500">{info.what}</p> : null}
+                        <p className={`mt-1 break-words text-xs ${v.state === "failing" ? "text-red-700" : "text-gray-700"}`}>{v.summary}</p>
+                      </div>
+                      <form action={runSeoJobNow}>
+                        <input type="hidden" name="location" value={loc.id} />
+                        <input type="hidden" name="job" value={j.job_type} />
+                        <button
+                          type="submit"
+                          disabled={!v.canRunNow}
+                          title={v.reason ?? undefined}
+                          className="whitespace-nowrap rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {v.canRunNow ? "Run now" : v.reason ?? "Run now"}
+                        </button>
+                      </form>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </Card>
         </div>
       ) : null}
