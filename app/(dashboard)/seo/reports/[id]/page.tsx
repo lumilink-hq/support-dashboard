@@ -6,6 +6,7 @@ import { BrandStory, StoreStory } from "@/components/seo/earned";
 import { Story, TileGrid } from "@/components/seo/search-tiles";
 import { dayLabel, fmtInt, fmtMoney, monthLabel, perClickLabel } from "@/supabase/functions/seo-search-console/insights";
 import { getSeoAccess } from "@/lib/seo-access";
+import { siteLabel } from "@/lib/seo-portal";
 import { createClient } from "@/lib/supabase/server";
 import {
   METRIC_LABELS,
@@ -55,13 +56,16 @@ function SearchBlock({ loc, sameAs }: { loc: LocationReport; sameAs: string | nu
   return (
     <div className="mt-4 space-y-6">
       <div className="rounded-xl bg-gray-900 p-5 text-white">
+        <p className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full bg-gray-800 px-2.5 py-1 font-medium text-gray-100">Whole website · {siteLabel(sum.site_url)}</span>
+          {s.shared_with > 0 ? (
+            <span className="text-gray-400">
+              Same figures for all {s.shared_with + 1} locations on this site, not just {loc.name}
+            </span>
+          ) : null}
+        </p>
         <h3 className="text-xl font-semibold leading-tight sm:text-2xl">{s.hero.headline}</h3>
         <p className="mt-2 max-w-3xl text-sm text-gray-300">{s.hero.summary}</p>
-        {s.shared_with > 0 ? (
-          <p className="mt-2 text-xs text-gray-400">
-            Figures for the whole website ({sum.site_url}), which {s.shared_with} other location{s.shared_with === 1 ? " shares" : "s share"}.
-          </p>
-        ) : null}
       </div>
       <TileGrid tiles={sum.tiles} compare="yoy" />
       {s.brand ? <BrandStory brand={s.brand} compare="yoy" /> : null}
@@ -80,7 +84,7 @@ function SearchBlock({ loc, sameAs }: { loc: LocationReport; sameAs: string | nu
         eyebrow="Return on investment"
         headline={`Estimated traffic value: ${fmtMoney(sum.value.year.cents)} over the last year`}
         lead={`${fmtInt(sum.value.year.clicks)} clicks from ${dayLabel(sum.value.year.start)} to ${dayLabel(sum.value.year.end)} at ${perClickLabel(sum.value.centsPerClick)} a click. ${sum.period.range}: ${fmtMoney(sum.value.period.cents)}.`}
-        source="A replacement value for the traffic, not revenue or profit."
+        source={`An estimated replacement value for the traffic: roughly what the same visits would cost as paid search ads, not revenue or profit. It counts clicks from Google search results through to the website (from Search Console) at ${perClickLabel(sum.value.centsPerClick)} each. Calls, direction requests and other actions on the Google Business Profile aren't included.`}
       >
         <BarChart
           label="Traffic value per month"

@@ -286,11 +286,14 @@ function searchSection(w: Writer, loc: LocationReport, shownFor: Map<string, str
     return;
   }
   const sum = s.summary;
+  // Search Console reports per website, not per store, so say which site these are.
+  const site = sum.site_url.replace(/^sc-domain:/, "").replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
+  w.text(
+    `Whole website · ${site}` + (s.shared_with > 0 ? ` · same figures for all ${s.shared_with + 1} locations on this site, not just ${loc.name}` : ""),
+    { size: 8, color: MUTED },
+  );
   w.text(s.hero.headline, { size: 12, bold: true });
   w.text(s.hero.summary, { size: 10 });
-  if (s.shared_with > 0) {
-    w.text(`These are figures for the whole website (${sum.site_url}), which ${s.shared_with} other location${s.shared_with === 1 ? " shares" : "s share"}.`, { size: 8, color: MUTED });
-  }
   w.gap(4);
   // Label, a short period, the value, then both comparisons. Long periods
   // ("August 2026 · complete month", the 12-month range) are shortened here.
@@ -303,7 +306,7 @@ function searchSection(w: Writer, loc: LocationReport, shownFor: Map<string, str
   }
   w.text("Keyword counts compare complete months only. Comparisons use the same days of the other period.", { size: 8, color: MUTED });
   w.text(
-    `Traffic value counts each click at ${perClickLabel(sum.value.centsPerClick)}. It is a replacement value for the visits, not revenue.`,
+    `Traffic value is an estimated replacement value for the traffic: roughly what the same visits would cost as paid search ads, not revenue or profit. It counts clicks from Google search results through to the website (from Search Console) at ${perClickLabel(sum.value.centsPerClick)} each. Calls, direction requests and other actions on the Google Business Profile aren't included.`,
     { size: 8, color: MUTED },
   );
   const pts = sum.months.map((m) => ({ x: m.month, y: m.clicks }));

@@ -29,6 +29,7 @@ import {
   SEO_TABS,
   shareOfVoice,
   hostOf,
+  siteLabel,
   splitSiteFindings,
   splitSuggestions,
   summarizeFindings,
@@ -903,13 +904,19 @@ export default async function SeoPortalPage({
           <section className="rounded-xl bg-gray-900 p-5 text-white sm:p-6">
             {summary && hero ? (
               <>
+                {/* Search Console reports per website, not per store, so say which site these are. */}
+                <p className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="rounded-full bg-gray-800 px-2.5 py-1 font-medium text-gray-100">
+                    Whole website · {siteLabel(summary.site_url)}
+                  </span>
+                  {sharedWith > 0 ? (
+                    <span className="text-gray-400">
+                      Same figures for all {sharedWith + 1} locations on this site, not just {loc.name}
+                    </span>
+                  ) : null}
+                </p>
                 <h2 className="text-2xl font-semibold leading-tight sm:text-3xl">{hero.headline}</h2>
                 <p className="mt-2 max-w-3xl text-sm text-gray-300">{hero.summary}</p>
-                {sharedWith > 0 ? (
-                  <p className="mt-2 text-xs text-gray-400">
-                    These are figures for the whole website ({summary.site_url}), which {sharedWith} other location{sharedWith === 1 ? " shares" : "s share"}.
-                  </p>
-                ) : null}
                 <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
                   <span className="text-gray-400">Compare</span>
                   {(["yoy", "mom"] as Compare[]).map((c) => (
@@ -961,7 +968,7 @@ export default async function SeoPortalPage({
                 eyebrow="Return on investment"
                 headline={`Estimated traffic value: ${fmtMoney(summary.value.year.cents)} over the last year`}
                 lead={`${fmtInt(summary.value.year.clicks)} clicks from Google search from ${dayLabel(summary.value.year.start)} to ${dayLabel(summary.value.year.end)}, counted at ${perClickLabel(centsPerClick)} a click.`}
-                source="A replacement value for the traffic, not revenue or profit. Sales attribution needs Google Analytics, which isn't connected."
+                source={`An estimated replacement value for the traffic: roughly what the same visits would cost as paid search ads, not revenue or profit. It counts clicks from Google search results through to the website (from Search Console) at ${perClickLabel(centsPerClick)} each. Calls, direction requests and other actions on the Google Business Profile aren't included. Sales attribution needs Google Analytics, which isn't connected.`}
               >
                 <div className="grid gap-4 rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 md:grid-cols-[auto_1fr] md:items-center">
                   <div>

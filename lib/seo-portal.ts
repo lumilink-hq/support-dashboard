@@ -397,6 +397,14 @@ export function hostOf(url: string | null | undefined): string | null {
   }
 }
 
+/** A Search Console property as people know it: "sc-domain:acme.com" and
+ *  "https://www.acme.com/" both read "acme.com". */
+export function siteLabel(site: string): string {
+  const s = site.trim();
+  if (s.startsWith("sc-domain:")) return s.slice("sc-domain:".length);
+  return hostOf(s) ?? s;
+}
+
 /** "/services/drains" for a URL on the site, the full URL otherwise. */
 export function pagePath(url: string): string {
   try {
