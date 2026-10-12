@@ -47,15 +47,16 @@ export type SeoPlan = {
 
 // Plan bullets for /pricing, /products/seo and /billing. They claim only what
 // is BUILT (components/marketing/seo.tsx's rule). Of the catalog's Google
-// Business Profile items, profile edits are live since 0079/0081 (description
-// and additional categories, approval-gated), so they're a bullet; Google Posts
+// Business Profile items, the profile description is live since 0079
+// (approval-gated; the only field LumiLink edits, categories went in 0089), so
+// it's a bullet; Google Posts
 // and review replies aren't built yet, so they stay a "coming soon" footnote.
 // The Stripe product descriptions carry the catalog's full wording.
 const LOCAL_INCLUDES = [
   "Weekly rank tracking in the local map pack",
   "A geo grid showing where each location ranks",
   "Local competitor tracking",
-  "Profile description and categories improved, with your approval",
+  "Profile description improved, with your approval",
   "Location-level monthly reporting",
 ];
 

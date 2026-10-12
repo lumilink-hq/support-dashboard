@@ -100,12 +100,11 @@ import {
   removeCompetitor,
   removeKeyword,
   linkGbpLocation,
-  proposeGbpCategories,
   runSeoJobNow,
   setKeywordGeoGrid,
   updateLocationSettings,
 } from "./actions";
-import { cleanQuery, currentCategories, encodePick, MAX_ADDITIONAL, searchCategories, type GbpCategory } from "@/lib/gbp-categories";
+import { currentCategories } from "@/lib/gbp-categories";
 import { gbpState, listingLabel, ratingLine, reviewsNote, type GbpListingRow, type GbpSyncRow } from "@/lib/seo-gbp";
 import { hasBusinessProfileScope } from "@/lib/google-oauth";
 import { shopifyCard, shopifyConnectUrl, type ShopifyConnectInfo, type SiteConnection } from "@/lib/seo-shopify";
@@ -390,12 +389,12 @@ function SuggestionList({
 export default async function SeoPortalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ location?: string; keyword?: string; error?: string; notice?: string; tab?: string; compare?: string; catq?: string }>;
+  searchParams: Promise<{ location?: string; keyword?: string; error?: string; notice?: string; tab?: string; compare?: string; }>;
 }) {
   const access = await getSeoAccess();
   if (!access.allowed) return <SeoLocked state={access.state} />;
 
-  const { location: locParam, keyword: kwParam, error: actionError, notice: actionNotice, tab: tabParam, compare: compareParam, catq: catqParam } = await searchParams;
+  const { location: locParam, keyword: kwParam, error: actionError, notice: actionNotice, tab: tabParam, compare: compareParam } = await searchParams;
   const tab: SeoTab = parseTab(tabParam);
   const compare: Compare = parseCompare(compareParam);
   const supabase = await createClient();
@@ -762,8 +761,8 @@ export default async function SeoPortalPage({
   // Settings tab only: when each job last ran and Run now (0073).
   const jobs: JobStatusRow[] =
     tab === "settings" ? sortJobs(((await supabase.rpc("seo_job_status", { p_location_id: loc.id })).data ?? []) as JobStatusRow[]) : [];
-  // Settings tab only: the additional-category picker (0081). The search runs
-  // against Google's own list with the client's own token.
+  // Settings tab only: the profile's categories, read-only. LumiLink stopped
+  // editing them in 0089 (a category change can put a listing at risk).
   const gbpCats =
     tab === "settings" && gbpLinked
       ? currentCategories(
@@ -771,17 +770,6 @@ export default async function SeoPortalPage({
             ?.categories,
         )
       : null;
-  const catQuery = cleanQuery(catqParam);
-  let catSearch: { ok: true; categories: GbpCategory[] } | { ok: false; error: string } | null = null;
-  if (gbpCats && catQuery) {
-    const { data: googleToken } = await supabase.rpc("get_my_google_access_token");
-    catSearch = googleToken
-      ? await searchCategories(String(googleToken), catQuery, (loc.country_code ?? "US").toUpperCase())
-      : { ok: false, error: "Google isn't connected." };
-  }
-  const catResults = catSearch?.ok
-    ? catSearch.categories.filter((c) => c.name !== gbpCats?.primary?.name && !gbpCats?.additional.some((a) => a.name === c.name))
-    : [];
 
   // Settings tab only: Connect Shopify (0077).
   const shopify =
@@ -2079,74 +2067,19 @@ export default async function SeoPortalPage({
             <Card
               title="Business Profile categories"
               id="gbp-categories"
-              note="Extra categories tell Google which other searches this profile can show up for. Only add ones that describe what this location really offers: Google can suspend profiles for categories that don't fit."
+              note="As they are on Google today. LumiLink doesn't change categories: a category change can send a profile back through verification or a suspension review."
             >
-              <div className="space-y-4 text-sm">
-                <p className="text-gray-700">
-                  <span className="font-medium text-gray-900">Primary:</span> {gbpCats.primary?.displayName ?? "not set"}{" "}
-                  <span className="text-xs text-gray-500">(LumiLink never changes the primary category; change it on Google if it&apos;s wrong.)</span>
+              <div className="space-y-2 text-sm text-gray-700">
+                <p>
+                  <span className="font-medium text-gray-900">Primary:</span> {gbpCats.primary?.displayName ?? "not set"}
                 </p>
-
-                <form method="get" action="/seo" className="flex flex-wrap items-end gap-2"><fieldset disabled={!canWrite} className="contents">
-                  <input type="hidden" name="location" value={loc.id} />
-                  <input type="hidden" name="tab" value="settings" />
-                  <label className="block min-w-0 flex-1">
-                    <span className="text-gray-700">Search Google&apos;s categories</span>
-                    <input
-                      name="catq"
-                      defaultValue={catQuery ?? ""}
-                      placeholder="e.g. cannabis, delivery, medical"
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5"
-                    />
-                    <span className="mt-1 block text-xs text-gray-500">Matches the start of a category name: &ldquo;cannabis&rdquo; finds &ldquo;Cannabis store&rdquo;.</span>
-                  </label>
-                  <button type="submit" className="mb-5 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                    Search
-                  </button>
-                </fieldset></form>
-
-                <form action={proposeGbpCategories} className="space-y-3"><fieldset disabled={!canWrite} className="contents">
-                  <input type="hidden" name="location" value={loc.id} />
-                  <fieldset>
-                    <legend className="text-gray-700">Additional categories (up to {MAX_ADDITIONAL})</legend>
-                    {gbpCats.additional.length === 0 && catResults.length === 0 ? (
-                      <p className="mt-1 text-xs text-gray-500">None yet. Search above to add some.</p>
-                    ) : null}
-                    <ul className="mt-1 space-y-1">
-                      {gbpCats.additional.map((c) => (
-                        <li key={c.name}>
-                          <label className="flex items-center gap-2">
-                            <input type="checkbox" name="cat" value={encodePick(c)} defaultChecked />
-                            <span>{c.displayName}</span>
-                            <span className="text-xs text-gray-400">on the profile now</span>
-                          </label>
-                        </li>
-                      ))}
-                      {catResults.map((c) => (
-                        <li key={c.name}>
-                          <label className="flex items-center gap-2">
-                            <input type="checkbox" name="cat" value={encodePick(c)} />
-                            <span>{c.displayName}</span>
-                          </label>
-                        </li>
-                      ))}
-                    </ul>
-                    {catSearch && !catSearch.ok ? <p className="mt-1 text-xs text-red-700">{catSearch.error}</p> : null}
-                    {catSearch?.ok && catResults.length === 0 ? (
-                      <p className="mt-1 text-xs text-gray-500">No other categories start with &ldquo;{catQuery}&rdquo;.</p>
-                    ) : null}
-                  </fieldset>
-                  {gbpCats.additional.length > 0 ? (
-                    <label className="flex items-center gap-2 text-xs text-gray-600">
-                      <input type="checkbox" name="clear" />
-                      Remove all additional categories (when nothing above is ticked)
-                    </label>
-                  ) : null}
-                  <p className="text-xs text-gray-500">Saving is the approval: LumiLink updates the profile within about 10 minutes, and you can roll it back from SEO approvals.</p>
-                  <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
-                    Save categories
-                  </button>
-                </fieldset></form>
+                <p>
+                  <span className="font-medium text-gray-900">Additional:</span>{" "}
+                  {gbpCats.additional.length > 0 ? gbpCats.additional.map((c) => c.displayName).join(", ") : "none"}
+                </p>
+                <p className="text-xs text-gray-500">
+                  To change them, edit the profile on Google (business.google.com) while signed in to an account that manages it.
+                </p>
               </div>
             </Card>
           ) : null}

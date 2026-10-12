@@ -91,9 +91,7 @@ begin
   assert not dismiss_seo_link_opportunity('example.org'), 'viewer cannot dismiss a link';
   assert request_seo_run_now((select v from t where k = 'loc'), 'seo_crawl') = 'not_allowed', 'viewer cannot run now';
   assert link_seo_gbp_location('locations/1', null) = 'not_allowed', 'viewer cannot link a profile';
-  -- 0085
-  assert propose_seo_gbp_categories((select v from t where k = 'loc'), '[]') = 'not_allowed',
-    'viewer cannot propose Business Profile categories';
+  -- 0085's propose_seo_gbp_categories was dropped in 0089 (no category edits).
 
   begin
     perform decide_seo_detail_suggestions((select v from t where k = 'loc'), '{}', 'dismissed');
@@ -101,14 +99,20 @@ begin
   exception when insufficient_privilege then null;
   end;
 
-  assert get_my_google_access_token() is null, 'viewer gets no Google token';
+  -- 0088: no tenant can read the Google token through PostgREST at all.
+  assert to_regprocedure('public.get_my_google_access_token()') is null, 'token RPC is gone';
+  begin
+    perform access_token_cache from google_oauth_tokens;
+    raise exception 'viewer read google_oauth_tokens';
+  exception when insufficient_privilege then null;
+  end;
   assert (disconnect_google_oauth())->>'error' = 'not_admin', 'viewer cannot disconnect Google';
   assert (store_google_oauth_tokens('r', 'a', now(), '{}', 'x@example.com'))->>'error' = 'not_admin',
     'viewer cannot store Google tokens';
 end $$;
 
 -- ---------------------------------------------------------------------------
--- Agent: works /seo, gets the token, can't connect/disconnect Google
+-- Agent: works /seo, can't read the token (0088), can't connect/disconnect Google
 -- ---------------------------------------------------------------------------
 select set_config('request.jwt.claim.sub', (select v::text from t where k = 'agent'), true);
 do $$
@@ -119,7 +123,11 @@ begin
 
   assert dismiss_seo_keyword_suggestion((select v from t where k = 'suggestion')), 'agent can dismiss a suggestion';
   assert request_seo_run_now((select v from t where k = 'loc'), 'seo_crawl') <> 'not_allowed', 'agent can run now';
-  assert get_my_google_access_token() = 'ya29.test-token', 'agent gets the Google token';
+  begin
+    perform access_token_cache from google_oauth_tokens;
+    raise exception 'agent read google_oauth_tokens';
+  exception when insufficient_privilege then null;
+  end;
 
   assert (disconnect_google_oauth())->>'error' = 'not_admin', 'agent cannot disconnect Google';
   assert exists (select 1 from google_oauth_connections), 'connection survives agent attempt';

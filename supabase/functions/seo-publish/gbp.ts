@@ -86,27 +86,12 @@ export const GBP_WRITABLE: Record<string, FieldSpec> = {
     body: (v) => ({ profile: { description: v } }),
     label: "description",
   },
-  // Google documents no mask for additional categories alone, so the whole
-  // "categories" object is sent with the primary copied from the profile as read
-  // a moment earlier, and the primary is checked again after the write.
-  gbp_additional_categories: {
-    readMask: "categories,metadata",
-    updateMask: "categories",
-    read: (l) => JSON.stringify((l.categories?.additionalCategories ?? []).map((c) => c.name ?? "").filter(Boolean).sort()),
-    canon: (v) => JSON.stringify(categoryValue(v)),
-    body: (v, live) => {
-      const primary = live.categories?.primaryCategory?.name;
-      if (!primary) throw new GbpError("user", "the profile has no primary category to keep");
-      return {
-        categories: {
-          primaryCategory: { name: primary },
-          additionalCategories: categoryValue(v).map((name) => ({ name })),
-        },
-      };
-    },
-    unchanged: (before, after) => (before.categories?.primaryCategory?.name ?? null) === (after.categories?.primaryCategory?.name ?? null),
-    label: "categories",
-  },
+  // gbp_additional_categories was writable from 0081 until 0089. Removed:
+  // Google has no mask for additional categories alone, so writing them meant
+  // sending the whole categories object, primary included, and a category
+  // change can trigger re-verification or a suspension review. LumiLink does
+  // not edit anything that could put a listing or its main details at risk;
+  // the description is the only field it writes.
 };
 
 export function isWritable(field: string | null | undefined): boolean {

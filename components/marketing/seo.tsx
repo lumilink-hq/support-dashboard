@@ -13,7 +13,8 @@
 //
 // COPY ONLY CLAIMS WHAT IS BUILT (plan.md §3, 2026-09-22). Google Business
 // Profile sync (module 3, live 2026-10-09) and approval-gated profile edits
-// (module 4: description and additional categories, 0079/0081) are features.
+// (module 4: the description only, 0079; categories were removed in 0089
+// because a category change can put a listing at risk) are features.
 // Reviews are NOT: the sync code reads them, but Google's v4 reviews API isn't
 // enabled yet, so review tracking and replies stay under "Coming soon".
 // Connecting Google for reporting is not permission to edit a listing: every
@@ -68,7 +69,7 @@ const PILLARS = [
   {
     n: "03",
     title: "Your Core Details Stay Yours",
-    body: "Your business name, address, phone number and primary category are never edited by automation. That's enforced in code, not left to a setting.",
+    body: "Your business name, address, phone number, hours and categories are never edited by automation. That's enforced in code, not left to a setting.",
   },
 ];
 
@@ -111,7 +112,7 @@ const CAPABILITIES = [
   },
   {
     title: "Google Business Profile",
-    body: "Each linked profile's views, calls, direction requests and website clicks, pulled daily, plus a completeness audit. Description and category updates are drafted for you and go live only after you approve each one, with the same rollback as site changes.",
+    body: "Each linked profile's views, calls, direction requests and website clicks, pulled daily, plus a completeness audit. A better description is drafted for you and goes live only after you approve it, with the same rollback as site changes.",
   },
 ];
 

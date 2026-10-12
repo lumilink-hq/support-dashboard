@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { revokeGoogleToken } from "@/lib/google-oauth";
 import { getMembership, isAdmin } from "@/lib/roles";
+import { googleAccessTokenForAdmin } from "@/lib/services/google-token";
 
 function fail(message: string): never {
   redirect(`/settings?error=${encodeURIComponent(message)}`);
@@ -213,9 +214,10 @@ export async function disconnectGoogleAccount() {
     redirect(`/settings?error=${encodeURIComponent("Only admins can disconnect Google.")}`);
   }
 
-  const { data: accessToken } = await supabase.rpc("get_my_google_access_token");
+  // Server-side read (0088): the token never goes through PostgREST.
+  const accessToken = await googleAccessTokenForAdmin();
   if (accessToken) {
-    await revokeGoogleToken(accessToken as string);
+    await revokeGoogleToken(accessToken);
   }
 
   const { error } = await supabase.rpc("disconnect_google_oauth");

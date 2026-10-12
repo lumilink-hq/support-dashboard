@@ -1,5 +1,5 @@
 -- =============================================================================
--- test_seo_gbp_write_path.sql — 0079 (module 4): the profile-edit allowlist on
+-- test_seo_gbp_write_path.sql — 0079 (module 4), narrowed by 0089 to the description only: the allowlist on
 -- seo_actions, and when seo_draft_targets makes a location due for a Business
 -- Profile description draft.
 --
@@ -28,7 +28,7 @@ begin
   insert into seo_locations (client_id, name) values (v_client, 'Store') returning id into v_loc;
 
   -- Rule 2 at the database: profile edits only to allowlisted fields.
-  foreach f in array array['gbp_hours', 'gbp_primary_category', 'gbp_title', 'gbp_phone', 'website'] loop
+  foreach f in array array['gbp_hours', 'gbp_primary_category', 'gbp_additional_categories', 'gbp_title', 'gbp_phone', 'website'] loop
     begin
       insert into seo_actions (client_id, location_id, action_type, target_field, idempotency_key, status)
       values (v_client, v_loc, 'gbp_field_update', f, 'k-' || f, 'pending_approval');

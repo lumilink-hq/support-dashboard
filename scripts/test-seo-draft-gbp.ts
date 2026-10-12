@@ -68,7 +68,7 @@ async function main() {
   ok("cleaned: quotes stripped, blank lines collapsed", paras.ok && !paras.text.startsWith('"') && !paras.text.includes("\n\n\n"), paras);
 
   // --- publishing: allowlist ---------------------------------------------------
-  eq("allowlist: description and additional categories only", Object.keys(GBP_WRITABLE), ["gbp_description", "gbp_additional_categories"]);
+  eq("allowlist: description only (categories removed in 0089)", Object.keys(GBP_WRITABLE), ["gbp_description"]);
   for (const f of ["name", "title", "phone", "address", "primary_category", "storefrontAddress", "phoneNumbers", "categories", "gbp_primary_category"]) {
     ok(`allowlist: ${f} is not writable`, !isWritable(f));
   }
@@ -194,53 +194,24 @@ async function main() {
     }) as unknown as typeof fetch;
     return { state, ctx: { token: "t", fetch: doFetch, sleep: async () => {}, base: "https://fake" } as GbpCtx };
   }
+  // 0089: categories are no longer written. A category action that reaches
+  // the publisher is refused before any call to Google.
   {
     const g = fakeCats({ primary: "categories/gcid:cannabis_store", additional: [] });
-    // Postgres writes ["a", "b"] with a space; values compare as sets, not strings.
-    const proposed = '["categories/gcid:medical_marijuana_dispensary", "categories/gcid:cannabis_delivery"]';
-    const r = await applyGbpField(g.ctx, "locations/1", "gbp_additional_categories", proposed, null, async () => {});
-    eq("categories: verified despite different JSON spacing and order", [r.verified, r.prior], [true, "[]"]);
-    const patch = g.state.calls.find((c) => c.method === "PATCH")!;
-    eq("categories: whole-object mask", patch.url, "https://fake/v1/locations/1?updateMask=categories");
-    eq("categories: primary sent back exactly as read", patch.body, {
-      categories: {
-        primaryCategory: { name: "categories/gcid:cannabis_store" },
-        additionalCategories: [{ name: "categories/gcid:cannabis_delivery" }, { name: "categories/gcid:medical_marijuana_dispensary" }],
-      },
-    });
-    eq("categories: primary unchanged", g.state.primary, "categories/gcid:cannabis_store");
-    eq("categories: rollback restores none", await revertGbpField(g.ctx, "locations/1", "gbp_additional_categories", proposed, "[]"), { noop: false });
-    eq("categories: rolled back", g.state.additional, []);
-  }
-  {
-    const g = fakeCats({ primary: "categories/gcid:cannabis_store", additional: [], changePrimaryOnWrite: true });
     let got = "";
     try {
       await applyGbpField(g.ctx, "locations/1", "gbp_additional_categories", '["categories/gcid:cannabis_delivery"]', null, async () => {});
     } catch (e) {
       got = e instanceof GbpError ? e.kind : "other";
     }
-    eq("categories: a moved primary is caught and reported", got, "user");
-  }
-  {
-    const g = fakeCats({ primary: "categories/gcid:cannabis_store", additional: ["categories/gcid:atm"] });
-    let got = "";
+    eq("categories: write refused, Google never called", [got, g.state.calls.length], ["user", 0]);
+    got = "";
     try {
       await revertGbpField(g.ctx, "locations/1", "gbp_additional_categories", '["categories/gcid:cannabis_delivery"]', "[]");
     } catch (e) {
       got = e instanceof GbpError ? e.kind : "other";
     }
-    eq("categories: rollback refuses after a hand edit", [got, g.state.additional], ["drift", ["categories/gcid:atm"]]);
-  }
-  {
-    const g = fakeCats({ primary: "", additional: [] });
-    let got = "";
-    try {
-      await applyGbpField(g.ctx, "locations/1", "gbp_additional_categories", '["categories/gcid:cannabis_delivery"]', null, async () => {});
-    } catch (e) {
-      got = e instanceof GbpError ? e.kind : "other";
-    }
-    eq("categories: no primary to keep means no write", [got, g.state.calls.some((c) => c.method === "PATCH")], ["user", false]);
+    eq("categories: rollback refused too, Google never called", [got, g.state.calls.length], ["user", 0]);
   }
   const mc = gbpManualInstructions("gbp_additional_categories", '["categories/gcid:a", "categories/gcid:b"]', "missing_scope");
   eq("categories: manual steps list the ids, one per line", mc.copy.text, "categories/gcid:a\ncategories/gcid:b");

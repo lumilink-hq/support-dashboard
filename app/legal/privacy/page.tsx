@@ -156,10 +156,10 @@ export default function PrivacyPage() {
 
       {/* Google OAuth verification reads this clause. It covers only the
           scopes the app requests today (lib/google-oauth.ts). Business
-          Profile is read daily (module 3, seo-gbp-sync) and, since 0079/0081,
-          written only for an approved description or additional categories
-          (seo-publish/gbp.ts GBP_WRITABLE). When review replies or any other
-          field ship, add what they write here BEFORE they go live. */}
+          Profile is read daily (module 3, seo-gbp-sync) and written only for
+          an approved description (seo-publish/gbp.ts GBP_WRITABLE; categories
+          were writable 0081-0089 and removed). When review replies or any
+          other field ship, add what they write here BEFORE they go live. */}
       <Clause heading="Information From Your Google Account">
         <p>
           If you connect your Google account in Settings, we ask Google for
@@ -185,11 +185,10 @@ export default function PrivacyPage() {
           replies to them. We keep that information to show it in your
           dashboard and reports, and to point out what a profile is missing.
           Connecting your Google account is not permission to edit your
-          listings. We change a profile only when you approve that specific
-          change, and only two things: its description and its additional
-          categories. We never
-          change its name, address, phone number or primary category, and we
-          do not post review replies. You can roll back any change we made
+          listings. The only thing we ever change is a profile&rsquo;s
+          description, and only when you approve that specific change. We never
+          change its name, address, phone number, website, hours or categories,
+          and we do not post review replies. You can roll back any change we made
           from your dashboard.
         </p>
         <p>
