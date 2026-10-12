@@ -17,7 +17,7 @@ Update the module checklist and the session log as work lands. Committed on the 
 |---|---|---|
 | Where the code lives | This repo. Shopify app in `shopify-app/`, backend in `supabase/`, pages in `app/` | LumiLink runs it and would sell it; Tsunami is tenant #1. Git syncs both machines. |
 | Shopify app type | CLI-created app (Dev Dashboard), custom distribution to Tsunami for now | Theme app blocks, Shopify Functions and app proxy need a CLI app; admin-created custom apps can't do them |
-| App owner account | **TBD:** LumiLink Partner/Dev Dashboard account recommended | Phase 2 is a LumiLink product |
+| App owner account | LumiLink's Shopify Partner account (created 2026-10-12) | Phase 2 is a LumiLink product |
 | Backend | Supabase edge functions + Postgres; pg_cron for scheduled jobs | Same pattern as voice/SEO (`0023_scheduled_product_sync.sql`). No new Railway service. |
 | Shopify token | Issued by OAuth on install, stored in Supabase Vault | Same storage pattern as `seo-publish`. Do **not** reuse the SEO custom-app token. |
 | Settings-driven | All rules, tiers, rewards and copy read from config tables, nothing Tsunami-specific in code | Games and Phase 2 reuse it |
@@ -119,7 +119,7 @@ theme block packaging; listing and review prep. $19 one-time App Store registrat
 
 | Item | Owner | Status |
 |---|---|---|
-| Decide which account owns the app (LumiLink recommended) | J | ☐ |
+| Decide which account owns the app: LumiLink Partner account | J | ☑ 2026-10-12 |
 | Free development store for testing | J | ☐ |
 | `shopify app init` into `shopify-app/` (browser login) | J + Claude | ☐ |
 | Joy member export (members, balances, tiers); check Joy Settings → Developers for an API key for points history | J | ☐ |
@@ -148,4 +148,4 @@ theme block packaging; listing and review prep. $19 one-time App Store registrat
 | Date | Machine | What happened |
 |---|---|---|
 | 2026-10-09 | Tsunami | Scoped the build, walked Joy's admin, wrote the scope brief (Drafts 1-4) |
-| 2026-10-12 | Tsunami | Phase 1 approved. Created `loyalty` branch and this plan |
+| 2026-10-12 | Tsunami | Phase 1 approved. Created `loyalty` branch and this plan. LumiLink Partner account created |
