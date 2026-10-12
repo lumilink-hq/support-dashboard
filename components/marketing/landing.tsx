@@ -205,7 +205,7 @@ const FAQS = [
   // "Information From Your Google Account" clause.
   {
     q: "What Does LumiLink Do With My Google Account?",
-    a: "Only what SEO + AI Search needs. When you connect Google in your dashboard, LumiLink gets read-only access to Google Search Console, to check which of your pages Google has indexed and why any aren't, and, if you allow it, access to your Google Business Profiles, to report each listing's details, views, calls and reviews. The results appear in your dashboard and reports. LumiLink can't change anything in Search Console, and it changes a profile only when you approve it: the description and additional categories, never the name, address, phone or primary category. It never sells or shares the data, and never sends it to an AI model. You can disconnect at any time. Our Privacy Policy has the details.",
+    a: "Only what SEO + AI Search needs. When you connect Google in your dashboard, LumiLink gets read-only access to Google Search Console, to check which of your pages Google has indexed and why any aren't, and, if you allow it, access to your Google Business Profiles, to report each listing's details, views and calls. The results appear in your dashboard and reports. LumiLink can't change anything in Search Console, and connecting Google is not permission to edit your listings: it changes a profile only when you approve that specific change, and only the description and additional categories, never the name, address, phone or primary category. It never sells or shares the data, and never sends it to an AI model. You can disconnect at any time. Our Privacy Policy has the details.",
   },
   {
     q: "We Have Many Locations Or Brands. Is There A Plan For Us?",

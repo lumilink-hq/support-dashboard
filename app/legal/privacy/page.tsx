@@ -184,8 +184,10 @@ export default function PrivacyPage() {
           direction requests and website clicks, and its reviews and your
           replies to them. We keep that information to show it in your
           dashboard and reports, and to point out what a profile is missing.
-          We change a profile only when you approve the change, and only two
-          things: its description and its additional categories. We never
+          Connecting your Google account is not permission to edit your
+          listings. We change a profile only when you approve that specific
+          change, and only two things: its description and its additional
+          categories. We never
           change its name, address, phone number or primary category, and we
           do not post review replies. You can roll back any change we made
           from your dashboard.

@@ -12,8 +12,12 @@
 // SEO_PLANS, so the numbers here can't disagree with what /billing charges.
 //
 // COPY ONLY CLAIMS WHAT IS BUILT (plan.md §3, 2026-09-22). Google Business
-// Profile sync, profile edits and review replies (Phase 4) wait on Google's
-// API approval, so they're listed under "Coming soon", not as features.
+// Profile sync (module 3, live 2026-10-09) and approval-gated profile edits
+// (module 4: description and additional categories, 0079/0081) are features.
+// Reviews are NOT: the sync code reads them, but Google's v4 reviews API isn't
+// enabled yet, so review tracking and replies stay under "Coming soon".
+// Connecting Google for reporting is not permission to edit a listing: every
+// profile change is its own approval, and the copy must keep saying so.
 // Citations and link building (Phase 5) are parked and aren't mentioned as
 // features at all. Only Shopify has a publish adapter; every other site gets
 // the change as step-by-step instructions (seo-publish's manual_required
@@ -105,11 +109,14 @@ const CAPABILITIES = [
     title: "A Monthly Report",
     body: "On the 1st of each month: rankings, work shipped, what's queued next, and a plain statement of the radius each location can realistically win.",
   },
+  {
+    title: "Google Business Profile",
+    body: "Each linked profile's views, calls, direction requests and website clicks, pulled daily, plus a completeness audit. Description and category updates are drafted for you and go live only after you approve each one, with the same rollback as site changes.",
+  },
 ];
 
 const COMING_SOON = [
-  "Google Business Profile sync: daily profile metrics, reviews and a completeness audit",
-  "Profile updates drafted for your approval, with the same rollback as site changes",
+  "Review tracking for each Google Business Profile",
   "Review replies in your voice, with anything under three stars sent to a person first",
 ];
 
