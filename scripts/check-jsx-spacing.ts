@@ -16,6 +16,17 @@
 // neither is visible in the source, which is why this is a script and not a
 // proofread.
 //
+// AND AN SWC BUG (found 2026-10-12). When a text node spans more than one line
+// AND contains an HTML entity (&rsquo;, &mdash;...), Next's compiler also
+// strips the space at its very start, even with no newline in it. So this:
+//
+//     <span>AI Search Optimization</span> for
+//     ChatGPT and Google&rsquo;s AI Overviews
+//
+// shipped as "Optimizationfor". Without the &rsquo; the space survives, and
+// tsc keeps it either way, so only this script catches it. Trailing spaces
+// are not affected.
+//
 // THE FIX is always one of: keep them on one line, or end the previous line
 // with {" "}.
 //
@@ -161,13 +172,20 @@ for (const file of [...walkDir("app"), ...walkDir("components")]) {
         // only a text node that STARTS OR ENDS WITH A WORD can be a defect.
         // Without this the checker reports a dozen correct sentences and gets
         // ignored, which is worse than not having it.
-        const startsWithWord = /^\s*[A-Za-z0-9]/.test(raw);
+        // A leading entity counts too: " &mdash; there" after a </strong>
+        // that loses its space reads as "free— there".
+        const startsWithWord = /^\s*([A-Za-z0-9]|&[A-Za-z0-9#]+;)/.test(raw);
         const endsWithWord = /[A-Za-z0-9]\s*$/.test(raw);
 
-        // Leading newline-whitespace is stripped: text butts against `prev`.
+        // Leading whitespace is stripped, so the text butts against `prev`,
+        // when it holds a newline (React's rule) or when the node is multi-line
+        // and contains an HTML entity (SWC's bug, see the header).
+        const leadStripped =
+          /^[^\S\n]*\n/.test(raw) ||
+          (/^\s/.test(raw) && raw.includes("\n") && /&[A-Za-z0-9#]+;/.test(raw));
         if (
           startsWithWord &&
-          /^[^\S\n]*\n/.test(raw) &&
+          leadStripped &&
           prev &&
           isInlineNeighbour(prev) &&
           !isSpaceExpression(prev) &&

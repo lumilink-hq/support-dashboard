@@ -483,7 +483,7 @@ export default async function BillingPage({
             a plan.
           </li>
           <li>
-            <strong>Setup is free</strong> &mdash; there is no one-time charge on
+            <strong>Setup is free</strong>{" "}&mdash; there is no one-time charge on
             any plan.
           </li>
           <li>

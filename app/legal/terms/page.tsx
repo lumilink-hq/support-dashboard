@@ -32,7 +32,7 @@ export default function TermsPage() {
     >
       <Clause heading="1. What We Provide">
         <p>
-          {LEGAL_ENTITY} provides an AI phone agent that answers calls on a
+          {LEGAL_ENTITY}{" "}provides an AI phone agent that answers calls on a
           number we provision for you, using information you give us about your
           business. Depending on your configuration it can book appointments,
           answer questions about your services or orders, and take details for a

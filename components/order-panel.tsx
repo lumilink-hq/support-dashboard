@@ -34,7 +34,7 @@ export function OrderPanel({
         </p>
       ) : !order ? (
         <p className="mt-3 text-sm text-gray-400">
-          Order #{orderNumber} isn&apos;t cached yet. It populates after the agent
+          Order #{orderNumber}{" "}isn&apos;t cached yet. It populates after the agent
           looks it up.
         </p>
       ) : (

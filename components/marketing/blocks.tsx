@@ -546,7 +546,7 @@ export function AiSearchIncludedCallout({ className = "" }: { className?: string
         Included Free
       </span>
       <p className="text-sm leading-relaxed text-green-900">
-        <span className="font-semibold">AI Search Optimization</span> for
+        <span className="font-semibold">AI Search Optimization</span>{" "}for
         ChatGPT and Google&rsquo;s AI Overviews comes with every website SEO
         plan. Many agencies sell it as a separate, expensive retainer. We
         don&rsquo;t charge for it at all.

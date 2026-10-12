@@ -339,7 +339,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
               </ul>
               <p className="mt-5 text-sm font-medium text-gray-900">{p.price}</p>
               <p className="mt-3 text-sm font-medium text-lumi-700 group-hover:underline">
-                {p.cta} &rarr;
+                {p.cta}{" "}&rarr;
               </p>
             </Link>
           ))}
