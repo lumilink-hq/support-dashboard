@@ -41,6 +41,8 @@ ok("/plans (public acquisition page)", isPublicPath("/plans"));
 ok("/home (landing, no redirect)", isPublicPath("/home"));
 ok("/preview (retired, redirects to /home)", isPublicPath("/preview"));
 ok("/login", isPublicPath("/login"));
+ok("/forgot-password", isPublicPath("/forgot-password"));
+ok("/account/password stays private", !isPublicPath("/account/password"));
 ok("/signup", isPublicPath("/signup"));
 ok("/auth/confirm (prefix covers sub-paths)", isPublicPath("/auth/confirm"));
 ok("/demo (bare)", isPublicPath("/demo"));

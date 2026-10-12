@@ -1,0 +1,21 @@
+<!--
+  Supabase "Reset password" email (/forgot-password). OPTIONAL in production.
+
+  Without it, Supabase's default template sends a one-time code link that only
+  works in the browser that requested the reset (the code's other half is a
+  cookie there). That covers most people but fails someone who asks on their
+  laptop and opens the email on their phone.
+
+  With it, the link carries a token_hash that /auth/confirm verifies anywhere.
+  To switch: Supabase Dashboard -> Authentication -> Email Templates ->
+  Reset password: subject "Reset your LumiLink password", body below.
+-->
+<h2>Reset your LumiLink password</h2>
+
+<p>Someone asked to reset the password for this email on LumiLink. If it was you, click below to choose a new one.</p>
+
+<p>
+  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/account/password">Choose a new password</a>
+</p>
+
+<p>The link only works once and expires soon. If you didn't ask for this, you can ignore this email: your password stays the same.</p>

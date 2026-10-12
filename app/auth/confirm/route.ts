@@ -49,6 +49,17 @@ export async function GET(request: NextRequest) {
     if (!error) return NextResponse.redirect(await landing());
   }
 
+  // A reset link (/forgot-password) or invite link carries
+  // next=/account/password. "Email confirmation" is the wrong word for those,
+  // and the fix is a new link, not signing in.
+  if (next === "/account/password") {
+    return NextResponse.redirect(
+      `${origin}/forgot-password?error=${encodeURIComponent(
+        "That link has expired or was already used. Request a new one below. If you were invited to a team, ask them to resend the invite.",
+      )}`,
+    );
+  }
+
   return NextResponse.redirect(
     `${origin}/login?error=${encodeURIComponent(
       "Email confirmation link is invalid or has expired.",

@@ -85,6 +85,10 @@ export const PUBLIC_EXACT = [
   // both redirected to /login, so Google had no sitemap for the site.
   "/sitemap.xml",
   "/robots.txt",
+  // Password reset request (2026-10-12). Signed out by definition. The page
+  // the reset link lands on, /account/password, stays behind the session:
+  // /auth/confirm signs them in before sending them there.
+  "/forgot-password",
 ] as const;
 
 /**

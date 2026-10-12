@@ -180,6 +180,28 @@ begin
 end $$;
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- 0087: /signup recognises an unused invite (and nothing else)
+-- ---------------------------------------------------------------------------
+insert into client_invites (client_id, email, role)
+values ((select v from t where k = 'client_a'), 'pending@team-a.example', 'viewer');
+insert into auth.users (id, email, invited_at) values (gen_random_uuid(), 'pending@team-a.example', now());
+set local role anon;
+do $$
+begin
+  assert signup_email_status(' Pending@Team-A.example ') = 'invited', 'unused invite is reported';
+  assert signup_email_status('admin@team-a.example') is null, 'a normal account is not reported';
+  assert signup_email_status('nobody@nowhere.example') is null, 'an unknown email is not reported';
+end $$;
+reset role;
+update auth.users set last_sign_in_at = now() where email = 'pending@team-a.example';
+set local role anon;
+do $$
+begin
+  assert signup_email_status('pending@team-a.example') is null, 'an accepted invite is not reported';
+end $$;
+reset role;
+
 select 'test_team_invites: all assertions passed' as result;
 
 rollback;

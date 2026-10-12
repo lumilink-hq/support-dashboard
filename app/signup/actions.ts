@@ -77,6 +77,18 @@ export async function signup(formData: FormData) {
       : `${origin}/auth/confirm?next=${encodeURIComponent(next)}`;
 
   const supabase = await createClient();
+
+  // AN UNUSED TEAM INVITE (0087). The invite already created this login,
+  // unconfirmed. Calling signUp on it would answer like an existing account
+  // AND quietly email a confirmation link that signs them in to the inviting
+  // workspace, not the one they're trying to create here. Don't call it.
+  const { data: emailStatus } = await supabase.rpc("signup_email_status", { p_email: email });
+  if (emailStatus === "invited") {
+    fail(
+      "You've been invited to a team on LumiLink with this email. Use the link in your invite email to join it. To set up your own workspace instead, ask the person who invited you to cancel the invite, then sign up here.",
+    );
+  }
+
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -134,7 +146,7 @@ export async function signup(formData: FormData) {
   // ---------------------------------------------------------------------------
   if (data?.user && (data.user.identities?.length ?? 0) === 0) {
     fail(
-      "That email can't be signed up right now. If you already have an account, sign in instead — or reset your password.",
+      "That email can't be signed up right now. If you already have an account, sign in instead. Forgot your password? Use \"Forgot password?\" on the sign-in page.",
     );
   }
 
