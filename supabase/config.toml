@@ -85,14 +85,17 @@ allowed_cidrs_v6 = ["::/0"]
 # enabled = true
 
 [realtime]
-enabled = true
+# Off locally (2026-10-12): the app uses no Realtime. Saves ~250 MB.
+enabled = false
 # Bind realtime via either IPv4 or IPv6. (default: IPv4)
 # ip_version = "IPv6"
 # The maximum length in bytes of HTTP request headers. (default: 4096)
 # max_header_length = 4096
 
 [studio]
-enabled = true
+# Off locally (2026-10-12): use psql (docker exec ... supabase_db_support-dashboard).
+# Studio + pg_meta ~360 MB. Flip back to true when you want the UI.
+enabled = false
 # Port to use for Supabase Studio.
 port = 54323
 # External URL of the API server that frontend connects to.
@@ -440,7 +443,9 @@ verify_jwt = false
 verify_jwt = false
 
 [analytics]
-enabled = true
+# Off locally (2026-10-12): the log store (Logflare + vector) grows without
+# bound, ~640 MB and climbing. Only Studio's log viewer reads it.
+enabled = false
 port = 54327
 # Configure one of the supported backends: `postgres`, `bigquery`.
 backend = "postgres"
