@@ -20,8 +20,7 @@ export default async function ForgotPasswordPage({
               password is on its way. It can take a minute or two.
             </p>
             <p className="mt-4 text-sm text-gray-500">
-              Open the link on this device and in this browser. Nothing
-              arrived? Check spam, or{" "}
+              Nothing arrived? Check spam, or{" "}
               <Link href="/forgot-password" className="font-medium text-gray-900 underline underline-offset-4">
                 try again
               </Link>
