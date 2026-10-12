@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { revokeGoogleToken } from "@/lib/google-oauth";
+import { getMembership, isAdmin } from "@/lib/roles";
 
 function fail(message: string): never {
   redirect(`/settings?error=${encodeURIComponent(message)}`);
@@ -204,6 +205,13 @@ export async function disconnectGoogleAccount() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=%2Fsettings");
+
+  // Admin-only (0084), and checked BEFORE the revoke below: revoking at Google
+  // first and being refused by disconnect_google_oauth after would break the
+  // connection while leaving it listed as connected.
+  if (!isAdmin((await getMembership())?.role)) {
+    redirect(`/settings?error=${encodeURIComponent("Only admins can disconnect Google.")}`);
+  }
 
   const { data: accessToken } = await supabase.rpc("get_my_google_access_token");
   if (accessToken) {

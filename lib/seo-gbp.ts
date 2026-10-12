@@ -93,4 +93,5 @@ export const LINK_RESULT: Record<string, { ok: boolean; text: string }> = {
   ok: { ok: true, text: "Saved. Its data syncs within the hour." },
   not_found: { ok: false, text: "That profile is no longer listed. It may have been removed from the Google account." },
   location_not_found: { ok: false, text: "That location no longer exists." },
+  not_allowed: { ok: false, text: "You have view-only access. Ask an admin on your team to change your role." },
 };

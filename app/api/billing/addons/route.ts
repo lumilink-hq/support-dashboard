@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireClientId } from "@/lib/entitlements";
+import { ADMIN_ONLY_BILLING_MESSAGE, getMembership } from "@/lib/roles";
 import { addAddonToClient, BillingError, removeAddonFromClient } from "@/lib/services/billing";
 import { isStripeConfigured } from "@/lib/stripe";
 
@@ -18,13 +18,19 @@ async function mutate(
   request: Request,
   action: (input: { clientId: string; addonKey: string }) => Promise<void>,
 ) {
+  const me = await getMembership();
+  if (!me) {
+    return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  }
+  // Billing is admin-only (0082 roles). This route charges with the service
+  // role, so there is no database policy behind it: this check is the gate.
+  if (me.role !== "admin") {
+    return NextResponse.json({ error: ADMIN_ONLY_BILLING_MESSAGE }, { status: 403 });
+  }
+  const clientId = me.clientId;
+
   if (!isStripeConfigured()) {
     return NextResponse.json({ error: "Billing isn't set up yet — check back soon." }, { status: 501 });
-  }
-
-  const clientId = await requireClientId();
-  if (!clientId) {
-    return NextResponse.json({ error: "Sign in first." }, { status: 401 });
   }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));

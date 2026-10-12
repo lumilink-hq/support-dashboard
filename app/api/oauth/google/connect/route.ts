@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
+import { getMembership, isAdmin } from "@/lib/roles";
 import {
   buildGoogleAuthUrl,
   GOOGLE_OAUTH_SCOPES_BUSINESS_PROFILE,
@@ -37,6 +38,14 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.redirect(new URL("/login?next=%2Fsettings", process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"));
+  }
+
+  // Admin-only (0084). store_google_oauth_tokens refuses anyone else too; this
+  // stops them before they sit through Google's consent screen for nothing.
+  if (!isAdmin((await getMembership())?.role)) {
+    return NextResponse.redirect(
+      new URL("/settings?google_error=" + encodeURIComponent("Only admins can connect Google."), process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+    );
   }
 
   const state = randomBytes(24).toString("hex");

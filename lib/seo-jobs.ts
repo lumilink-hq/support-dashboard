@@ -38,6 +38,7 @@ export const RUN_NOW_RESULT: Record<string, { ok: boolean; text: string }> = {
   cooldown: { ok: false, text: "It ran recently. Each job can be run early once per cooldown to keep costs down." },
   unknown_job: { ok: false, text: "That job can't be run from here." },
   not_found: { ok: false, text: "That location no longer exists." },
+  not_allowed: { ok: false, text: "You have view-only access. Ask an admin on your team to change your role." },
 };
 
 export function sortJobs(rows: JobStatusRow[]): JobStatusRow[] {

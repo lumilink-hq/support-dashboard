@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { canAct, getMembership } from "@/lib/roles";
 import {
   FlagChip,
   TicketNoChip,
@@ -123,6 +124,8 @@ export default async function ReviewQueuePage({
     : "pending";
 
   const supabase = await createClient();
+  // Viewers are read-only (0083): no Resolve/Dismiss/Reopen or callback buttons.
+  const canWrite = canAct((await getMembership())?.role);
 
   // The callbacks tab reads the dedicated view: it already filters to pending
   // tickets awaiting a call and computes `overdue` in SQL. It's security_invoker,
@@ -336,11 +339,13 @@ export default async function ReviewQueuePage({
                   </p>
                 )}
 
+                {!canWrite ? null : (
                 <div className="mt-3 flex gap-2">
                   {item.status === "pending" ? (
                     <>
                       <form action={resolveItem}>
                         <input type="hidden" name="id" value={item.id} />
+                        <input type="hidden" name="filter" value={active} />
                         <button
                           type="submit"
                           className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800"
@@ -350,6 +355,7 @@ export default async function ReviewQueuePage({
                       </form>
                       <form action={dismissItem}>
                         <input type="hidden" name="id" value={item.id} />
+                        <input type="hidden" name="filter" value={active} />
                         <button
                           type="submit"
                           className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
@@ -361,6 +367,7 @@ export default async function ReviewQueuePage({
                   ) : (
                     <form action={reopenItem}>
                       <input type="hidden" name="id" value={item.id} />
+                        <input type="hidden" name="filter" value={active} />
                       <button
                         type="submit"
                         className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
@@ -370,8 +377,9 @@ export default async function ReviewQueuePage({
                     </form>
                   )}
                 </div>
+                )}
 
-                {hasCallback && item.status === "pending" ? (
+                {canWrite && hasCallback && item.status === "pending" ? (
                   <CallbackActions ticketId={item.id} filter={active} />
                 ) : null}
               </li>

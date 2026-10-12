@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SeoLocked } from "@/components/seo/locked";
 import { getSeoAccess } from "@/lib/seo-access";
+import { canAct, getMembership } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import { generateReportNow } from "./actions";
 
@@ -30,6 +31,8 @@ export default async function SeoReportsPage({
 
   const { notice, error: actionError } = await searchParams;
   const supabase = await createClient();
+  // Viewers are read-only (0084): they read reports but don't trigger one.
+  const canWrite = canAct((await getMembership())?.role);
   const { data, error } = await supabase
     .from("seo_reports")
     .select("id, period_start, content, email_status, created_at")
@@ -47,6 +50,7 @@ export default async function SeoReportsPage({
         A report is prepared on the 1st of each month covering the month before: rankings, profile results, the work that went live and what is queued next.
       </p>
 
+      {canWrite ? (
       <form action={generateReportNow} className="mt-4">
         <button
           type="submit"
@@ -56,6 +60,7 @@ export default async function SeoReportsPage({
         </button>
         <span className="ml-2 text-xs text-gray-500">Takes up to a minute. It won&apos;t email a report that already went out.</span>
       </form>
+      ) : null}
       {notice ? <div className="mt-3 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">{notice}</div> : null}
       {actionError ? <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{actionError}</div> : null}
 

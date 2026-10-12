@@ -144,3 +144,12 @@ body {
   font-weight: 600;
   color: var(--color-gray-900);
 }
+
+/* View-only roles (0084): /seo wraps each form's contents in
+   <fieldset disabled className="contents">. The browser disables the controls,
+   but the buttons keep their normal look; make them read as unavailable. */
+fieldset.contents:disabled button,
+fieldset.contents:disabled input[type="submit"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

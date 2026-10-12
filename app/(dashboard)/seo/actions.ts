@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentClientId } from "@/lib/entitlements";
 import { getSeoAccess } from "@/lib/seo-access";
+import { canAct, getMembership, READ_ONLY_MESSAGE } from "@/lib/roles";
 import {
   cleanDomain,
   cleanKeyword,
@@ -50,6 +51,7 @@ export async function addAiQuery(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(backTo(location, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(backTo(location, READ_ONLY_MESSAGE));
   if (query.length < QUERY_MIN || query.length > QUERY_MAX) {
     redirect(backTo(location, `A question must be between ${QUERY_MIN} and ${QUERY_MAX} characters.`));
   }
@@ -93,6 +95,7 @@ export async function removeAiQuery(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(backTo(location, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(backTo(location, READ_ONLY_MESSAGE));
 
   const supabase = await createClient();
   const {
@@ -121,6 +124,7 @@ export async function addCompetitor(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(competitorBack(location, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(competitorBack(location, READ_ONLY_MESSAGE));
   if (!domain) redirect(competitorBack(location, "That doesn't look like a website address, e.g. rival.com."));
 
   const clientId = await getCurrentClientId();
@@ -163,6 +167,7 @@ export async function removeCompetitor(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(competitorBack(location, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(competitorBack(location, READ_ONLY_MESSAGE));
 
   const supabase = await createClient();
   const {
@@ -191,6 +196,7 @@ export async function addKeyword(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(keywordBack(location, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(keywordBack(location, READ_ONLY_MESSAGE));
   if (keyword.length < KEYWORD_MIN || keyword.length > KEYWORD_MAX) {
     redirect(keywordBack(location, `A keyword must be between ${KEYWORD_MIN} and ${KEYWORD_MAX} characters.`));
   }
@@ -238,6 +244,7 @@ export async function removeKeyword(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(keywordBack(location, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(keywordBack(location, READ_ONLY_MESSAGE));
 
   const supabase = await createClient();
   const {
@@ -271,6 +278,7 @@ export async function setKeywordGeoGrid(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(keywordBack(location, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(keywordBack(location, READ_ONLY_MESSAGE));
 
   const supabase = await createClient();
   const {
@@ -326,6 +334,7 @@ export async function dismissKeywordSuggestion(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(suggestionBack(location, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(suggestionBack(location, READ_ONLY_MESSAGE));
 
   const supabase = await createClient();
   const {
@@ -353,6 +362,7 @@ export async function dismissCompetitorGap(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(gapBack(location, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(gapBack(location, READ_ONLY_MESSAGE));
 
   const supabase = await createClient();
   const {
@@ -388,6 +398,7 @@ export async function saveLocationDetails(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(back(undefined, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(back(undefined, READ_ONLY_MESSAGE));
   if (formData.get("confirm") !== "yes") redirect(back(undefined, "Tick the box to confirm these details are true before saving."));
   const clientId = await getCurrentClientId();
   if (!clientId) redirect("/login");
@@ -473,6 +484,7 @@ export async function dismissDetailSuggestion(id: string, formData: FormData) {
   };
   const access = await getSeoAccess();
   if (!access.allowed) redirect(back("Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(back(READ_ONLY_MESSAGE));
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("decide_seo_detail_suggestions", { p_location_id: location, p_ids: [id], p_status: "dismissed" });
   if (error) redirect(back(error.message));
@@ -504,6 +516,7 @@ export async function importFromExport(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(back(undefined, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(back(undefined, READ_ONLY_MESSAGE));
   const clientId = await getCurrentClientId();
   if (!clientId) redirect("/login");
   const supabase = await createClient();
@@ -579,6 +592,7 @@ export async function dismissLinkOpportunity(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(linksBack(location, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(linksBack(location, READ_ONLY_MESSAGE));
 
   const supabase = await createClient();
   const {
@@ -658,6 +672,7 @@ export async function updateLocationSettings(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(back(undefined, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(back(undefined, READ_ONLY_MESSAGE));
   const supabase = await createClient();
 
   const { data: current } = await supabase
@@ -707,6 +722,7 @@ export async function runSeoJobNow(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(back(undefined, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(back(undefined, READ_ONLY_MESSAGE));
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("request_seo_run_now", { p_location_id: location, p_job_type: job });
   if (error) redirect(back(undefined, error.message));
@@ -737,6 +753,7 @@ export async function linkGbpLocation(formData: FormData) {
 
   const access = await getSeoAccess();
   if (!access.allowed) redirect(back(undefined, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(back(undefined, READ_ONLY_MESSAGE));
   if (!profile && !previous) redirect(back(undefined, "Choose a profile."));
   const supabase = await createClient();
   const { data, error } = profile
@@ -755,6 +772,7 @@ const CATEGORY_RESULT: Record<string, { ok: boolean; text: string }> = {
   not_linked: { ok: false, text: "Choose this location's Business Profile first." },
   invalid: { ok: false, text: "Pick up to 9 categories from Google's list, not including the primary one." },
   not_found: { ok: false, text: "That location no longer exists." },
+  not_allowed: { ok: false, text: READ_ONLY_MESSAGE },
 };
 
 /**
@@ -775,6 +793,7 @@ export async function proposeGbpCategories(formData: FormData) {
   };
   const access = await getSeoAccess();
   if (!access.allowed) redirect(back(undefined, "Local SEO isn't active on your plan."));
+  if (!canAct((await getMembership())?.role)) redirect(back(undefined, READ_ONLY_MESSAGE));
 
   const picks = formData.getAll("cat").map((v) => decodePick(String(v))).filter((c): c is GbpCategory => !!c);
   const unique = [...new Map(picks.map((c) => [c.name, c])).values()];

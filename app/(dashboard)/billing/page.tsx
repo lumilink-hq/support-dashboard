@@ -6,6 +6,7 @@ import { availableAddons } from "@/lib/addons";
 import { formatDateTime } from "@/lib/format";
 import { readProfile } from "@/lib/onboarding";
 import { createClient } from "@/lib/supabase/server";
+import { getMembership, isAdmin } from "@/lib/roles";
 import {
   activeAddonsForClient,
   hasStripeCustomerForClient,
@@ -122,6 +123,9 @@ export default async function BillingPage({
   // so clientId has to resolve first, not join the same Promise.all.
   const clientId = await getCurrentClientId();
   const supabase = await createClient();
+  // Billing is admin-only (0082 roles; the /api/billing routes enforce it).
+  // Everyone else sees the plan state without the buttons.
+  const canBill = isAdmin((await getMembership())?.role);
   const [ent, usage, activeAddons, hasStripeCustomer, clientRow, seoLocationCount] = await Promise.all([
     getEntitlements(),
     getVoiceUsage(),
@@ -155,6 +159,11 @@ export default async function BillingPage({
         Turn features on for your workspace. Unlock a plan and it&rsquo;s set up
         automatically.
       </p>
+      {!canBill ? (
+        <div className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
+          Only admins can change plans or billing. Ask an admin on your team.
+        </div>
+      ) : null}
       {checkout === "canceled" ? (
         <div className="mt-4 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600">
           Checkout canceled — nothing was charged.
@@ -375,12 +384,14 @@ export default async function BillingPage({
             </p>
           </div>
         ) : (
+          canBill ? (
           <div className="mt-4">
             <SeoCheckoutForm
               plans={availableSeoPlans().map((p) => p.key)}
               initialLocationCount={seoLocationCount.count ?? 0}
             />
           </div>
+          ) : null
         )}
       </div>
 
@@ -434,9 +445,11 @@ export default async function BillingPage({
                   <p className="mt-1 flex-1 text-xs leading-relaxed text-gray-600">
                     {a.blurb}
                   </p>
+                  {canBill ? (
                   <div className="mt-4">
                     <AddonToggle addonKey={a.key} active={active} />
                   </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -444,7 +457,7 @@ export default async function BillingPage({
         </div>
       ) : null}
 
-      {hasStripeCustomer ? (
+      {canBill && hasStripeCustomer ? (
         <div className="mt-10">
           <ManageBillingButton />
           <p className="mt-2 text-xs text-gray-500">

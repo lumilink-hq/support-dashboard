@@ -410,13 +410,6 @@ export async function getCurrentClientId(): Promise<string | null> {
   return (data?.client_id as string | undefined) ?? null;
 }
 
-// Shared by the three billing Route Handlers so each doesn't repeat the same
-// "signed in, and known to a tenant" check. Not a new abstraction — just a
-// dedupe of what every caller already did inline.
-export async function requireClientId(): Promise<string | null> {
-  return getCurrentClientId();
-}
-
 /** Reverse lookup: which tier (if any) a Stripe Price id belongs to. Used by
  * the webhook to resolve a renewal event that carries no plan_tier metadata
  * (only the very first checkout.session.completed sets it). Returns null on

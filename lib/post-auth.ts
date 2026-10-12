@@ -77,9 +77,20 @@ export async function landingPathAfterAuth(requestedNext: string): Promise<strin
     // BLOCKING steps only. A client who skipped the optional website step is
     // live and working; dragging them back to the wizard every sign-in would be
     // nagging, not onboarding.
-    return blockingRemaining(state, profile).length > 0
-      ? "/onboarding"
-      : dashboardHome(profile.products);
+    if (blockingRemaining(state, profile).length === 0) {
+      return dashboardHome(profile.products);
+    }
+
+    // Setup is the account owner's job. An agent or viewer invited from /team
+    // (0082) can't finish it and shouldn't be greeted by it.
+    // Filter by id: RLS lets every member read the whole team's rows.
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: me } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user?.id ?? "")
+      .maybeSingle();
+    return me?.role === "admin" ? "/onboarding" : dashboardHome(profile.products);
   } catch (e) {
     // Never let this stand between a user and their dashboard. Landing on
     // /conversations with setup incomplete is the old behaviour; failing to sign

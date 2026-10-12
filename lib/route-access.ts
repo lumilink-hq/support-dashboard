@@ -49,7 +49,8 @@ export const PUBLIC_PREFIXES = [
   // JSON) and is actively wrong for /api/webhooks/stripe, which Stripe calls
   // with no session cookie at all and whose OWN signature check is its
   // security. Auth for /api/billing/* is enforced inside each route handler
-  // (requireClientId() → 401 JSON), not by this proxy — see lib/services/billing.ts.
+  // (getMembership() → 401, non-admin → 403 JSON), not by this proxy — see
+  // lib/roles.ts and lib/services/billing.ts.
   "/api",
 ] as const;
 

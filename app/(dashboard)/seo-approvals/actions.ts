@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentClientId } from "@/lib/entitlements";
+import { canAct, getMembership, READ_ONLY_MESSAGE } from "@/lib/roles";
 import { editArticle, editPageFix } from "@/lib/seo-draft-edit";
 import { validateGbpDescription } from "@/supabase/functions/seo-draft/gbp";
 import { saveDraftEdit } from "@/lib/services/seo-draft-edits";
@@ -13,6 +14,18 @@ import type { LocationDetails } from "@/supabase/functions/seo-content/details";
 function cleanNote(raw: FormDataEntryValue | null): string | null {
   const s = String(raw ?? "").replace(/\s+/g, " ").trim().slice(0, 500);
   return s || null;
+}
+
+/**
+ * Viewers are read-only (0083). The database refuses their approve/reject and
+ * the rollback RPCs too; this check gives them a message instead of a silent
+ * zero-row update, and it is the ONLY gate for editDraft, which writes with
+ * the service role.
+ */
+async function requireCanAct(filter: string) {
+  const me = await getMembership();
+  if (!me) redirect("/login");
+  if (!canAct(me.role)) redirect(backTo(filter, READ_ONLY_MESSAGE));
 }
 
 function backTo(filter: string, error?: string) {
@@ -47,6 +60,7 @@ async function decide(formData: FormData, next: "approved" | "rejected") {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  await requireCanAct(filter);
 
   const note = cleanNote(formData.get("note"));
   const write = (withNote: boolean) =>
@@ -81,6 +95,7 @@ const RPC_MESSAGES: Record<string, string> = {
   not_found: "That draft no longer exists.",
   not_rollbackable: "That change can't be rolled back from here (it isn't live, or was applied by hand).",
   not_pending_manual: "That change isn't waiting for you to apply it.",
+  not_allowed: READ_ONLY_MESSAGE,
 };
 
 /**
@@ -99,6 +114,7 @@ async function callRpc(formData: FormData, fn: "request_seo_rollback" | "confirm
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  await requireCanAct(filter);
 
   const { data, error } = await supabase.rpc(fn, { p_action_id: id });
   if (error) redirect(backTo(filter, error.message));
@@ -136,6 +152,7 @@ export async function editDraft(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  await requireCanAct(filter);
   const clientId = await getCurrentClientId();
   if (!clientId) redirect("/login");
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentClientId } from "@/lib/entitlements";
 import { getSeoAccess } from "@/lib/seo-access";
+import { canAct, getMembership, READ_ONLY_MESSAGE } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 
 const REGENERATE_COOLDOWN_MS = 5 * 60 * 1000;
@@ -26,6 +27,7 @@ function back(params: Record<string, string>) {
 export async function generateReportNow() {
   const access = await getSeoAccess();
   if (!access.allowed) redirect(back({ error: "Local SEO isn't active on your plan." }));
+  if (!canAct((await getMembership())?.role)) redirect(back({ error: READ_ONLY_MESSAGE }));
 
   const clientId = await getCurrentClientId();
   if (!clientId) redirect("/login");

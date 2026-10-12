@@ -105,7 +105,12 @@ select u.email, u.role, c.slug, c.name
 
 
 -- =============================================================================
--- WORTH FIXING PROPERLY AT SOME POINT
+-- UPDATE 2026-10-09: for someone who has NOT signed up yet, use
+-- scripts/add-staff.sql instead (0080 client_invites): pre-approve the email
+-- and their own /signup joins the right client. This file is now only for
+-- people who already have a login on the wrong workspace.
+-- =============================================================================
+-- WORTH FIXING PROPERLY AT SOME POINT (original note, kept for context)
 -- =============================================================================
 -- There is no way to invite a teammate to an existing workspace. Every signup
 -- is a new tenant, so a second person at the same business either does this

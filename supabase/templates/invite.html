@@ -1,0 +1,17 @@
+<!--
+  Supabase "Invite user" email (0082, /team). Local: wired in config.toml.
+  PRODUCTION: paste the subject and this body into Supabase Dashboard ->
+  Authentication -> Email Templates -> Invite user. The link MUST go to
+  /auth/confirm with token_hash: the default {{ .ConfirmationURL }} hands the
+  session back in a URL fragment, which our server-side route can't read.
+-->
+<h2>You've been invited to {{ .Data.client_name }} on LumiLink</h2>
+
+<p>You've been added to the {{ .Data.client_name }} workspace on LumiLink. Click below to join and set your password.</p>
+
+<p>
+  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/account/password">Accept the invite</a>
+</p>
+
+<p>The link only works once and expires. If it has, ask whoever invited you to resend it.</p>
+<p>If you weren't expecting this, you can ignore this email.</p>

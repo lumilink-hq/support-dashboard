@@ -57,7 +57,10 @@ begin
   -- Status
   -- ---------------------------------------------------------------------------
   select count(*) into v_seen from seo_job_status(v_store);
-  assert v_seen = 10, format('status: one row per run-now job (got %s)', v_seen);
+  -- Against the allowlist, not a literal: 0076 added seo_gbp_sync and the
+  -- hardcoded 10 went stale.
+  assert v_seen = (select count(*) from seo_run_now_jobs()),
+    format('status: one row per run-now job (got %s, expected %s)', v_seen, (select count(*) from seo_run_now_jobs()));
   select next_run_at into v_next from seo_job_status(v_store) where job_type = 'seo_crawl';
   assert v_next = v_far, 'site-wide jobs run on the primary: the store sees the primary''s crawl';
   select count(*) into v_seen from seo_job_status(v_loc_b);

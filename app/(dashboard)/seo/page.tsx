@@ -6,6 +6,7 @@ import { SeoLocked } from "@/components/seo/locked";
 import { Story, TileGrid } from "@/components/seo/search-tiles";
 import { BrandStory, StoreStory } from "@/components/seo/earned";
 import { getSeoAccess } from "@/lib/seo-access";
+import { canAct, getMembership } from "@/lib/roles";
 import { formatDateTime } from "@/lib/format";
 import {
   aiSummary,
@@ -265,7 +266,7 @@ function DetailList({ name, label, hint, values }: { name: string; label: string
   );
 }
 
-function LinkLine({ domain, detail, href, locationId }: { domain: string; detail: string; href?: string | null; locationId: string }) {
+function LinkLine({ domain, detail, href, locationId, canWrite }: { domain: string; detail: string; href?: string | null; locationId: string; canWrite: boolean }) {
   const link = href ? safeUrl(href) : null;
   return (
     <li className="flex flex-wrap items-center justify-between gap-2 py-2">
@@ -277,18 +278,18 @@ function LinkLine({ domain, detail, href, locationId }: { domain: string; detail
         )}
         {detail ? <span className="block break-all text-xs text-gray-500">{detail}</span> : null}
       </span>
-      <form action={dismissLinkOpportunity}>
+      <form action={dismissLinkOpportunity}><fieldset disabled={!canWrite} className="contents">
         <input type="hidden" name="domain" value={domain} />
         <input type="hidden" name="location" value={locationId} />
         <button type="submit" aria-label={`Dismiss ${domain}`} className="text-xs text-gray-500 underline hover:text-gray-900">
           Dismiss
         </button>
-      </form>
+      </fieldset></form>
     </li>
   );
 }
 
-function GapLine({ gap, locationId, atCap }: { gap: CompetitorGap; locationId: string; atCap: boolean }) {
+function GapLine({ gap, locationId, atCap, canWrite }: { gap: CompetitorGap; locationId: string; atCap: boolean; canWrite: boolean }) {
   const stats = keywordStatsLine(gap);
   const isTopic = competitorGapScore(gap) > 0;
   return (
@@ -299,7 +300,7 @@ function GapLine({ gap, locationId, atCap }: { gap: CompetitorGap; locationId: s
         <span className="block text-xs text-gray-500">{[gap.competitor_positions.join(", "), stats].filter(Boolean).join(" · ")}</span>
       </span>
       <span className="flex flex-wrap items-center gap-2">
-        <form action={addKeyword}>
+        <form action={addKeyword}><fieldset disabled={!canWrite} className="contents">
           <input type="hidden" name="location" value={locationId} />
           <input type="hidden" name="keyword" value={gap.keyword} />
           <button
@@ -310,14 +311,14 @@ function GapLine({ gap, locationId, atCap }: { gap: CompetitorGap; locationId: s
           >
             Track
           </button>
-        </form>
-        <form action={dismissCompetitorGap}>
+        </fieldset></form>
+        <form action={dismissCompetitorGap}><fieldset disabled={!canWrite} className="contents">
           <input type="hidden" name="keyword" value={gap.keyword} />
           <input type="hidden" name="location" value={locationId} />
           <button type="submit" aria-label={`Dismiss ${gap.keyword}`} className="text-xs text-gray-500 underline hover:text-gray-900">
             Dismiss
           </button>
-        </form>
+        </fieldset></form>
       </span>
     </li>
   );
@@ -329,12 +330,14 @@ function SuggestionList({
   rows,
   locationId,
   atCap,
+  canWrite,
 }: {
   heading: string;
   lead: string;
   rows: KeywordSuggestion[];
   locationId: string;
   atCap: boolean;
+  canWrite: boolean;
 }) {
   return (
     <div>
@@ -356,7 +359,7 @@ function SuggestionList({
                 ) : null}
               </span>
               <span className="flex flex-wrap items-center gap-2">
-                <form action={addKeyword}>
+                <form action={addKeyword}><fieldset disabled={!canWrite} className="contents">
                   <input type="hidden" name="location" value={locationId} />
                   <input type="hidden" name="keyword" value={r.keyword} />
                   <button
@@ -367,14 +370,14 @@ function SuggestionList({
                   >
                     Track
                   </button>
-                </form>
-                <form action={dismissKeywordSuggestion}>
+                </fieldset></form>
+                <form action={dismissKeywordSuggestion}><fieldset disabled={!canWrite} className="contents">
                   <input type="hidden" name="id" value={r.id} />
                   <input type="hidden" name="location" value={locationId} />
                   <button type="submit" aria-label={`Dismiss ${r.keyword}`} className="text-xs text-gray-500 underline hover:text-gray-900">
                     Dismiss
                   </button>
-                </form>
+                </fieldset></form>
               </span>
             </li>
           );
@@ -396,6 +399,8 @@ export default async function SeoPortalPage({
   const tab: SeoTab = parseTab(tabParam);
   const compare: Compare = parseCompare(compareParam);
   const supabase = await createClient();
+  // Viewers are read-only (0084): every form below renders disabled for them.
+  const canWrite = canAct((await getMembership())?.role);
 
   const { data: locData } = await supabase
     .from("seo_locations")
@@ -826,6 +831,12 @@ export default async function SeoPortalPage({
         </div>
       </div>
 
+      {!canWrite ? (
+        <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
+          You have view-only access. Ask an admin on your team to change your role.
+        </div>
+      ) : null}
+
       {locations.length > 1 ? (
         <nav aria-label="Location" className="flex flex-wrap gap-1">
           {locations.map((l) => (
@@ -1069,7 +1080,7 @@ export default async function SeoPortalPage({
                           {!r ? "Not checked yet" : r.position === null ? "Not ranking yet" : `#${r.position} on Google`}
                           {r && r.check_date < since30 ? ` · ${r.check_date}` : ""}
                         </span>
-                        <form action={setKeywordGeoGrid}>
+                        <form action={setKeywordGeoGrid}><fieldset disabled={!canWrite} className="contents">
                           <input type="hidden" name="id" value={k.id} />
                           <input type="hidden" name="location" value={loc.id} />
                           <input type="hidden" name="on" value={k.is_geo_grid_enabled ? "false" : "true"} />
@@ -1082,12 +1093,12 @@ export default async function SeoPortalPage({
                           >
                             Map grid {k.is_geo_grid_enabled ? "on" : "off"}
                           </button>
-                        </form>
-                        <form action={removeKeyword}>
+                        </fieldset></form>
+                        <form action={removeKeyword}><fieldset disabled={!canWrite} className="contents">
                           <input type="hidden" name="id" value={k.id} />
                           <input type="hidden" name="location" value={loc.id} />
                           <button type="submit" className="text-xs text-gray-500 underline hover:text-gray-900">Stop tracking</button>
-                        </form>
+                        </fieldset></form>
                       </span>
                     </li>
                   );
@@ -1100,7 +1111,7 @@ export default async function SeoPortalPage({
               </p>
             ) : null}
             {keywords.length < MAX_KEYWORDS_PER_LOCATION ? (
-              <form action={addKeyword} className="mt-3 flex flex-wrap gap-2">
+              <form action={addKeyword} className="mt-3 flex flex-wrap gap-2"><fieldset disabled={!canWrite} className="contents">
                 <input type="hidden" name="location" value={loc.id} />
                 <label className="sr-only" htmlFor="seo-keyword">Keyword to track</label>
                 <input
@@ -1115,7 +1126,7 @@ export default async function SeoPortalPage({
                 <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
                   Track keyword
                 </button>
-              </form>
+              </fieldset></form>
             ) : (
               <p className="mt-2 text-xs text-gray-500">You&apos;re tracking the maximum of {MAX_KEYWORDS_PER_LOCATION}. Stop tracking one to add another.</p>
             )}
@@ -1136,6 +1147,7 @@ export default async function SeoPortalPage({
               <div className="space-y-4">
                 {suggestions.searchConsole.length > 0 ? (
                   <SuggestionList
+                    canWrite={canWrite}
                     heading="Already showing up, just off the top"
                     lead="Searches your site already appears for at an average position of 8 to 20. A small push here moves the most traffic."
                     rows={suggestions.searchConsole.slice(0, 15)}
@@ -1145,6 +1157,7 @@ export default async function SeoPortalPage({
                 ) : null}
                 {suggestions.related.length > 0 ? (
                   <SuggestionList
+                    canWrite={canWrite}
                     heading="Related searches"
                     lead="Searches related to the keywords you track, most searched first."
                     rows={suggestions.related.slice(0, 15)}
@@ -1164,14 +1177,14 @@ export default async function SeoPortalPage({
             id="import"
             note="Already tracking keywords or competitors in another tool? Export them and pick the ones to track here."
           >
-            <ImportCard
+            {canWrite ? <ImportCard
               locationId={loc.id}
               locationName={loc.name}
               trackedKeywords={keywords.map((k) => k.keyword)}
               trackedCompetitors={competitors.map((c) => c.domain)}
               keywordCap={MAX_KEYWORDS_PER_LOCATION}
               competitorCap={MAX_COMPETITORS_PER_LOCATION}
-            />
+            /> : <p className="text-sm text-gray-500">You have view-only access.</p>}
           </Card>
 
           {summary && topQueries.length > 0 ? (
@@ -1221,16 +1234,16 @@ export default async function SeoPortalPage({
                 {competitors.map((c) => (
                   <li key={c.id} className="flex items-center justify-between gap-2 py-1.5">
                     <span className="min-w-0 break-all text-gray-800">{c.label || c.domain}</span>
-                    <form action={removeCompetitor}>
+                    <form action={removeCompetitor}><fieldset disabled={!canWrite} className="contents">
                       <input type="hidden" name="id" value={c.id} />
                       <input type="hidden" name="location" value={loc.id} />
                       <button type="submit" className="text-xs text-gray-500 underline hover:text-gray-900">Stop tracking</button>
-                    </form>
+                    </fieldset></form>
                   </li>
                 ))}
               </ul>
               {competitors.length < MAX_COMPETITORS_PER_LOCATION ? (
-                <form action={addCompetitor} className="mt-3 flex flex-wrap gap-2">
+                <form action={addCompetitor} className="mt-3 flex flex-wrap gap-2"><fieldset disabled={!canWrite} className="contents">
                   <input type="hidden" name="location" value={loc.id} />
                   <label className="sr-only" htmlFor="competitor-domain">Competitor website</label>
                   <input
@@ -1244,7 +1257,7 @@ export default async function SeoPortalPage({
                   <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
                     Track competitor
                   </button>
-                </form>
+                </fieldset></form>
               ) : (
                 <p className="mt-2 text-xs text-gray-500">You&apos;re tracking the maximum of {MAX_COMPETITORS_PER_LOCATION}. Stop tracking one to add another.</p>
               )}
@@ -1267,7 +1280,7 @@ export default async function SeoPortalPage({
                 </p>
                 <ul className="divide-y divide-gray-100 text-sm">
                   {gaps.slice(0, 15).map((g) => (
-                    <GapLine key={g.keyword} gap={g} locationId={loc.id} atCap={atKeywordCap} />
+                    <GapLine key={g.keyword} gap={g} locationId={loc.id} atCap={atKeywordCap} canWrite={canWrite} />
                   ))}
                 </ul>
                 {gaps.length > 15 ? (
@@ -1275,7 +1288,7 @@ export default async function SeoPortalPage({
                     <summary className="cursor-pointer text-sm text-blue-700 underline">Show all {gaps.length}</summary>
                     <ul className="mt-1 divide-y divide-gray-100 text-sm">
                       {gaps.slice(15).map((g) => (
-                        <GapLine key={g.keyword} gap={g} locationId={loc.id} atCap={atKeywordCap} />
+                        <GapLine key={g.keyword} gap={g} locationId={loc.id} atCap={atKeywordCap} canWrite={canWrite} />
                       ))}
                     </ul>
                   </details>
@@ -1326,11 +1339,11 @@ export default async function SeoPortalPage({
                             {PLATFORM_SHORT.map(([key, name]) => (
                               <span key={key}>{badge(latestMention.get(`${q.id}|${key}`), name)}</span>
                             ))}
-                            <form action={removeAiQuery}>
+                            <form action={removeAiQuery}><fieldset disabled={!canWrite} className="contents">
                               <input type="hidden" name="id" value={q.id} />
                               <input type="hidden" name="location" value={loc.id} />
                               <button type="submit" className="text-xs text-gray-500 underline hover:text-gray-900">Stop tracking</button>
-                            </form>
+                            </fieldset></form>
                           </span>
                         </li>
                       );
@@ -1338,7 +1351,7 @@ export default async function SeoPortalPage({
                   </ul>
                 ) : null}
 
-                <form action={addAiQuery} className="mt-3 flex flex-wrap gap-2">
+                <form action={addAiQuery} className="mt-3 flex flex-wrap gap-2"><fieldset disabled={!canWrite} className="contents">
                   <input type="hidden" name="location" value={loc.id} />
                   <label className="sr-only" htmlFor="ai-query">A question customers ask AI</label>
                   <input
@@ -1353,7 +1366,7 @@ export default async function SeoPortalPage({
                   <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
                     Track this question
                   </button>
-                </form>
+                </fieldset></form>
               </div>
             </div>
             {respondingPlatforms.size > 0 ? (
@@ -1437,7 +1450,7 @@ export default async function SeoPortalPage({
           >
             {/* Keyed by location: the switcher is a soft navigation, and without a fresh form
                 the inputs keep the last location's values (defaultValue only applies on mount). */}
-            <form key={loc.id} action={saveLocationDetails} className="space-y-4 text-sm">
+            <form key={loc.id} action={saveLocationDetails} className="space-y-4 text-sm"><fieldset disabled={!canWrite} className="contents">
               <input type="hidden" name="location" value={loc.id} />
               {detailSuggestions.length > 0 ? (
                 <div className="rounded-md border border-blue-100 bg-blue-50/60 p-3">
@@ -1530,7 +1543,7 @@ export default async function SeoPortalPage({
                 </button>
                 {details?.confirmed_at ? <span className="text-xs text-gray-500">Last confirmed {formatDateTime(details.confirmed_at)}.</span> : null}
               </div>
-            </form>
+            </fieldset></form>
           </Card>
 
           <Card title="Google Business Profile" id="gbp-profile" note="Views, calls and direction requests from your profile, last 60 days, plus reviews and what the profile is missing.">
@@ -1683,6 +1696,7 @@ export default async function SeoPortalPage({
                   <ul className="mt-1 divide-y divide-gray-100 text-sm">
                     {linkGaps.slice(0, 15).map((o) => (
                       <LinkLine
+                        canWrite={canWrite}
                         key={o.referring_domain}
                         domain={o.referring_domain}
                         detail={`Links to ${o.competitors.join(", ")}${o.domain_rank !== null ? ` · rank ${o.domain_rank}` : ""}`}
@@ -1720,6 +1734,7 @@ export default async function SeoPortalPage({
                   <ul className="mt-1 divide-y divide-gray-100 text-sm">
                     {lostLinks.slice(0, 15).map((o) => (
                       <LinkLine
+                        canWrite={canWrite}
                         key={`${o.referring_domain}|${o.url_from}`}
                         domain={o.referring_domain}
                         detail={[
@@ -1918,7 +1933,7 @@ export default async function SeoPortalPage({
             id="location-settings"
             note="What the SEO engine knows about this location. The audit, drafts and articles all read from here."
           >
-            <form key={loc.id} action={updateLocationSettings} className="group space-y-4 text-sm">
+            <form key={loc.id} action={updateLocationSettings} className="group space-y-4 text-sm"><fieldset disabled={!canWrite} className="contents">
               <input type="hidden" name="location" value={loc.id} />
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="block">
@@ -1993,7 +2008,7 @@ export default async function SeoPortalPage({
               <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
                 Save settings
               </button>
-            </form>
+            </fieldset></form>
           </Card>
 
           {shopify.kind !== "hidden" ? (
@@ -2027,7 +2042,7 @@ export default async function SeoPortalPage({
                 {gbpView.kind === "message" && gbpView.action === "connect" ? <a href="/settings" className="underline">Open Settings</a> : null}
               </Empty>
             ) : (
-              <form key={loc.id} action={linkGbpLocation} className="space-y-3 text-sm">
+              <form key={loc.id} action={linkGbpLocation} className="space-y-3 text-sm"><fieldset disabled={!canWrite} className="contents">
                 <input type="hidden" name="location" value={loc.id} />
                 <input type="hidden" name="previous" value={gbpLinked?.location_name ?? ""} />
                 <label className="block">
@@ -2056,7 +2071,7 @@ export default async function SeoPortalPage({
                 <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
                   Save profile
                 </button>
-              </form>
+              </fieldset></form>
             )}
           </Card>
 
@@ -2072,7 +2087,7 @@ export default async function SeoPortalPage({
                   <span className="text-xs text-gray-500">(LumiLink never changes the primary category; change it on Google if it&apos;s wrong.)</span>
                 </p>
 
-                <form method="get" action="/seo" className="flex flex-wrap items-end gap-2">
+                <form method="get" action="/seo" className="flex flex-wrap items-end gap-2"><fieldset disabled={!canWrite} className="contents">
                   <input type="hidden" name="location" value={loc.id} />
                   <input type="hidden" name="tab" value="settings" />
                   <label className="block min-w-0 flex-1">
@@ -2088,9 +2103,9 @@ export default async function SeoPortalPage({
                   <button type="submit" className="mb-5 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
                     Search
                   </button>
-                </form>
+                </fieldset></form>
 
-                <form action={proposeGbpCategories} className="space-y-3">
+                <form action={proposeGbpCategories} className="space-y-3"><fieldset disabled={!canWrite} className="contents">
                   <input type="hidden" name="location" value={loc.id} />
                   <fieldset>
                     <legend className="text-gray-700">Additional categories (up to {MAX_ADDITIONAL})</legend>
@@ -2131,7 +2146,7 @@ export default async function SeoPortalPage({
                   <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
                     Save categories
                   </button>
-                </form>
+                </fieldset></form>
               </div>
             </Card>
           ) : null}
@@ -2164,7 +2179,7 @@ export default async function SeoPortalPage({
                         {info ? <p className="mt-0.5 text-xs text-gray-500">{info.what}</p> : null}
                         <p className={`mt-1 break-words text-xs ${v.state === "failing" ? "text-red-700" : "text-gray-700"}`}>{v.summary}</p>
                       </div>
-                      <form action={runSeoJobNow}>
+                      <form action={runSeoJobNow}><fieldset disabled={!canWrite} className="contents">
                         <input type="hidden" name="location" value={loc.id} />
                         <input type="hidden" name="job" value={j.job_type} />
                         <button
@@ -2175,7 +2190,7 @@ export default async function SeoPortalPage({
                         >
                           {v.canRunNow ? "Run now" : v.reason ?? "Run now"}
                         </button>
-                      </form>
+                      </fieldset></form>
                     </li>
                   );
                 })}

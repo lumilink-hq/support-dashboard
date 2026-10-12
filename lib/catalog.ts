@@ -90,6 +90,7 @@ export const SOLUTIONS: { name: string; blurb: string; href: string }[] = [
 /** Pages every workspace has, whatever it has bought. */
 export const WORKSPACE_PAGES: DashboardPage[] = [
   { href: "/settings", label: "Settings" },
+  { href: "/team", label: "Team" },
   { href: "/billing", label: "Plans & billing" },
 ];
 

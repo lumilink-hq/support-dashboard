@@ -69,6 +69,9 @@ export async function GET(request: Request) {
 
     if (rpcError || !data?.ok) {
       const reason = rpcError?.message ?? data?.error ?? "unknown_error";
+      if (reason === "not_admin") {
+        return redirectToSettings(origin, { google_error: "Only admins can connect Google." });
+      }
       // no_refresh_token_on_first_connect: Google didn't issue one, which
       // only happens if prompt=consent somehow didn't take effect. Send them
       // through connect again rather than leaving a half-connected state.

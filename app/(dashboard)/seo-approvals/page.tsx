@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { humanize, timeAgo } from "@/lib/format";
 import { SeoLocked } from "@/components/seo/locked";
 import { getSeoAccess } from "@/lib/seo-access";
+import { canAct, getMembership } from "@/lib/roles";
 import { approveDraft, confirmManualApply, editDraft, rejectDraft, requestRollback } from "./actions";
 import { EDITABLE_FIELDS, htmlToEditText } from "@/lib/seo-draft-edit";
 
@@ -212,7 +213,7 @@ function ArticleBlock({ a }: { a: ArticleProposal }) {
   );
 }
 
-function ManualBlock({ m, id, filter }: { m: ManualInstructions; id: string; filter: Filter }) {
+function ManualBlock({ m, id, filter, canWrite }: { m: ManualInstructions; id: string; filter: Filter; canWrite: boolean }) {
   return (
     <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
       <p className="text-sm font-medium text-amber-900">Please apply this one yourself</p>
@@ -234,6 +235,7 @@ function ManualBlock({ m, id, filter }: { m: ManualInstructions; id: string; fil
           </pre>
         </div>
       ))}
+      {canWrite ? (
       <form action={confirmManualApply} className="mt-3">
         <input type="hidden" name="id" value={id} />
         <input type="hidden" name="filter" value={filter} />
@@ -244,6 +246,7 @@ function ManualBlock({ m, id, filter }: { m: ManualInstructions; id: string; fil
           I&apos;ve done this
         </button>
       </form>
+      ) : null}
     </div>
   );
 }
@@ -325,6 +328,8 @@ export default async function SeoApprovalsPage({
     : "pending_approval";
 
   const supabase = await createClient();
+  // Viewers are read-only (0083): they see drafts but not the buttons.
+  const canWrite = canAct((await getMembership())?.role);
 
   const load = (columns: string) => {
     let q = supabase
@@ -479,11 +484,11 @@ export default async function SeoApprovalsPage({
                 </p>
               ) : null}
 
-              {item.status === "pending_approval" ? (
+              {canWrite && item.status === "pending_approval" ? (
                 <EditDraft item={item} filter={active} />
               ) : null}
 
-              {item.status === "pending_approval" ? (
+              {canWrite && item.status === "pending_approval" ? (
                 <div className="mt-3 flex flex-wrap items-start gap-2">
                   <form action={approveDraft}>
                     <input type="hidden" name="id" value={item.id} />
@@ -517,11 +522,11 @@ export default async function SeoApprovalsPage({
               ) : null}
 
               {item.status === "manual_required" && item.manual_instructions ? (
-                <ManualBlock m={item.manual_instructions} id={item.id} filter={active} />
+                <ManualBlock m={item.manual_instructions} id={item.id} filter={active} canWrite={canWrite} />
               ) : null}
 
               {/* Only a change LumiLink applied itself can be undone by LumiLink. */}
-              {item.status === "published" && item.apply_mode === "api" ? (
+              {canWrite && item.status === "published" && item.apply_mode === "api" ? (
                 <form action={requestRollback} className="mt-3">
                   <input type="hidden" name="id" value={item.id} />
                   <input type="hidden" name="filter" value={active} />

@@ -3,8 +3,10 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 /**
  * Service-role Supabase client — bypasses RLS entirely.
  *
- * CONFINE THIS TO lib/services/billing.ts and lib/services/seo-draft-edits.ts
- * (a validated edit to an SEO draft, 0074; see that file for why). Per app/onboarding/actions.ts:
+ * CONFINE THIS TO lib/services/billing.ts, lib/services/seo-draft-edits.ts
+ * (a validated edit to an SEO draft, 0074; see that file for why) and
+ * lib/services/team-invites.ts (auth-admin calls for /team, 0082, each made
+ * only after an admin-scoped RPC has passed). Per app/onboarding/actions.ts:
  * "a wizard that could write as service_role is a wizard one bug away from
  * writing to somebody else's row." Every other Server Component/Action/Route
  * Handler in this app uses lib/supabase/server.ts instead, which runs under
