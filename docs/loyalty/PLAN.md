@@ -126,7 +126,8 @@ theme block packaging; listing and review prep. $19 one-time App Store registrat
 | Free development store for testing | J | ☑ 2026-10-12 |
 | `shopify app init` → `ll-loyalty/`; sample FAQ extensions and nested `.git` removed; scopes set | J + Claude | ☑ 2026-10-12 |
 | Protected customer data: Name + Email selected, data protection answers saved (see 8b). First save returned "not approved": select a distribution method first | J | ◐ |
-| Set distribution to **Custom** (Tsunami's store) in the Dev Dashboard; confirm protected data then shows as available | J | ☐ |
+| Set distribution to **Custom** (Tsunami's store) in the Dev Dashboard | J | ☑ 2026-10-12 |
+| Confirm protected customer data (name, email) shows as available after custom distribution | J | ☐ |
 | `shopify app deploy` the config, then install on the dev store | J + Claude | ☐ |
 | Joy member export (members, balances, tiers); check Joy Settings → Developers for an API key for points history | J | ☐ |
 | Keep the Joy export **out of git** (customer PII) | J | ☐ |
