@@ -147,7 +147,10 @@ export default async function SettingsPage({
             and ranking data, and Google Business Profile, so we can read
             views, calls, direction requests and reviews. Use a Google account
             that has access to your Search Console property and manages all of
-            your Business Profiles.
+            your Business Profiles. Connecting is not permission to edit your
+            listings: the only thing LumiLink ever changes is a profile&rsquo;s
+            description, and only after you approve that change on SEO
+            approvals.
           </p>
           <div className="mt-4">
             {!isGoogleOAuthConfigured() ? (
