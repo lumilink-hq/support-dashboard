@@ -38,3 +38,5 @@ Deno edge functions in `supabase/functions/`). Billing is Stripe.
 - `../plan.md` (outside this repo) is the SEO build plan. Update its module row as work lands, and
   add setup / live-test items to §8 as each module is built.
 - `docs/PROJECT-STATUS.md` is an older handover doc; it is not the source of truth for SEO status.
+- `docs/loyalty/PLAN.md` is the LL Loyalty build plan (Joy replacement for Tsunami, `loyalty` branch).
+  Read it before any loyalty work; update its module checklist and session log as work lands.
