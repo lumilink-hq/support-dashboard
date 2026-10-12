@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { changeRole, inviteTeammate, reactivateTeammate, removeTeammate, resendInvite } from "./actions";
 
 const inputCls =
@@ -32,7 +33,7 @@ function StatusBadge({ status }: { status: Member["status"] }) {
       : status === "invited"
         ? "bg-amber-50 text-amber-700"
         : "bg-gray-100 text-gray-500";
-  const label = status === "active" ? "Active" : status === "invited" ? "Invited" : "Removed";
+  const label = status === "active" ? "Active" : status === "invited" ? "Invited" : "Deactivated";
   return <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${cls}`}>{label}</span>;
 }
 
@@ -79,7 +80,8 @@ export default async function TeamPage({
       ) : null}
       {removed ? (
         <div className="mt-4 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600">
-          Removed. They can no longer sign in.
+          Removed. Their login is deleted; anything they approved or wrote
+          stays. You can invite the same email again later.
         </div>
       ) : null}
       {error || loadError ? (
@@ -183,20 +185,27 @@ export default async function TeamPage({
                     </form>
                   ) : null}
 
+                  {/* Only people removed before 0086 are "deactivated". */}
                   {m.status === "deactivated" && m.user_id ? (
                     <form action={reactivateTeammate}>
                       <input type="hidden" name="user_id" value={m.user_id} />
                       <button className={smallBtn}>Reactivate</button>
                     </form>
-                  ) : (
-                    <form action={removeTeammate}>
-                      <input type="hidden" name="user_id" value={m.user_id ?? ""} />
-                      <input type="hidden" name="email" value={m.email} />
-                      <button className={`${smallBtn} text-red-700`}>
-                        {m.status === "invited" ? "Cancel invite" : "Remove"}
-                      </button>
-                    </form>
-                  )}
+                  ) : null}
+                  <form action={removeTeammate}>
+                    <input type="hidden" name="user_id" value={m.user_id ?? ""} />
+                    <input type="hidden" name="email" value={m.email} />
+                    <ConfirmSubmit
+                      className={`${smallBtn} text-red-700`}
+                      message={
+                        m.status === "invited"
+                          ? `Cancel the invite for ${m.email}?`
+                          : `Remove ${m.full_name || m.email} permanently? Their login is deleted. Anything they approved or wrote stays.`
+                      }
+                    >
+                      {m.status === "invited" ? "Cancel invite" : m.status === "deactivated" ? "Remove permanently" : "Remove"}
+                    </ConfirmSubmit>
+                  </form>
                 </div>
               ) : (
                 <span className="text-xs capitalize text-gray-500">{m.role}</span>

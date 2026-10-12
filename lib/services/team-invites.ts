@@ -41,8 +41,11 @@ export async function sendInviteEmail(input: {
   return { error: error?.message ?? null };
 }
 
-/** Delete an invited auth user who never signed in. public.users cascades. */
-export async function deleteInvitedUser(userId: string): Promise<{ error: string | null }> {
+/**
+ * Permanently delete a teammate's login (0086). public.users cascades; their
+ * approvals, notes and keywords stay, with the "by" column set to null.
+ */
+export async function deleteTeamUser(userId: string): Promise<{ error: string | null }> {
   const { error } = await createServiceClient().auth.admin.deleteUser(userId);
   return { error: error?.message ?? null };
 }

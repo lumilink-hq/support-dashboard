@@ -18,7 +18,13 @@ export async function login(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    const message = error.message || "Sign-in failed. Check your credentials.";
+    // A teammate an admin deactivated on /team is banned in Supabase Auth
+    // (0082; 0086 deletes instead, but older removals are still bans).
+    // Supabase's own "User is banned" reads like a moderation action.
+    const banned = error.code === "user_banned" || /banned/i.test(error.message);
+    const message = banned
+      ? "This account no longer has access to its workspace. Ask an admin on your team to restore your access."
+      : error.message || "Sign-in failed. Check your credentials.";
     // Carry `next` through the failure so a typo'd password doesn't lose it.
     const qs = new URLSearchParams({ error: message });
     if (next !== "/conversations") qs.set("next", next);

@@ -98,13 +98,11 @@ begin
   exception when insufficient_privilege then null;
   end;
 
-  assert remove_team_member((select v from t where k = 'agent')) = 'deactivate',
-    'signed-in teammate is deactivated, not deleted';
-  assert (select status from team_members() where email = 'agent@team-a.example') = 'deactivated',
-    'removed teammate shows as deactivated';
-  perform reactivate_team_member((select v from t where k = 'agent'));
+  -- 0086: Remove is permanent for everyone; the app then deletes the auth user.
+  assert remove_team_member((select v from t where k = 'agent')) = 'delete',
+    'signed-in teammate is deleted on remove, not deactivated';
   assert (select status from team_members() where email = 'agent@team-a.example') = 'active',
-    'reactivated teammate is active';
+    'remove_team_member itself changes nothing (the auth delete does)';
 
   perform withdraw_team_invite('new@team-a.example');
   assert not exists (select 1 from team_members() where email = 'new@team-a.example'),
@@ -161,6 +159,25 @@ begin
 exception when insufficient_privilege then null;
 end $$;
 
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Someone 0082 deactivated (still on prod): listed as deactivated, and the
+-- admin can reactivate them or remove them for good.
+-- ---------------------------------------------------------------------------
+update users set is_active = false where id = (select v from t where k = 'agent');
+set local role authenticated;
+select set_config('request.jwt.claim.sub', (select v::text from t where k = 'admin'), true);
+do $$
+begin
+  assert (select status from team_members() where email = 'agent@team-a.example') = 'deactivated',
+    'legacy deactivated teammate is listed as deactivated';
+  assert remove_team_member((select v from t where k = 'agent')) = 'delete',
+    'legacy deactivated teammate can be removed permanently';
+  perform reactivate_team_member((select v from t where k = 'agent'));
+  assert (select status from team_members() where email = 'agent@team-a.example') = 'active',
+    'legacy deactivated teammate can be reactivated';
+end $$;
 reset role;
 
 select 'test_team_invites: all assertions passed' as result;

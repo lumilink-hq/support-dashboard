@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { deleteInvitedUser, sendInviteEmail, setUserBanned } from "@/lib/services/team-invites";
+import { deleteTeamUser, sendInviteEmail, setUserBanned } from "@/lib/services/team-invites";
 
 // Every action runs its 0082 RPC under the admin's own session FIRST. The RPC
 // is the authorization (admin, same client, not yourself); the service-role
@@ -95,8 +95,10 @@ export async function removeTeammate(formData: FormData) {
   const { data: next, error } = await supabase.rpc("remove_team_member", { p_user_id: userId });
   if (error) fail(error.message);
 
-  const result = next === "delete" ? await deleteInvitedUser(userId) : await setUserBanned(userId, true);
-  if (result.error) fail(`Removed from the team, but signing them out failed: ${result.error}`);
+  // 0086 always answers 'delete' (permanent). 'deactivate' only comes from a
+  // database still on 0082, i.e. this code deployed before 0086 was pushed.
+  const result = next === "delete" ? await deleteTeamUser(userId) : await setUserBanned(userId, true);
+  if (result.error) fail(`Couldn't remove them: ${result.error}`);
 
   done("removed=1");
 }
