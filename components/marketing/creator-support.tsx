@@ -59,7 +59,7 @@ const PILLARS = [
   {
     n: "03",
     title: "Costs Less Than One Missed Enrollment",
-    body: `Starter is $${STARTER_PLAN.monthlyUsd} a month and covers ${guaranteedCalls(STARTER_PLAN.includedMinutes)} calls a month. One enrolled student covers it several times over.`,
+    body: `Starter is $${STARTER_PLAN.monthlyUsd} a month and covers at least ${guaranteedCalls(STARTER_PLAN.includedMinutes)} calls a month. One enrolled student covers it several times over.`,
   },
 ];
 

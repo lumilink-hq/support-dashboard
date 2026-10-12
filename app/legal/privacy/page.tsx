@@ -156,9 +156,10 @@ export default function PrivacyPage() {
 
       {/* Google OAuth verification reads this clause. It covers only the
           scopes the app requests today (lib/google-oauth.ts). Business
-          Profile is read-only today (module 3, seo-gbp-sync). When profile
-          edits or review replies ship (module 4), add what they write here
-          BEFORE they go live. */}
+          Profile is read daily (module 3, seo-gbp-sync) and, since 0079/0081,
+          written only for an approved description or additional categories
+          (seo-publish/gbp.ts GBP_WRITABLE). When review replies or any other
+          field ship, add what they write here BEFORE they go live. */}
       <Clause heading="Information From Your Google Account">
         <p>
           If you connect your Google account in Settings, we ask Google for
@@ -183,7 +184,11 @@ export default function PrivacyPage() {
           direction requests and website clicks, and its reviews and your
           replies to them. We keep that information to show it in your
           dashboard and reports, and to point out what a profile is missing.
-          We do not change your profiles or post replies.
+          We change a profile only when you approve the change, and only two
+          things: its description and its additional categories. We never
+          change its name, address, phone number or primary category, and we
+          do not post review replies. You can roll back any change we made
+          from your dashboard.
         </p>
         <p>
           Your Google access token is stored in a dedicated secrets vault,

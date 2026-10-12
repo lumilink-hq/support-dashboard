@@ -142,11 +142,11 @@ const WIDGET_POINTS = [
 const FAQS = [
   {
     q: "Which platforms do you support?",
-    a: "Shopify and WooCommerce today. Both are read-only: Lumi looks orders up, it never edits or refunds them.",
+    a: "Shopify and WooCommerce today. Order lookup is read-only on both: Lumi looks orders up, it never edits or refunds them.",
   },
   {
     q: "How do you get access to my store?",
-    a: "For Shopify we ask you to invite an account to your store, and we create the read-only connection ourselves — you never have to generate or paste an API key. WooCommerce uses a read-only REST key you create in your own admin.",
+    a: "We set the connection up with you directly, never through a form. On Shopify you approve a private LumiLink app in your own admin, so you never generate or paste an API key. WooCommerce uses a read-only REST key you create in your own admin.",
   },
   {
     q: "Can it look up any order?",

@@ -16,7 +16,7 @@ export function finderPrices(): FinderPrices {
       label: t.label,
       monthlyUsd: t.monthlyUsd,
       // The advertised count, from the tier's own first highlight
-      // ("About 90 calls a month (100 minutes)"), so the quiz and the plan
+      // ("About 65 calls a month (100 minutes)"), so the quiz and the plan
       // card can't disagree.
       calls: Number(/(\d+) calls/.exec(t.highlights[0])?.[1] ?? 0),
       volume: t.highlights[0],

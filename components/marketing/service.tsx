@@ -58,7 +58,7 @@ const PILLARS = [
   {
     n: "03",
     title: `Costs less than the calls you're missing`,
-    body: `Starter is $${STARTER_PLAN.monthlyUsd} a month and covers ${guaranteedCalls(STARTER_PLAN.includedMinutes)} calls a month. One booked job covers it.`,
+    body: `Starter is $${STARTER_PLAN.monthlyUsd} a month and covers at least ${guaranteedCalls(STARTER_PLAN.includedMinutes)} calls a month. One booked job covers it.`,
   },
 ];
 

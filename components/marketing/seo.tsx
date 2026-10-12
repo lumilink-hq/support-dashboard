@@ -124,7 +124,7 @@ const FAQS = [
   },
   {
     q: "What Do I Need To Connect?",
-    a: "Your Google Search Console property, so we can see indexing and search data. If your site runs on Shopify, you can also connect the store so approved fixes and articles are published for you.",
+    a: "Your Google account, in one step: Search Console for your website's indexing and search data, and, for Local SEO, the Google Business Profiles you manage. If your site runs on Shopify, you can also connect the store so approved fixes and articles are published for you.",
   },
   {
     q: "Will You Change My Site Without Asking?",

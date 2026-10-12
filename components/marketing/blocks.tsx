@@ -13,6 +13,7 @@
 
 import Link from "next/link";
 import {
+  advertisedCalls,
   guaranteedCalls,
   ENTERPRISE_TIER,
   OVERAGE,
@@ -296,8 +297,9 @@ export async function PricingGrid({
       {/* pricing block was shared, so it stays attached to the prices.       */}
       {/*                                                                    */}
       {/* Worth knowing what this removes: no marketing page states the       */}
-      {/* $0.30/min overage anywhere except the FAQ. /billing still carries   */}
-      {/* the full disclosure, and that is the page a customer sees before    */}
+      {/* $0.30/min rate at all (the FAQ's OVERAGE_ANSWER describes the hard  */}
+      {/* cap instead). /billing still carries the rate, and that is the page  */}
+      {/* a customer sees before                                              */}
       {/* checkout, so the pre-purchase disclosure survives. If a Stripe      */}
       {/* Payment Link is ever linked straight from a marketing page,         */}
       {/* bypassing /billing, put this block back FIRST.                      */}
@@ -510,11 +512,13 @@ export function ClosingCta({
 //
 // Still bridges the two units. We SELL calls and we METER minutes, and the one
 // moment a customer meets the second unit must not be a surprise.
-export const OVERAGE_ANSWER = `We don't. There's no per-minute charge and no surprise bill — your plan is a cap, not a meter. Starter covers ${guaranteedCalls(
-  STARTER_PLAN.includedMinutes,
-)} calls a month (${
+export const OVERAGE_ANSWER = `We don't. There's no per-minute charge and no surprise bill — your plan is a cap, not a meter. Starter's ${
   STARTER_PLAN.includedMinutes
-} minutes of talk time), and you can see what you've used in your dashboard at any point. If you're regularly reaching it, that's a good problem — move up a plan and we'll handle the switch.`;
+} minutes of talk time cover about ${advertisedCalls(
+  STARTER_PLAN.includedMinutes,
+)} calls a month, and never fewer than ${guaranteedCalls(
+  STARTER_PLAN.includedMinutes,
+)}, and you can see what you've used in your dashboard at any point. If you're regularly reaching it, that's a good problem — move up a plan and we'll handle the switch.`;
 
 // ---------------------------------------------------------------------------
 // Cross-sell blocks for the vertical pages (2026-10-12)
