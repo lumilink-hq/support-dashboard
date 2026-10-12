@@ -1,0 +1,26 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+# LL Loyalty: extension-only app. The backend is LumiLink (Supabase edge functions + the Next.js app).
+# See docs/loyalty/PLAN.md.
+
+client_id = "6bfc5441e16cbd1562db482f32edb56c"
+name = "LL Loyalty"
+# Placeholder until the install/OAuth route exists in the LumiLink app (Phase 1, module 2).
+application_url = "https://shopify.dev/apps/default-app-home"
+embedded = true
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true
+
+[webhooks]
+api_version = "2026-10"
+# Subscriptions (orders/paid, refunds/create, customers/create) get added when the
+# loyalty-webhooks edge function exists, so Shopify never delivers to a missing endpoint.
+
+[access_scopes]
+# read_all_orders: the tier backfill reaches back to 2026-06-05, past the 60-day default window.
+# write_customers: tier metafield + tags. write_discounts: reward and perk discount codes.
+scopes = "read_orders,read_all_orders,read_customers,write_customers,write_discounts,read_products"
+
+[auth]
+redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]

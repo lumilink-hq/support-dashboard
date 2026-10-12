@@ -15,7 +15,7 @@ Update the module checklist and the session log as work lands. Committed on the 
 
 | Decision | Choice | Why |
 |---|---|---|
-| Where the code lives | This repo. Shopify app in `shopify-app/`, backend in `supabase/`, pages in `app/` | LumiLink runs it and would sell it; Tsunami is tenant #1. Git syncs both machines. |
+| Where the code lives | This repo. Shopify app in `ll-loyalty/` (extension-only CLI app), backend in `supabase/`, pages in `app/` | LumiLink runs it and would sell it; Tsunami is tenant #1. Git syncs both machines. |
 | Shopify app type | CLI-created app (Dev Dashboard), custom distribution to Tsunami for now | Theme app blocks, Shopify Functions and app proxy need a CLI app; admin-created custom apps can't do them |
 | App owner account | LumiLink's Shopify Partner account (created 2026-10-12) | Phase 2 is a LumiLink product |
 | Backend | Supabase edge functions + Postgres; pg_cron for scheduled jobs | Same pattern as voice/SEO (`0023_scheduled_product_sync.sql`). No new Railway service. |
@@ -120,13 +120,16 @@ theme block packaging; listing and review prep. $19 one-time App Store registrat
 | Item | Owner | Status |
 |---|---|---|
 | Decide which account owns the app: LumiLink Partner account | J | ☑ 2026-10-12 |
-| Free development store for testing | J | ☐ |
-| `shopify app init` into `shopify-app/` (browser login) | J + Claude | ☐ |
+| Free development store for testing | J | ☑ 2026-10-12 |
+| `shopify app init` → `ll-loyalty/`; sample FAQ extensions and nested `.git` removed; scopes set | J + Claude | ☑ 2026-10-12 |
+| Request protected customer data access (name, email, phone) in the Dev Dashboard; `read_all_orders` may also need a request | J | ☐ |
+| `shopify app deploy` the config, then install on the dev store | J + Claude | ☐ |
 | Joy member export (members, balances, tiers); check Joy Settings → Developers for an API key for points history | J | ☐ |
 | Keep the Joy export **out of git** (customer PII) | J | ☐ |
 | Klaviyo key with events:write and profiles:write | J | ☐ |
 | Docker Desktop running for `npx supabase start` | J | ☐ |
-| Shopify CLI updated (4.8.0 installed on the Tsunami machine) | J | ☐ |
+| Shopify CLI 4.9.3 installed globally on the Tsunami machine (`npm i -g @shopify/cli --allow-scripts=esbuild`) | J | ☑ 2026-10-12 |
+| Tsunami machine: `node_modules` links point at the repo's old path; run `pnpm install` before `npm run check` there | J | ☐ |
 
 ## 9. Open questions
 
@@ -148,4 +151,4 @@ theme block packaging; listing and review prep. $19 one-time App Store registrat
 | Date | Machine | What happened |
 |---|---|---|
 | 2026-10-09 | Tsunami | Scoped the build, walked Joy's admin, wrote the scope brief (Drafts 1-4) |
-| 2026-10-12 | Tsunami | Phase 1 approved. Created `loyalty` branch and this plan. LumiLink Partner account created |
+| 2026-10-12 | Tsunami | Phase 1 approved. Created `loyalty` branch and this plan. LumiLink Partner account and dev store created. Scaffolded `ll-loyalty/`, set scopes, excluded it from root tsconfig |
