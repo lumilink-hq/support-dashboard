@@ -19,6 +19,7 @@ Update the module checklist and the session log as work lands. Committed on the 
 | Shopify app type | CLI-created app (Dev Dashboard), custom distribution to Tsunami for now | Theme app blocks, Shopify Functions and app proxy need a CLI app; admin-created custom apps can't do them |
 | App owner account | LumiLink's Shopify Partner account (created 2026-10-12) | Phase 2 is a LumiLink product |
 | Backend | Supabase edge functions + Postgres; pg_cron for scheduled jobs | Same pattern as voice/SEO (`0023_scheduled_product_sync.sql`). No new Railway service. |
+| Distribution | **Custom distribution** for this app (Tsunami only, no review). Shopify doesn't let an app change distribution later, so Phase 2 uses a **second, public app** with its own `shopify.app.public.toml` and the same extensions | Unblocks protected data now without App Store review |
 | Shopify token | Issued by OAuth on install, stored in Supabase Vault | Same storage pattern as `seo-publish`. Do **not** reuse the SEO custom-app token. |
 | Settings-driven | All rules, tiers, rewards and copy read from config tables, nothing Tsunami-specific in code | Games and Phase 2 reuse it |
 | Admin UI | Staff-only. Never client-facing in the LumiLink portal | Phase 2 merchants get an embedded admin inside Shopify instead |
@@ -122,7 +123,8 @@ theme block packaging; listing and review prep. $19 one-time App Store registrat
 | Decide which account owns the app: LumiLink Partner account | J | ☑ 2026-10-12 |
 | Free development store for testing | J | ☑ 2026-10-12 |
 | `shopify app init` → `ll-loyalty/`; sample FAQ extensions and nested `.git` removed; scopes set | J + Claude | ☑ 2026-10-12 |
-| Request protected customer data access (name, email, phone) in the Dev Dashboard; `read_all_orders` may also need a request | J | ☐ |
+| Protected customer data: Name + Email selected, data protection answers saved (see 8b). First save returned "not approved": select a distribution method first | J | ◐ |
+| Set distribution to **Custom** (Tsunami's store) in the Dev Dashboard; confirm protected data then shows as available | J | ☐ |
 | `shopify app deploy` the config, then install on the dev store | J + Claude | ☐ |
 | Joy member export (members, balances, tiers); check Joy Settings → Developers for an API key for points history | J | ☐ |
 | Keep the Joy export **out of git** (customer PII) | J | ☐ |
@@ -130,6 +132,35 @@ theme block packaging; listing and review prep. $19 one-time App Store registrat
 | Docker Desktop running for `npx supabase start` | J | ☐ |
 | Shopify CLI 4.9.3 installed globally on the Tsunami machine (`npm i -g @shopify/cli --allow-scripts=esbuild`) | J | ☑ 2026-10-12 |
 | Tsunami machine: `node_modules` links point at the repo's old path; run `pnpm install` before `npm run check` there | J | ☐ |
+
+## 8b. Data protection (Shopify protected customer data)
+
+LL Loyalty uses name and email, so Shopify's **Level 1 and Level 2** requirements apply
+(https://shopify.dev/docs/apps/launch/protected-customer-data). Custom-distribution apps and apps on
+dev stores need no review; the App Store version (Phase 2) does. Answers were saved in the Dev
+Dashboard on 2026-10-12. Flip each "No" there to "Yes" when its item lands.
+
+| # | Requirement | Answer saved | What makes it true | Status |
+|---|---|---|---|---|
+| L1-1 | Minimum data | Yes | Name + email only; no phone or address | ☑ |
+| L1-2 | Tell merchants what and why | Yes | Tsunami knows; Phase 2 needs a privacy policy page | ☑ (☐ for Phase 2) |
+| L1-3 | Limit use to stated purpose | Yes | Loyalty only | ☑ |
+| L1-4 | Respect consent | Yes | Never subscribe anyone; Klaviyo applies consent; newsletter points only on real opt-in | ☑ |
+| L1-5 | Respect opt-out of data sharing | N/A | We don't sell data | ☑ |
+| L1-6 | Automated decisions | N/A | Points and tiers aren't legally significant | ☑ |
+| L1-7 | Privacy agreement with merchants | **No** | Write a short data processing agreement, LumiLink ↔ Tsunami; reuse as the Phase 2 terms | ☐ |
+| L1-8 | Retention periods | **No** | Written retention rule + handle `customers/redact`, `customers/data_request`, `shop/redact` webhooks; delete member PII on redact and after uninstall | ☐ |
+| L1-9 | Encrypt at rest and in transit | Yes | Supabase encryption + HTTPS | ☑ |
+| L2-1 | Encrypt backups | Yes | Supabase backups are encrypted | ☑ |
+| L2-2 | Separate test and production | Yes | Dev store + local Supabase vs Tsunami + production project | ☑ |
+| L2-3 | Data loss prevention strategy | Yes (thin) | Write `docs/loyalty/DATA-PROTECTION.md`: Supabase daily backups, restore steps, who has access | ☐ |
+| L2-4 | Limit staff access | Yes | Staff-only admin route, RLS, only J has DB access | ☑ |
+| L2-5 | Strong staff passwords | **No** | Production Supabase Auth: minimum 12 characters + character requirements (local `config.toml` is 6, no rules). Consider MFA for staff | ☐ |
+| L2-6 | Access log for protected data | **No** | `loyalty_access_log` table; staff admin writes a row on every member lookup and export (module 7) | ☐ |
+| L2-7 | Security incident response policy | **No** | One page in `DATA-PROTECTION.md`: detect, contain, notify Tsunami (and Shopify for Phase 2), fix, review | ☐ |
+
+**Do before real Tsunami data flows (before installing on tsunami.store):** L1-7, L1-8, L2-3, L2-5, L2-6, L2-7.
+Then update the Dev Dashboard answers.
 
 ## 9. Open questions
 
