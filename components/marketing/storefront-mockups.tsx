@@ -26,6 +26,7 @@ export function StorefrontSupportMockup({
   accent,
   caption,
   className,
+  message = "Order questions? Call or text and we’ll pull it up.",
 }: {
   storeName: string;
   tagline: string;
@@ -33,6 +34,8 @@ export function StorefrontSupportMockup({
   accent: keyof typeof ACCENTS;
   caption: string;
   className?: string;
+  /** The line above the number. Defaults to the online-store wording. */
+  message?: string;
 }) {
   const a = ACCENTS[accent];
   return (
@@ -52,7 +55,7 @@ export function StorefrontSupportMockup({
         </span>
 
         <p className="mt-3 text-sm text-gray-600">
-          Order questions? Call or text and we&rsquo;ll pull it up.
+          {message}
         </p>
         <p
           aria-hidden
@@ -71,11 +74,13 @@ export function WidgetPreviewMockup({
   accent,
   caption,
   className,
+  greeting = "Hi! Ask me about an order, and I’ll pull up the real status.",
 }: {
   storeName: string;
   accent: keyof typeof ACCENTS;
   caption: string;
   className?: string;
+  greeting?: string;
 }) {
   const a = ACCENTS[accent];
   return (
@@ -95,7 +100,7 @@ export function WidgetPreviewMockup({
           {storeName} Support
         </p>
         <div className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-xs text-gray-700">
-          Hi! Ask me about an order, and I&rsquo;ll pull up the real status.
+          {greeting}
         </div>
         <div className="mt-2 rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-400">
           Type a message…

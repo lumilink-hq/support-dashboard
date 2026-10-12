@@ -15,6 +15,11 @@
 //   callback tickets              create_ticket + the review queue
 //   web widget                    slug routing, live at /demo/orders
 //
+// SEO + WEBSITE CHAT (2026-10-12): the page also recommends Website SEO + AI
+// Search alongside the phone agent (SeoPairing) and gives the website widget
+// its own band (WebsiteChatBand), both shared from blocks.tsx so the prices
+// come from lib/seo-pricing.ts and lib/addons.ts.
+//
 // EMAIL IS NOT ON THIS PAGE, deliberately. The email channel is paused, has no
 // sending code in the repo, and its Zapier economics are unresolved
 // (docs/BUILD-PLAN-2026-08.md §E). Do not add it here until that is settled.
@@ -32,7 +37,9 @@ import {
   Pillars,
   PricingGrid,
   Section,
+  SeoPairing,
   SIGNUP_CTA,
+  WebsiteChatBand,
 } from "@/components/marketing/blocks";
 import { StorefrontSupportMockup } from "@/components/marketing/storefront-mockups";
 import { DEMO_LINES } from "@/lib/demo";
@@ -89,6 +96,10 @@ const CAPABILITIES = [
     body: "Returns, shipping and refund policy read from your own store — so the answer on the phone is the answer on your site.",
   },
   {
+    title: "A chat widget on your site",
+    body: "The same agent as a chat bubble on your storefront, so shoppers get order status and product answers without leaving the page.",
+  },
+  {
     title: "Nothing disappears",
     body: "When Lumi can't finish — a damaged parcel, a refund dispute, an order it genuinely can't find — it takes the details and logs a callback ticket in your queue.",
   },
@@ -113,6 +124,21 @@ const VERTICALS = [
   "Adult wellness",
 ];
 
+const WIDGET_POINTS = [
+  {
+    title: "Answers while they're still shopping",
+    body: "Product, stock and policy questions answered on the page, before a hesitant shopper closes the tab.",
+  },
+  {
+    title: "Order status without a phone call",
+    body: "Customers check where their order is from your site. Lumi asks for the order email or ZIP first and reveals nothing until it matches.",
+  },
+  {
+    title: "One agent, two channels",
+    body: "The widget and your phone line share the same catalog, policies and dashboard, so a customer gets the same answer either way.",
+  },
+];
+
 const FAQS = [
   {
     q: "Which platforms do you support?",
@@ -129,6 +155,14 @@ const FAQS = [
   {
     q: "What if it can't find the order?",
     a: "It says so, asks the customer to re-read the number, and then takes their details for a callback rather than guessing. A wrong order read aloud is worse than an honest handover.",
+  },
+  {
+    q: "Can I put it on my website?",
+    a: "Yes. Website Chat adds the same agent to your store as a chat widget, on top of any phone plan. It answers order, product and policy questions and logs every session in your dashboard next to your calls.",
+  },
+  {
+    q: "Can you help my store get found, too?",
+    a: "Yes. SEO + AI Search is a separate plan that audits your store weekly, tracks your rankings, drafts fixes for your approval, and checks whether ChatGPT and Google's AI Overviews recommend you. On Shopify we publish approved fixes for you. AI search optimization is included at no extra cost.",
   },
   {
     q: "Do you work with hemp, peptide or supplement stores?",
@@ -204,7 +238,7 @@ export function EcommerceSolution() {
                 <Check /> Live order lookup
               </li>
               <li className="flex items-center gap-2">
-                <Check /> Phone and web
+                <Check /> Phone and website chat
               </li>
             </ul>
           </div>
@@ -251,6 +285,14 @@ export function EcommerceSolution() {
         </div>
         <CapabilityGrid items={CAPABILITIES} />
       </Section>
+
+      <WebsiteChatBand
+        heading="Put Lumi on your website, too"
+        body="Most shoppers would rather type than call. The website widget puts the same agent in a chat bubble on your store, answering from the same orders, catalog and policies as your phone line."
+        points={WIDGET_POINTS}
+        storeName="Aurora Home Goods"
+        greeting="Hi! Ask me about an order or a product, and I’ll pull up the real answer."
+      />
 
       {/* ------------------------------------------------------------------ */}
       {/* Regulated verticals                                                */}
@@ -323,6 +365,19 @@ export function EcommerceSolution() {
           />
         </div>
       </Section>
+
+      <SeoPairing
+        audience="Online Stores"
+        heading="Answer every customer. Then bring in more of them."
+        body="Support keeps the customers you have. SEO + AI Search brings in the next ones: from Google, and from the AI answers more shoppers now read before they click anything."
+        recommend="website"
+        reasons={[
+          "Weekly audits of your product and collection pages, with fixes drafted for your approval",
+          "On Shopify, approved fixes and articles are published for you",
+          "Rank tracking against up to five competing stores",
+          "A weekly check on whether ChatGPT and Google's AI Overviews recommend your store",
+        ]}
+      />
 
       {/* ------------------------------------------------------------------ */}
       {/* Honesty block                                                      */}

@@ -7,6 +7,10 @@
 // This page leads with SCHEDULING, which is the MVP (docs/scheduling-mvp-build-plan.md)
 // and the thing the landing page only gestures at. Same plan ladder, same
 // pricing component.
+//
+// SEO (2026-10-12): the page also recommends Local SEO alongside the phone
+// agent (SeoPairing in blocks.tsx), since a trade that answers every call
+// still needs the calls to come in.
 
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
@@ -21,6 +25,7 @@ import {
   Pillars,
   PricingGrid,
   Section,
+  SeoPairing,
   SIGNUP_CTA,
 } from "@/components/marketing/blocks";
 import {
@@ -112,6 +117,10 @@ const FAQS = [
   {
     q: "What If I Run Out Of Calls?",
     a: OVERAGE_ANSWER,
+  },
+  {
+    q: "Can You Help Me Get More Calls, Not Just Answer Them?",
+    a: "Yes. SEO + AI Search is a separate plan that tracks where you rank in the Google map pack across your service area, audits your website weekly, and drafts fixes for your approval. Website plans include AI search optimization for ChatGPT and Google's AI Overviews at no extra cost.",
   },
   {
     q: "What Does Setup Cost?",
@@ -225,6 +234,19 @@ export function ServiceSolution() {
           className="mx-auto mt-12 max-w-2xl"
         />
       </Section>
+
+      <SeoPairing
+        audience="Service Businesses"
+        heading="Answer every call. Then get more of them."
+        body="Lumi makes sure no call goes to voicemail. SEO + AI Search makes sure you're the business people call: in the map pack, in Google's results, and in the AI answers people now ask first."
+        recommend="local"
+        reasons={[
+          "See where you rank in the map pack across your whole service area, not just at your address",
+          "Your keywords tracked weekly against the competitors you actually lose jobs to",
+          "Local articles drafted for the services and areas where you're furthest behind",
+          "Add your website for the full bundle, with AI search optimization included",
+        ]}
+      />
 
       <CallLengthPolicy closing="We publish this because you will hit it. An AI that keeps a frustrated caller on the line for nine minutes costs you more than one that hands them to a person at two." />
 

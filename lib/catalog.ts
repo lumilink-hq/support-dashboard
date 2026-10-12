@@ -81,6 +81,11 @@ export const SOLUTIONS: { name: string; blurb: string; href: string }[] = [
     href: "/solutions/ecommerce",
   },
   {
+    name: "Retail Locations",
+    blurb: "Every storefront answered and every location found.",
+    href: "/solutions/retail",
+  },
+  {
     name: "Service Businesses",
     blurb: "Every call answered and every job on the calendar.",
     href: "/solutions/service",

@@ -353,7 +353,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
         <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">
           Built For Your Kind Of Business
         </h2>
-        <div className="mt-6 grid gap-6 md:grid-cols-3">
+        <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <Link
             href="/solutions/service"
             className="group rounded-xl border border-gray-200 bg-white p-6 shadow-sm hover:border-gray-900"
@@ -376,6 +376,20 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
               Shopify and WooCommerce. &ldquo;Where&rsquo;s my order?&rdquo;
               answered from the real order, and your store found in search.
+            </p>
+            <p className="mt-4 text-sm font-medium text-gray-900 group-hover:underline">
+              See How It Works &rarr;
+            </p>
+          </Link>
+
+          <Link
+            href="/solutions/retail"
+            className="group rounded-xl border border-gray-200 bg-white p-6 shadow-sm hover:border-gray-900"
+          >
+            <h3 className="text-lg font-semibold text-gray-900">Retail Locations</h3>
+            <p className="mt-2 text-sm leading-relaxed text-gray-600">
+              One shop or many. Every storefront&rsquo;s calls and website
+              chat answered, and every location found in search.
             </p>
             <p className="mt-4 text-sm font-medium text-gray-900 group-hover:underline">
               See How It Works &rarr;

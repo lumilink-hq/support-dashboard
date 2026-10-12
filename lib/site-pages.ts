@@ -15,6 +15,7 @@ export const SITEMAP_PATHS = [
   "/products/seo",
   "/solutions/service",
   "/solutions/ecommerce",
+  "/solutions/retail",
   "/story",
   "/contact",
   "/legal/privacy",

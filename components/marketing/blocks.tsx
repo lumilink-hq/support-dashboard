@@ -21,6 +21,15 @@ import {
 } from "@/lib/entitlements";
 import { isSignedIn } from "@/components/marketing/shell";
 import { safeNextPath } from "@/lib/route-access";
+import { ADDONS } from "@/lib/addons";
+import {
+  SEO_EXTRA_LOCATION,
+  SEO_PLANS,
+  seoPlanByKey,
+  type SeoPlan,
+  type SeoPlanKey,
+} from "@/lib/seo-pricing";
+import { WidgetPreviewMockup } from "@/components/marketing/storefront-mockups";
 
 /**
  * Where an Enterprise/partner CTA sends someone: the real /contact form, with
@@ -506,3 +515,201 @@ export const OVERAGE_ANSWER = `We don't. There's no per-minute charge and no sur
 )} calls a month (${
   STARTER_PLAN.includedMinutes
 } minutes of talk time), and you can see what you've used in your dashboard at any point. If you're regularly reaching it, that's a good problem — move up a plan and we'll handle the switch.`;
+
+// ---------------------------------------------------------------------------
+// Cross-sell blocks for the vertical pages (2026-10-12)
+// ---------------------------------------------------------------------------
+//
+// Every industry page recommends a plan WITH SEO, not just the phone agent,
+// and the store pages pitch the website widget. Both blocks quote prices, so
+// they live here and read them from lib/seo-pricing.ts and lib/addons.ts like
+// every other money block.
+
+const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
+
+/**
+ * "AI search optimization is included, free." Shown wherever SEO is pitched
+ * on a vertical page. Only the website plans include it (SEO_PLANS'
+ * includesWebsite), so the copy says "with every website SEO plan", never
+ * "with every plan": Local SEO on its own does not cover it.
+ */
+export function AiSearchIncludedCallout({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`flex flex-col gap-3 rounded-xl border-2 border-green-600 bg-green-50 p-5 sm:flex-row sm:items-center ${className}`}
+    >
+      <span className="w-max shrink-0 rounded-full bg-green-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+        Included Free
+      </span>
+      <p className="text-sm leading-relaxed text-green-900">
+        <span className="font-semibold">AI Search Optimization</span> for
+        ChatGPT and Google&rsquo;s AI Overviews comes with every website SEO
+        plan. Many agencies sell it as a separate, expensive retainer. We
+        don&rsquo;t charge for it at all.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * "Pair it with SEO + AI Search": a recommended SEO plan for this vertical,
+ * the other two as options, and the AI search callout. Links to
+ * /products/seo rather than a checkout: SEO is its own subscription, bought
+ * from that page or /billing.
+ */
+export function SeoPairing({
+  audience,
+  heading,
+  body,
+  recommend,
+  reasons,
+}: {
+  /** Who the recommendation is for, e.g. "Online Stores". */
+  audience: string;
+  heading: string;
+  body: string;
+  recommend: SeoPlanKey;
+  /** Why this plan fits this vertical, one line each. */
+  reasons: string[];
+}) {
+  const plan = seoPlanByKey(recommend);
+  const others = SEO_PLANS.filter((p) => p.key !== recommend);
+  const priceLabel = (p: SeoPlan) =>
+    p.perLocation
+      ? `${usd(p.monthlyUsd)}/location/mo`
+      : p.includedLocations > 0
+        ? `${usd(p.monthlyUsd)}/mo + ${usd(SEO_EXTRA_LOCATION.monthlyUsd)}/extra location`
+        : `${usd(p.monthlyUsd)}/mo`;
+
+  return (
+    <Section id="seo" className="border-t border-gray-200 py-20">
+      <div className="grid gap-12 lg:grid-cols-2">
+        <div>
+          <Eyebrow>Pair It With SEO + AI Search</Eyebrow>
+          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+            {heading}
+          </h2>
+          <p className="mt-3 leading-relaxed text-gray-600">{body}</p>
+          <ul className="mt-6 space-y-3">
+            {reasons.map((r) => (
+              <li key={r} className="flex gap-2 text-sm leading-relaxed text-gray-700">
+                <Check /> {r}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-6 text-sm text-gray-500">
+            SEO + AI Search is its own subscription. Run it alongside your
+            phone plan or on its own.
+          </p>
+        </div>
+
+        <div>
+          <div className="rounded-2xl border-2 border-gray-900 bg-white p-8 shadow-sm">
+            <span className="rounded-full bg-gray-900 px-2.5 py-0.5 text-xs font-semibold text-white">
+              Recommended For {audience}
+            </span>
+            <p className="mt-4 text-sm font-medium text-gray-500">{plan.name}</p>
+            <p className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
+              {usd(plan.monthlyUsd)}
+              <span className="text-base font-normal text-gray-500">
+                {plan.perLocation ? " / location / month" : " / month"}
+              </span>
+            </p>
+            {!plan.perLocation && plan.includedLocations > 0 ? (
+              <p className="mt-1 text-sm text-gray-500">
+                Includes {plan.includedLocations} location, then{" "}
+                {usd(SEO_EXTRA_LOCATION.monthlyUsd)}/mo per extra location
+              </p>
+            ) : null}
+            <p className="mt-3 text-sm text-gray-600">{plan.headline}</p>
+            <ul className="mt-5 space-y-2">
+              {plan.includes.slice(0, 5).map((item) => (
+                <li key={item} className="flex gap-2 text-sm text-gray-600">
+                  <Check /> {item}
+                </li>
+              ))}
+            </ul>
+            <Link
+              href="/products/seo#pricing"
+              className="mt-6 block rounded-md bg-gray-900 px-4 py-3 text-center text-sm font-medium text-white hover:bg-gray-800"
+            >
+              See SEO + AI Search
+            </Link>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+              Other Options
+            </p>
+            <ul className="mt-3 space-y-2">
+              {others.map((p) => (
+                <li key={p.key} className="flex flex-wrap justify-between gap-x-4 text-sm">
+                  <span className="font-medium text-gray-900">{p.name}</span>
+                  <span className="text-gray-600">{priceLabel(p)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <AiSearchIncludedCallout className="mt-10" />
+    </Section>
+  );
+}
+
+/**
+ * The website widget: the same agent as a chat bubble on the client's site.
+ * Sold as the Website Chat add-on on a phone plan (lib/addons.ts), so the
+ * price line reads from there, and disappears if the add-on is pulled.
+ */
+export function WebsiteChatBand({
+  heading,
+  body,
+  points,
+  storeName,
+  greeting,
+}: {
+  heading: string;
+  body: string;
+  points: { title: string; body: string }[];
+  storeName: string;
+  greeting?: string;
+}) {
+  const chat = ADDONS.find((a) => a.key === "website_chat");
+  return (
+    <Section id="website-chat" className="border-t border-gray-200 bg-gray-50 py-20">
+      <div className="grid items-center gap-12 md:grid-cols-2">
+        <div>
+          <Eyebrow>Website Chat Widget</Eyebrow>
+          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+            {heading}
+          </h2>
+          <p className="mt-3 leading-relaxed text-gray-600">{body}</p>
+          <div className="mt-8 space-y-5">
+            {points.map((p) => (
+              <div key={p.title} className="flex gap-3">
+                <Check />
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">{p.title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-gray-600">{p.body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {chat?.available ? (
+            <p className="mt-8 text-sm font-medium text-gray-900">
+              Add it to any phone plan for {usd(chat.monthlyUsd)}/month.
+            </p>
+          ) : null}
+        </div>
+        <WidgetPreviewMockup
+          storeName={storeName}
+          accent="slate"
+          greeting={greeting}
+          caption="The chat widget on your website"
+        />
+      </div>
+    </Section>
+  );
+}
