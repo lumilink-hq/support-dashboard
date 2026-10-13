@@ -72,7 +72,30 @@ Stages: `sourced` → `email_found` / `no_email` → `verified` / `invalid` → 
      - **A real DataForSEO call.** The parser's field names come from the docs (`cid`, `title`, `url`, `address_info.*`, `rating.value/votes_count`, `work_time.work_hours.current_status`). They have not been checked against a real response.
      - **Whether `rating.value` and `rating.votes_count` are accepted as filter fields.** The docs show `rating.value` in an example; the full filter list wasn't read.
      - **Whether `cannabis_store` is a real DataForSEO category id.**
-3. **`outbound-enrich`**: fetch home, contact and about pages, using the `seo-crawl` fetch code and `render-service` for JavaScript-rendered sites. Extract emails from mailto links, page text and simple obfuscation. Prefer same-domain addresses and skip images and placeholder addresses.
+3. **`outbound-enrich`**: fetch home, contact and about pages, using the `seo-crawl` fetch code and `render-service` for JavaScript-rendered sites. Extract emails from mailto links, page text and simple obfuscation. Prefer same-domain addresses and skip images and placeholder addresses. 🟡 **Built and locally verified end to end (2026-10-13); not deployed.**
+   - **`0302_outbound_enrich.sql`**
+     - Adds `claimed_until` and `outbound_claim_leads(stage, limit, lease)`, which hands out leases with `skip locked` so overlapping runs never work the same lead.
+     - Adds `outbound_record_email(lead, email, source_url)`, the only place an email is written. Outcomes: found, no_email, suppressed, duplicate (with a `duplicate_email` event naming the other lead, safe under a concurrent race), stage_changed (leaves a lead a person moved on alone) and not_found.
+     - `scripts/test_outbound_enrich.sql` passes.
+   - **`supabase/functions/outbound-enrich`** (`index.ts` and `lib.ts`)
+     - **Per lead:** robots.txt is honoured for every page. It fetches the homepage (rendered once through `render-service` if it's a JavaScript shell), then up to 3 same-site contact, about or location pages. It stops early when an own-domain address turns up.
+     - **Address extraction:** mailto links, visible text, HTML entities, `[at]`/`(at)` obfuscation and Cloudflare email protection (both the link and `data-cfemail` forms).
+     - **What it rejects:** placeholders, platform addresses (Sentry, Wix), no-reply, image filenames, and addresses inside scripts or styles. A bare " at " in prose is deliberately not read as an address.
+     - **Which address wins:** only the business's own domain (including subdomains) or a free mailbox provider qualifies; a third party such as the web designer never does. Inboxes like privacy, careers and admin are skipped. Ranking puts own domain first, then info, hello and similar, then a named person, with mailto links ahead of text.
+     - **Logging:** one `enrich` event per lead records the pages read, the reason and any rejected addresses.
+     - **Batching:** batch of 1–25, 4 at a time, a 110-second run budget, and unreached leads are released.
+     - **Code sharing:** it imports `decodeEntities`, `normalizeUrl`, `visibleWordCount`, `isAllowedByRobots`, `isCrawlable` and `sameSite` from `seo-crawl` rather than copying them.
+   - **Tests**
+     - `scripts/test-outbound-enrich.ts`: 37 unit tests pass.
+     - **Local end-to-end** (`functions serve` plus 4 fixture sites on host ports and 1 dead port):
+       - own-domain mailto on the homepage → found from 1 page
+       - nothing on the homepage, a Cloudflare-protected gmail on `/contact-us` → found from 3 pages, source page recorded
+       - robots `Disallow: /` → `no_email` (robots_disallowed)
+       - only the web designer's address → `no_email` (no_usable_address, address listed for review)
+       - dead port → `no_email` (fetch_failed)
+     - The first run correctly returned `suppressed` for the two found addresses, because a local crawler-test client's site is also on `host.docker.internal`. That client was moved aside for one rerun and restored afterwards.
+     - `npm run check` passes.
+   - **Not verified:** real business sites, so the hit rate is unknown (§8 item); the `render-service` path (RENDER_SERVICE_URL isn't set locally); and CPU time on very large pages (HTML is capped at 1.5 MB).
 4. **`outbound-verify`**: Reoon single-email check. `valid` → `verified`; `invalid` → `invalid` plus a suppression entry; catch-all and unknown are kept, flagged, and sent last.
 5. Cron: source daily, enrich and verify every 15 minutes in batches. Migration `0301`.
 
@@ -103,6 +126,9 @@ Hand-test at the end. Add items as each phase is built.
   - Check that the parser's fields fill in: city, region, website, rating, review count.
   - Check whether the rating filters are accepted.
   - Look up the right category ids for dispensaries and HVAC (DataForSEO `business_listings/categories`).
+- [ ] Deploy `outbound-enrich` with `--no-verify-jwt`.
+  - Set `RENDER_SERVICE_URL` and `RENDER_SERVICE_SECRET` for it; they're the same values seo-crawl uses.
+  - Run it on the leads from the real sourcing call. Record the hit rate, and hand-check 10 `no_email` events for missed addresses.
 - [ ] Push 0300 to prod. It needs `supabase db push --include-all` if any lower-numbered migration landed first. Afterwards confirm the four tables and `outbound_funnel` exist, and that the anon key returns a permission error on `outbound_leads`.
 
 - [ ] A real DataForSEO listings call returns the expected fields for one dispensary profile. Check coverage for one state.
