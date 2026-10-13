@@ -53,7 +53,25 @@ Stages: `sourced` → `email_found` / `no_email` → `verified` / `invalid` → 
    - `scripts/test_outbound_schema.sql` passes against the local stack. It covers normalisation, the three dedupe rules, the profile checks, stage events, the funnel, email-, domain- and client-level suppression, and both browser roles being refused. Dropping `uq_outbound_leads_domain` makes it fail.
    - Applied twice locally to confirm it's idempotent; `check-migration-sql` is clean.
    - **Local note:** the local database was only at 0080, missing main's 0081–0091. 0300 was applied by hand because it doesn't depend on them.
-2. **`outbound-source`**: DataForSEO `business_data/business_listings/search/live` per active profile, using `vendor_budgets`. Skips suppressed domains and businesses already on file. **Spend cap per run.** Test with a real $0.05 call on one profile.
+2. **`outbound-source`**: DataForSEO `business_data/business_listings/search/live` per active profile, using `vendor_budgets`. Skips suppressed domains and businesses already on file. **Spend cap per run.** Test with a real $0.05 call on one profile. 🟡 **Built and locally verified (2026-10-13); no real DataForSEO call made yet.**
+   - **`0301_outbound_source.sql`**
+     - Adds a paging cursor to each profile: `source_cursor_key`, `source_offset_token`, `source_total_count`, `source_exhausted_at` and `last_sourced_at`.
+     - Adds `outbound_insert_leads(profile, rows)`: one insert per page that skips duplicates on any of 0300's rules, plus suppressed and client domains. It returns received, inserted, duplicates, suppressed and invalid counts.
+     - `scripts/test_outbound_source.sql` passes.
+   - **`supabase/functions/outbound-source`** (`index.ts` and `lib.ts`)
+     - **One Live call per due active profile.** It buys `pageLimit` = 4× the daily target, clamped to 100–1,000 listings, sorted by most reviews.
+     - **Skips a profile when** it was sourced in the last 20 hours, its audience is exhausted, or it already has 5 days of unprocessed leads. `force` overrides these checks.
+     - **`dry_run`** returns the request without spending anything.
+     - **Paging** resumes from the stored token unless the audience changed. It stops when a page comes back short or without a token.
+     - **Listings are skipped** if they have no id or name, are closed (permanently or temporarily), or have no website. The last check can be turned off with `require_website: false`.
+   - **Tests**
+     - `scripts/test-outbound-source.ts`: 44 unit tests pass.
+     - The function was run on the local edge runtime with `functions serve`. Verified: a wrong secret gets 401; no active profiles does nothing; a draft profile without force is refused; a forced dry run returns the expected request; an unknown profile gets 404; an empty audience gets `bad_audience`; and a real call without DataForSEO credentials gets "Server not configured".
+     - `npm run check` passes.
+   - **Not verified:**
+     - **A real DataForSEO call.** The parser's field names come from the docs (`cid`, `title`, `url`, `address_info.*`, `rating.value/votes_count`, `work_time.work_hours.current_status`). They have not been checked against a real response.
+     - **Whether `rating.value` and `rating.votes_count` are accepted as filter fields.** The docs show `rating.value` in an example; the full filter list wasn't read.
+     - **Whether `cannabis_store` is a real DataForSEO category id.**
 3. **`outbound-enrich`**: fetch home, contact and about pages, using the `seo-crawl` fetch code and `render-service` for JavaScript-rendered sites. Extract emails from mailto links, page text and simple obfuscation. Prefer same-domain addresses and skip images and placeholder addresses.
 4. **`outbound-verify`**: Reoon single-email check. `valid` → `verified`; `invalid` → `invalid` plus a suppression entry; catch-all and unknown are kept, flagged, and sent last.
 5. Cron: source daily, enrich and verify every 15 minutes in batches. Migration `0301`.
@@ -80,6 +98,11 @@ Stages: `sourced` → `email_found` / `no_email` → `verified` / `invalid` → 
 
 Hand-test at the end. Add items as each phase is built.
 
+- [ ] Deploy `outbound-source` with `--no-verify-jwt`.
+- [ ] Run one forced, real call on a test profile with `daily_lead_target` 25 (100 listings, about $0.05).
+  - Check that the parser's fields fill in: city, region, website, rating, review count.
+  - Check whether the rating filters are accepted.
+  - Look up the right category ids for dispensaries and HVAC (DataForSEO `business_listings/categories`).
 - [ ] Push 0300 to prod. It needs `supabase db push --include-all` if any lower-numbered migration landed first. Afterwards confirm the four tables and `outbound_funnel` exist, and that the anon key returns a permission error on `outbound_leads`.
 
 - [ ] A real DataForSEO listings call returns the expected fields for one dispensary profile. Check coverage for one state.
