@@ -9,13 +9,14 @@ What the `outbound` branch adds to the database, so other branches (loyalty, mai
 | `0300_outbound_schema.sql` | yes (`1d9c5a0`) | **yes** | Four tables, a view, five helper functions and triggers |
 | `0301_outbound_source.sql` | yes (`ba8ee58`) | **yes** | Paging columns on `outbound_profiles`, `outbound_insert_leads()` |
 | `0302_outbound_enrich.sql` | yes (`b741ec0`) | no | `claimed_until` column, `outbound_claim_leads()`, `outbound_record_email()` |
-| `0303_outbound_verify.sql` | not yet | no | `outbound_record_verification()` |
+| `0303_outbound_verify.sql` | yes (`b9f741e`) | no | `outbound_record_verification()` |
+| `0304_outbound_schedule.sql` | not yet | no | `request_outbound_job()` and 3 cron jobs: `outbound-source-daily`, `outbound-enrich-due`, `outbound-verify-due` |
 
 **Production already has 0300 and 0301** (checked with `supabase migration list` on 2026-10-13). They were pushed from this folder while it was on the `outbound` branch. That's why pushing loyalty's 02xx migrations now fails: production's latest version is 0301, and the CLI refuses to apply a lower number after a higher one unless told to.
 
 ## What the migrations touch
 
-**Everything is new and prefixed `outbound_`.** None of the four migrations alters, drops or replaces anything that existed before them.
+**Everything is new and named for outbound.** Objects start with `outbound_`, except 0304's dispatch function `request_outbound_job` and its cron jobs (`outbound-…`), which follow the existing `request_*` naming. None of the migrations alters, drops or replaces anything that existed before them.
 
 | Kind | Objects |
 |---|---|
@@ -37,7 +38,7 @@ The functions also call `check_and_reserve_vendor_budget('dataforseo')` from 004
 
 A loyalty migration conflicts with these only if it does one of the following:
 
-1. **Creates anything named `outbound_…`** (table, function, trigger, index or view).
+1. **Creates anything named `outbound_…`** (table, function, trigger, index or view), a function named `request_outbound_job`, or a cron job named `outbound-…`.
 2. **Drops or renames `set_updated_at()`** or `seo_locations.website_url`, or changes `set_updated_at()` in a way that breaks it.
 3. **Adds a global event trigger or default privileges** that would grant `anon` or `authenticated` access to new tables. The outbound tables revoke those grants explicitly, but a later blanket `grant … on all tables in schema public` would re-open them.
 4. **Puts a staff or role concept on tables outbound expects to own.** The staff concept will eventually add policies to the outbound tables. That should happen in an outbound migration (0304+) once loyalty's model is committed, not in a loyalty migration.

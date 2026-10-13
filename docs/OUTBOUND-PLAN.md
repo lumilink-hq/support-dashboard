@@ -124,7 +124,17 @@ Stages: `sourced` → `email_found` / `no_email` → `verified` / `invalid` → 
        - a wrong secret → 401
      - `npm run check` passes (54 of 54).
    - **Not verified:** a real Reoon response. The field names come from Reoon's API docs. Also unchecked: the exact error body Reoon sends when out of credits (the mapping matches on words like credit, key and quota), and real power-mode latency.
-5. Cron: source daily, enrich and verify every 15 minutes in batches. Migration `0301`.
+5. Cron: source daily, enrich and verify every 15 minutes in batches. Migration `0301`. 🟡 **Built as `0304_outbound_schedule.sql` and Docker-verified (2026-10-13); not on production.**
+   - **`request_outbound_job('source' | 'enrich' | 'verify')`** first checks for work: an active profile for source, unclaimed `sourced` leads for enrich, unclaimed `email_found` leads for verify. Only then does it read `outbound_<job>_url` plus `voice_tool_secret` from Vault and send a pg_net POST with a 150-second timeout.
+   - **Safe before Phase 0 is done.** With no work it calls nothing; with a missing secret it raises a notice and makes no call. With no active profile, nothing is ever bought, so **making a profile active is the on switch**.
+   - **Schedule:**
+     - `outbound-source-daily` at `0 14 * * *`
+     - `outbound-enrich-due` at `*/10 * * * *`
+     - `outbound-verify-due` at `5-59/10 * * * *`
+
+     That's every 10 minutes rather than 15, which is enough for 1,440 leads a day per step.
+   - **Tests:** `scripts/test_outbound_schedule.sql` passes, and removing the no-work early exit makes it fail. The migration was applied twice locally. There's no pg_cron locally, so the schedule block was skipped with its notice.
+   - **Deliberately not done:** adding the three secrets and cron jobs to `system_health_snapshot()` (0068). That function belongs to main, so it gets a main migration after the merge.
 
 ### Phase 2: Instantly sync (about 4–8 hrs)
 1. **`outbound-instantly` push**: verified, unsuppressed leads go into the profile's campaign, up to the daily target. Store the Instantly lead id; stage becomes `queued`.
@@ -159,6 +169,11 @@ Hand-test at the end. Add items as each phase is built.
 - [ ] Deploy `outbound-verify` with `--no-verify-jwt` and set `REOON_API_KEY` (not `REOON_API_BASE`). Then:
   - Verify 3 known addresses: one real, one made up on a real domain, one on a catch-all domain. Compare the results with Reoon's dashboard.
   - Check what an empty-credits answer looks like, against the `fatal` matching in `lib.ts`.
+- [ ] After 0304 reaches production:
+  - Create the Vault secrets `outbound_source_url`, `outbound_enrich_url` and `outbound_verify_url` (commands in 0304's header).
+  - Confirm `select jobname, schedule from cron.job where jobname like 'outbound-%'` lists 3 jobs.
+  - After the first active profile, confirm `cron.job_run_details` shows them succeeding.
+- [ ] After merging to main, add the outbound secrets and cron jobs to `system_health_snapshot()` in a main migration.
 - [ ] Push 0300 to prod. It needs `supabase db push --include-all` if any lower-numbered migration landed first. Afterwards confirm the four tables and `outbound_funnel` exist, and that the anon key returns a permission error on `outbound_leads`.
 
 - [ ] A real DataForSEO listings call returns the expected fields for one dispensary profile. Check coverage for one state.
