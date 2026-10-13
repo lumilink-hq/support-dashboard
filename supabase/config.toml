@@ -452,6 +452,9 @@ verify_jwt = false
 [functions.outbound-verify]
 verify_jwt = false
 
+[functions.outbound-snapshot]
+verify_jwt = false
+
 [analytics]
 # Off locally (2026-10-12): the log store (Logflare + vector) grows without
 # bound, ~640 MB and climbing. Only Studio's log viewer reads it.

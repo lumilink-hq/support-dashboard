@@ -150,6 +150,32 @@ Stages: `sourced` → `email_found` / `no_email` → `verified` / `invalid` → 
 
 ### Phase 4: pre-call SEO snapshot (about 4–5 hrs)
 - Run the existing crawl, technical audit and rank and competitor checks against a **prospect** domain, with no client or location rows, and render a one-page summary for the call. Needs `seo-crawl` / `seo-technical-audit` refactored to accept a bare URL. SEO profiles only in v1.
+- 🟡 **Built and locally verified end to end against a mock DataForSEO (2026-10-13); no real DataForSEO call yet.** No refactor of the SEO modules was needed. Their pure helpers are imported as they are:
+  - from `seo-crawl/lib.ts`: `auditPage` and `isAllowedByRobots`
+  - from `seo-technical-audit/lib.ts`: `analyzeRedirectChain`, `analyzeRobotsTxt` and `analyzeSitemap`
+  - from `seo-rank-tracking/lib.ts`: `findOwnRanking`
+- **`0305_outbound_snapshots.sql`** adds `outbound_snapshots`: lead, status `ready`/`partial`/`failed`, keyword, `data` (the raw checks), `todo` (ordered list), `summary`, `cost` and `error`. History is kept per lead and deleted with the lead. Service-role only. `scripts/test_outbound_snapshots.sql` passes.
+- **`supabase/functions/outbound-snapshot`** (`index.ts` and `lib.ts`): `{lead_id, keyword?, force?}`. It builds three parts in parallel, and any of them may fail without stopping the others:
+  1. **Website, no spend.** Robots.txt, the homepage redirect chain, the sitemap (declared in robots.txt or at /sitemap.xml), https, the mobile viewport tag, and `auditPage` (title, description, H1, LocalBusiness markup, phone on page, thin content, image alt text).
+  2. **Competitors.** One business-listings call in the lead's primary category within 15 km. It excludes the prospect by cid, domain or name, and drops permanently closed listings. It keeps the top 5 by reviews and computes the median reviews, average rating and the prospect's rank by reviews.
+  3. **Ranking.** One live Google SERP for "<category> <city>" (or the `keyword` override) from the lead's coordinates: mobile, depth 20. It records map-pack and organic positions plus the map-pack leaders.
+- **Output:** `buildTodo` turns the results into plain-language items ordered critical → warning → info. `summaryLines` gives the caller three lines.
+- **Spend control:** a snapshot under 7 days old is returned instead of rebuilding, unless `force` is set. It's on demand only, with nothing scheduled. Each run logs a `snapshot` event.
+- **Coordinate units differ between the two APIs.** The SERP `location_coordinate` radius is in **millimetres** (DataForSEO docs: minimum 199), while business listings uses kilometres. `SERP_RADIUS_MM = 1000`.
+- **Tests**
+  - `scripts/test-outbound-snapshot.ts`: 32 unit tests pass.
+  - **Local end-to-end** (`functions serve`, a fixture prospect site and a mock DataForSEO that logs requests):
+    - Status `ready`, cost 0.0182 (the mock's figure), 10 to-do items with the map-pack miss and the reviews gap (40 against a median of 120) first. Six website items were in plain language. The phone number on the page was correctly not flagged.
+    - The mock received the listings call with a `…,15` km radius and the SERP call with `…,1000` mm, depth 20, mobile.
+    - A second call reused the snapshot. `force` with a keyword override rebuilt it with the lower-cased keyword.
+    - A lead with no coordinates or category came back `partial` at $0, with the error naming both missing parts.
+    - A missing `lead_id` returned 400; an unknown lead returned 404.
+  - `npm run check` passes (55 of 55).
+- **Not verified:**
+  - Real DataForSEO SERP and listings responses, so field names come from the docs.
+  - The real cost of a live depth-20 SERP (DataForSEO's docs don't list a base price).
+  - PageSpeed: not included, because it needs a key and slows the snapshot down.
+  - **Display:** the snapshot is JSON in the database until Phase 3 shows it in the portal.
 
 ### Phase 5: live testing (6–10 hrs)
 - See §8 below.
@@ -174,6 +200,10 @@ Hand-test at the end. Add items as each phase is built.
   - Confirm `select jobname, schedule from cron.job where jobname like 'outbound-%'` lists 3 jobs.
   - After the first active profile, confirm `cron.job_run_details` shows them succeeding.
 - [ ] After merging to main, add the outbound secrets and cron jobs to `system_health_snapshot()` in a main migration.
+- [ ] Deploy `outbound-snapshot` with `--no-verify-jwt` (not `DATAFORSEO_BASE`), then run it on one real lead from the sourcing test. Check:
+  - That the competitor list and map-pack names look right next to a real Google search.
+  - The real cost per snapshot, from `outbound_snapshots.cost`.
+  - That the to-do wording reads well to someone outside the business.
 - [ ] Push 0300 to prod. It needs `supabase db push --include-all` if any lower-numbered migration landed first. Afterwards confirm the four tables and `outbound_funnel` exist, and that the anon key returns a permission error on `outbound_leads`.
 
 - [ ] A real DataForSEO listings call returns the expected fields for one dispensary profile. Check coverage for one state.

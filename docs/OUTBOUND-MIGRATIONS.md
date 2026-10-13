@@ -10,7 +10,8 @@ What the `outbound` branch adds to the database, so other branches (loyalty, mai
 | `0301_outbound_source.sql` | yes (`ba8ee58`) | **yes** | Paging columns on `outbound_profiles`, `outbound_insert_leads()` |
 | `0302_outbound_enrich.sql` | yes (`b741ec0`) | no | `claimed_until` column, `outbound_claim_leads()`, `outbound_record_email()` |
 | `0303_outbound_verify.sql` | yes (`b9f741e`) | no | `outbound_record_verification()` |
-| `0304_outbound_schedule.sql` | not yet | no | `request_outbound_job()` and 3 cron jobs: `outbound-source-daily`, `outbound-enrich-due`, `outbound-verify-due` |
+| `0304_outbound_schedule.sql` | yes (`feeedb5`) | no | `request_outbound_job()` and 3 cron jobs: `outbound-source-daily`, `outbound-enrich-due`, `outbound-verify-due` |
+| `0305_outbound_snapshots.sql` | not yet | no | `outbound_snapshots` table (pre-call SEO snapshot per lead) |
 
 **Production already has 0300 and 0301** (checked with `supabase migration list` on 2026-10-13). They were pushed from this folder while it was on the `outbound` branch. That's why pushing loyalty's 02xx migrations now fails: production's latest version is 0301, and the CLI refuses to apply a lower number after a higher one unless told to.
 
