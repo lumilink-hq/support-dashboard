@@ -142,6 +142,34 @@ Stages: `sourced` → `email_found` / `no_email` → `verified` / `invalid` → 
 3. **Cleanup**: once a lead's sequence has finished, save its final state and delete it from Instantly. Alert when the contact count passes 800 of 1,000.
 4. Cron: migration `0302`.
 
+🟡 **Built as `0306_outbound_instantly.sql` and `outbound-instantly`, verified locally against a mock Instantly (2026-10-13). No real Instantly account yet.**
+- **`0306`** adds:
+  - `outbound_claim_pushable(profile, limit)`: verified, unsuppressed leads not yet in Instantly, valid before catch-all/unknown, oldest first, leased.
+  - `outbound_pushed_today(profile)`, `outbound_in_instantly()` and `outbound_suppress_lead(lead, reason, source, note)`. The last one suppresses the address but leaves won/lost/booked/called outcomes alone.
+  - An `'instantly'` branch in `request_outbound_job`, and the cron job `outbound-instantly-due` at `2-59/15 * * * *`. It's dispatched only when an active profile has a campaign or leads are held in Instantly.
+  - `scripts/test_outbound_instantly.sql` passes.
+- **`supabase/functions/outbound-instantly`** (`index.ts` and `lib.ts`): the actions are `sync`, `cleanup` and `push`, and `all` (the default) runs them in that order.
+  - **Push:** `POST /api/v2/leads/add` with `skip_if_in_workspace`, sending only documented fields (city, state, category and our lead id go in `custom_variables`). The amount is what's left of `daily_lead_target` today, never past `INSTANTLY_CONTACT_CAP` (default 1,000) minus 50. Leads Instantly didn't create are looked up in the campaign by email: if found they're recorded as queued (a crash-recovery case); otherwise they're suppressed with a note.
+  - **Sync:** `POST /api/v2/leads/list` by id, 100 per page.
+    - Unsubscribed or bounced → suppressed.
+    - A reply → `replied`, and the reply text is fetched from `GET /api/v2/emails` (at most 10 per run, because that endpoint allows 20 a minute), trimmed of quoted history and signatures.
+    - Instantly interest → positive / negative / booked / won / lost.
+    - A completed sequence with no reply → `finished`.
+    - Stages only move forward, so a person's update is never undone. A lead deleted in Instantly by hand is marked removed.
+  - **Cleanup:** `DELETE /api/v2/leads/{id}` for finished, suppressed, negative, lost and won leads, and for conversations quiet for 30 days or more. At most 50 per run; a 404 counts as already gone.
+  - **Errors:** a 401 or 402 stops the run and releases claimed leads. A warning is logged at 80% of the contact cap.
+  - **Testing hook:** `INSTANTLY_API_BASE` exists only for tests.
+- **Tests**
+  - `scripts/test-outbound-instantly.ts`: 38 unit tests pass.
+  - **Local end-to-end** (`functions serve` plus a stateful mock Instantly):
+    - **Push:** 7 claimed → 5 created, 1 recovered (already in the campaign), 1 blocklisted → suppressed.
+    - **Activity:** after simulated activity, the full run's sync gave replied 1, positive 1, unsubscribed 1, bounced 1, finished 1, unchanged 1, with 2 reply texts fetched and trimmed.
+    - **Cleanup:** removed the 3 done leads from the mock; the two live conversations stayed.
+    - **Push again:** `nothing_verified`, so nothing was pushed twice.
+    - **Wrong API key:** the run stopped at the first call with `stopped` set, and the pending lead was left verified and unclaimed.
+  - `npm run check` passes (56 of 56).
+- **Not verified:** a real Instantly account, including whether Growth allows API keys (Phase 0), real response shapes, real rate limits on `/leads/list` and `DELETE`, whether deleting really frees uploaded-contacts space (Instantly's help center says so), and reply text from real mail clients.
+
 ### Phase 3: portal UI (about 9–14 hrs; waits on the staff access model)
 1. Access policies plus the route group and sidebar entry, following whatever the loyalty staff concept becomes.
 2. **Profiles**: list, create and edit (audience builder, product, offer, campaign link), pause and resume.
@@ -204,6 +232,11 @@ Hand-test at the end. Add items as each phase is built.
   - That the competitor list and map-pack names look right next to a real Google search.
   - The real cost per snapshot, from `outbound_snapshots.cost`.
   - That the to-do wording reads well to someone outside the business.
+- [ ] Deploy `outbound-instantly` with `--no-verify-jwt`; set `INSTANTLY_API_KEY` (and `INSTANTLY_CONTACT_CAP` if on Hypergrowth: 25000), and create the Vault secret `outbound_instantly_url`. Then, using a test campaign that only sends to our own inboxes:
+  - Push 2 leads and confirm the Instantly ids are saved.
+  - Reply from one inbox and unsubscribe from the other.
+  - Run sync and confirm `replied` with a snippet, plus a suppression.
+  - Run cleanup and confirm Instantly's uploaded-contacts count goes down.
 - [ ] Push 0300 to prod. It needs `supabase db push --include-all` if any lower-numbered migration landed first. Afterwards confirm the four tables and `outbound_funnel` exist, and that the anon key returns a permission error on `outbound_leads`.
 
 - [ ] A real DataForSEO listings call returns the expected fields for one dispensary profile. Check coverage for one state.
