@@ -61,6 +61,7 @@ const FIELD_LABELS: Record<string, string> = {
   article: "Blog article",
   gbp_description: "Google Business Profile description",
   gbp_review_reply: "Reply to a Google review",
+  gbp_post: "Google Business Profile post",
   gbp_additional_categories: "Google Business Profile categories",
 };
 
@@ -128,7 +129,7 @@ function DiffBlock({ diff, field }: { diff: ActionRow["diff"]; field: string | n
   const mono = field === "local_business_schema";
   const box = mono
     ? "whitespace-pre-wrap break-words rounded-md p-3 font-mono text-xs"
-    : field === "gbp_description"
+    : field === "gbp_description" || field === "gbp_post"
       ? "whitespace-pre-wrap break-words rounded-md p-3 text-sm"
       : "rounded-md p-3 text-sm";
   return (
@@ -136,7 +137,7 @@ function DiffBlock({ diff, field }: { diff: ActionRow["diff"]; field: string | n
       <div>
         <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">Now</p>
         <div className={`${box} bg-red-50 text-red-900`}>
-          {before ? before : <span className="text-gray-400">{field === "gbp_description" ? "No description on the profile yet" : field === "gbp_additional_categories" ? "No additional categories" : "Nothing on the page yet"}</span>}
+          {before ? before : <span className="text-gray-400">{field === "gbp_description" ? "No description on the profile yet" : field === "gbp_post" ? "A new post on the profile" : field === "gbp_additional_categories" ? "No additional categories" : "Nothing on the page yet"}</span>}
         </div>
       </div>
       <div>
@@ -321,7 +322,7 @@ function EscalatedReply({ item, filter }: { item: ActionRow; filter: Filter }) {
 
 function EditDraft({ item, filter }: { item: ActionRow; filter: Filter }) {
   const isArticle = item.action_type === "content_publish";
-  const isGbp = item.target_field === "gbp_description" || item.action_type === "review_reply";
+  const isGbp = item.target_field === "gbp_description" || item.action_type === "review_reply" || item.action_type === "gbp_post";
   const editable = isArticle ? !!item.proposed_value?.body_html : isGbp || (EDITABLE_FIELDS as readonly string[]).includes(item.target_field ?? "");
   if (!editable) return null;
   const pv = item.proposed_value ?? {};
@@ -351,6 +352,14 @@ function EditDraft({ item, filter }: { item: ActionRow; filter: Filter }) {
               </span>
             </label>
           </>
+        ) : item.action_type === "gbp_post" ? (
+          <label className="block">
+            <span className="text-gray-700">Post</span>
+            <textarea name="value" required rows={6} maxLength={700} defaultValue={item.diff?.after ?? pv.value ?? ""} className={input} />
+            <span className="mt-1 block text-xs text-gray-500">
+              100 to 700 characters. About the store, the area, visiting or services only: no products, prices, deals, links, phone numbers or &ldquo;order now&rdquo;, which Google doesn&apos;t allow for regulated goods.
+            </span>
+          </label>
         ) : item.action_type === "review_reply" ? (
           <label className="block">
             <span className="text-gray-700">Reply</span>
@@ -606,7 +615,7 @@ export default async function SeoApprovalsPage({
                     type="submit"
                     className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
                   >
-                    {item.action_type === "review_reply" ? "Take the reply down" : "Roll back"}
+                    {item.action_type === "review_reply" ? "Take the reply down" : item.action_type === "gbp_post" ? "Delete the post" : "Roll back"}
                   </button>
                 </form>
               ) : null}

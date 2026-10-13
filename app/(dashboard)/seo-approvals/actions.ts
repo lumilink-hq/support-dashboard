@@ -8,6 +8,7 @@ import { canAct, getMembership, READ_ONLY_MESSAGE } from "@/lib/roles";
 import { editArticle, editPageFix } from "@/lib/seo-draft-edit";
 import { validateGbpDescription } from "@/supabase/functions/seo-draft/gbp";
 import { validateReviewReply } from "@/supabase/functions/seo-draft/reviews";
+import { validateGbpPost } from "@/supabase/functions/seo-draft/posts";
 import { answerEscalatedReview, saveDraftEdit } from "@/lib/services/seo-draft-edits";
 import type { LocationDetails } from "@/supabase/functions/seo-content/details";
 
@@ -183,6 +184,29 @@ export async function editDraft(formData: FormData) {
     if (!r.ok) redirect(backTo(filter, `Not saved: ${r.reason}.`));
     saved = await saveDraftEdit(id, clientId, user.id, {
       proposed_value: { ...pv, title: r.title, meta_description: r.meta_description, body_html: r.body_html, blocks: r.blocks, word_count: r.word_count },
+      original_value: original,
+    });
+  } else if (row.action_type === "gbp_post") {
+    // Held to the post rules (seo-draft/posts.ts): no products, offers or calls to action.
+    const [{ data: loc }, { data: details }, { data: others }] = await Promise.all([
+      supabase.from("seo_locations").select("name").eq("id", row.location_id).maybeSingle(),
+      supabase
+        .from("seo_location_details")
+        .select("service_areas, landmarks, services, year_founded, licensed, insured, bonded, certifications, family_owned, locally_owned, free_estimates, guarantee, awards")
+        .eq("location_id", row.location_id)
+        .maybeSingle(),
+      supabase.from("seo_actions").select("proposed_value").eq("location_id", row.location_id).eq("action_type", "gbp_post").neq("id", id).limit(20),
+    ]);
+    const r = validateGbpPost(String(formData.get("value") ?? ""), {
+      businessName: (loc?.name as string | null) ?? null,
+      details: (details as LocationDetails | null) ?? null,
+      avoidOpenings: ((others ?? []) as { proposed_value: { value?: string } | null }[]).map((o) => o.proposed_value?.value ?? "").filter(Boolean),
+    });
+    if (!r.ok) redirect(backTo(filter, `Not saved: ${r.reason.replace(/^post /, "it ")}.`));
+    const diff = (row.diff ?? {}) as Record<string, unknown>;
+    saved = await saveDraftEdit(id, clientId, user.id, {
+      proposed_value: { ...pv, value: r.text },
+      diff: { ...diff, after: r.text },
       original_value: original,
     });
   } else if (row.action_type === "review_reply") {

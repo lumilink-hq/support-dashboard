@@ -70,6 +70,7 @@ import {
 import { checkRepo, deleteFile, GithubError, readFile, writeFile, type GhCtx } from "./github.ts";
 import { applyGbpField, GbpError, gbpManualInstructions, isWritable, revertGbpField, type GbpCtx, type GbpManualReason } from "./gbp.ts";
 import { deleteReply, postReply, type ReviewRef } from "./reviews.ts";
+import { createPost, deletePost } from "./posts.ts";
 import {
   articleFile,
   blogPath,
@@ -546,6 +547,92 @@ async function rollbackReplyOne(action: ActionRow): Promise<"rolled_back" | "kep
       .eq("client_id", action.client_id)
       .eq("location_name", ref.location_name)
       .eq("review_id", ref.review_id);
+    return "rolled_back";
+  } catch (e) {
+    if (e instanceof GbpError && e.kind !== "transient") {
+      await keep(e.message);
+      return "kept";
+    }
+    const message = e instanceof Error ? e.message : String(e);
+    await supabase.from("seo_actions").update({ status: "rollback_requested", error: message }).eq("id", action.id);
+    return "retry";
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Business Profile posts (seo-publish/posts.ts), gated by gbp_posts_enabled (0091).
+// -----------------------------------------------------------------------------
+
+async function postsEnabled(clientId: string): Promise<boolean> {
+  const { data } = await supabase.from("seo_client_settings").select("gbp_posts_enabled").eq("client_id", clientId).maybeSingle();
+  return data?.gbp_posts_enabled === true;
+}
+
+async function publishPostOne(action: ActionRow): Promise<"published" | "manual" | "retry" | "skipped"> {
+  if (!(await postsEnabled(action.client_id))) {
+    await supabase.from("seo_actions").update({ error: "Business Profile posts are switched off for this account, so it hasn't been published." }).eq("id", action.id);
+    return "skipped";
+  }
+  const ref = (action.resource_ref ?? {}) as Record<string, unknown>;
+  const text = String(action.proposed_value?.value ?? "").trim();
+  if (typeof ref.account_name !== "string" || typeof ref.location_name !== "string" || !text) {
+    await supabase.from("seo_actions").update({ status: "failed", error: "the post has no profile or no text" }).eq("id", action.id);
+    return "skipped";
+  }
+  const { data: claimed, error: claimErr } = await supabase.rpc("claim_seo_action", { p_action_id: action.id, p_kind: "publish" });
+  if (claimErr) throw new Error(`claim failed: ${claimErr.message}`);
+  if (!claimed) return "skipped";
+
+  const target = await gbpTarget(action);
+  if ("reason" in target) {
+    await supabase.from("seo_actions").update({ status: "approved", error: "LumiLink can't reach this Business Profile right now; the post will publish once Google is connected." }).eq("id", action.id);
+    return "retry";
+  }
+  try {
+    const r = await createPost({ token: target.ctx.token, fetch, sleep, base: Deno.env.get("GBP_V4_API_BASE") || undefined }, ref.account_name, ref.location_name, text);
+    await supabase
+      .from("seo_actions")
+      .update({
+        status: "published",
+        apply_mode: "api",
+        published_at: new Date().toISOString(),
+        error: r.state === "REJECTED" ? "Google rejected this post. It isn't showing on the profile." : null,
+        publish_result: { written: text, post_name: r.name, state: r.state, search_url: r.searchUrl, noop: r.noop },
+      })
+      .eq("id", action.id);
+    return "published";
+  } catch (e) {
+    if (e instanceof GbpError && e.kind !== "transient") {
+      await supabase.from("seo_actions").update({ status: "failed", error: e.message }).eq("id", action.id);
+      return "skipped";
+    }
+    const message = e instanceof Error ? e.message : String(e);
+    console.error(`seo-publish post ${action.id}: ${message}`);
+    await supabase.from("seo_actions").update({ status: "approved", error: message }).eq("id", action.id);
+    return "retry";
+  }
+}
+
+async function rollbackPostOne(action: ActionRow): Promise<"rolled_back" | "kept" | "retry" | "skipped"> {
+  const { data: claimed, error: claimErr } = await supabase.rpc("claim_seo_action", { p_action_id: action.id, p_kind: "rollback" });
+  if (claimErr) throw new Error(`claim failed: ${claimErr.message}`);
+  if (!claimed) return "skipped";
+  const keep = async (message: string) => {
+    await supabase.from("seo_actions").update({ status: "published", error: `Not deleted: ${message}` }).eq("id", action.id);
+  };
+  const pr = (action.publish_result ?? {}) as { written?: string; post_name?: string };
+  if (typeof pr.written !== "string" || typeof pr.post_name !== "string") {
+    await keep("LumiLink has no record of the post it published.");
+    return "kept";
+  }
+  const target = await gbpTarget(action);
+  if ("reason" in target) {
+    await keep("LumiLink no longer has working access to this Business Profile.");
+    return "kept";
+  }
+  try {
+    await deletePost({ token: target.ctx.token, fetch, sleep, base: Deno.env.get("GBP_V4_API_BASE") || undefined }, pr.post_name, pr.written);
+    await supabase.from("seo_actions").update({ status: "rolled_back", rolled_back_at: new Date().toISOString(), error: null }).eq("id", action.id);
     return "rolled_back";
   } catch (e) {
     if (e instanceof GbpError && e.kind !== "transient") {
@@ -1130,6 +1217,12 @@ async function runPublish(locationId: string, clientId: string): Promise<Record<
       continue;
     }
     const isRollback = a.status === "rollback_requested" || a.status === "rolling_back";
+    // Business Profile posts (0091).
+    if (a.action_type === "gbp_post") {
+      const o = isRollback ? await rollbackPostOne(a) : await publishPostOne(a);
+      tally[o as keyof typeof tally]++;
+      continue;
+    }
     // Module 4 part 3: review replies go to Google too.
     if (a.action_type === "review_reply") {
       const o = isRollback ? await rollbackReplyOne(a) : await publishReplyOne(a);

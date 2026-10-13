@@ -73,6 +73,7 @@ import {
   validateReviewReply,
   type ReviewForReply,
 } from "./reviews.ts";
+import { buildPostPayload, POST_SYSTEM_PROMPT, postIdempotencyKey, themeFor, validateGbpPost } from "./posts.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const rawSecrets = Deno.env.get("SUPABASE_SECRET_KEYS");
@@ -281,6 +282,89 @@ async function draftLocation(loc: DraftLocation, group: SiteGroup<DraftLocation>
   out.skipped += replies.skipped;
   out.failed += replies.failed;
 
+  // ---- Business Profile posts (only when switched on, 0091) ----------------
+  const post = await draftGbpPost(loc);
+  out.drafted += post.drafted;
+  out.skipped += post.skipped;
+  out.failed += post.failed;
+
+  return out;
+}
+
+/**
+ * One safe "update" post a week for a linked store (seo-draft/posts.ts), only
+ * when the client's gbp_posts_enabled is on, and only once the last post draft
+ * was dealt with. Up to two themes are tried if the first is too thin.
+ */
+async function draftGbpPost(loc: DraftLocation): Promise<Outcome> {
+  const out: Outcome = { drafted: 0, skipped: 0, failed: 0 };
+  const { data: settings } = await supabase.from("seo_client_settings").select("gbp_posts_enabled").eq("client_id", loc.client_id).maybeSingle();
+  if (!settings?.gbp_posts_enabled) return out;
+  const { data: listing } = await supabase.from("seo_gbp_locations").select("location_name, account_name, maps_uri").eq("linked_location_id", loc.id).maybeSingle();
+  if (!listing) return out;
+
+  const { data: recent, error: rErr } = await supabase
+    .from("seo_actions")
+    .select("status, created_at, proposed_value")
+    .eq("location_id", loc.id)
+    .eq("action_type", "gbp_post")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (rErr) throw new Error(`loading posts failed: ${rErr.message}`);
+  const rows = (recent ?? []) as { status: string; created_at: string; proposed_value: { value?: string } | null }[];
+  const weekAgo = Date.now() - 7 * 86_400_000;
+  if (rows.some((r) => Date.parse(r.created_at) > weekAgo || ["draft", "pending_approval", "approved", "publishing", "manual_required"].includes(r.status))) {
+    return out;
+  }
+  if (!anthropic) throw new Error("ANTHROPIC_API_KEY is not set");
+
+  const { data: details } = await supabase
+    .from("seo_location_details")
+    .select("service_areas, landmarks, services, year_founded, licensed, insured, bonded, certifications, family_owned, locally_owned, free_estimates, guarantee, awards")
+    .eq("location_id", loc.id)
+    .maybeSingle();
+  const d = (details as LocationDetails | null) ?? null;
+  const avoid = rows.map((r) => r.proposed_value?.value ?? "").filter(Boolean);
+  const now = new Date();
+
+  for (const offset of [0, 1]) {
+    const theme = themeFor(now, offset);
+    let text: string;
+    try {
+      text = await callModel(buildPostPayload({ name: loc.name, city: loc.city, theme, details: d, avoidOpenings: avoid }), POST_SYSTEM_PROMPT);
+    } catch (e) {
+      console.error(`seo-draft ${loc.id} post: model call failed: ${e instanceof Error ? e.message : e}`);
+      out.failed++;
+      return out;
+    }
+    const verdict = validateGbpPost(text, { businessName: loc.name, details: d, avoidOpenings: avoid });
+    if (!verdict.ok) {
+      console.log(`seo-draft ${loc.id} post (${theme}): rejected by validator: ${verdict.reason}`);
+      out.skipped++;
+      continue;
+    }
+    const { error } = await supabase.from("seo_actions").insert({
+      client_id: loc.client_id,
+      location_id: loc.id,
+      action_type: "gbp_post",
+      target_field: "gbp_post",
+      target_url: listing.maps_uri,
+      previous_value: { value: null },
+      proposed_value: { value: verdict.text, theme },
+      diff: { field: "gbp_post", before: null, after: verdict.text, scope: "store" },
+      resource_ref: { platform: "gbp", account_name: listing.account_name, location_name: listing.location_name },
+      status: "pending_approval",
+      idempotency_key: postIdempotencyKey(loc.id, now),
+      drafted_by: MODEL,
+    });
+    if (error && error.code !== "23505") {
+      console.error(`seo-draft ${loc.id} post: insert failed: ${error.message}`);
+      out.failed++;
+    } else {
+      out.drafted++;
+    }
+    return out;
+  }
   return out;
 }
 
