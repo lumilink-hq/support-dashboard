@@ -1,6 +1,6 @@
 # LL Loyalty: data protection
 
-**DRAFT (2026-10-13), for J to review.** Covers PLAN §8b items L1-8 (retention), L2-3 (data loss
+**Reviewed and agreed by J, 2026-10-13.** Covers PLAN §8b items L1-8 (retention), L2-3 (data loss
 prevention) and L2-7 (incident response). L1-7 (the agreement with Tsunami) is a separate document.
 Once agreed, flip the matching answers in the Shopify Dev Dashboard.
 

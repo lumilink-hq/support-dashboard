@@ -170,11 +170,11 @@ Dashboard on 2026-10-12. Flip each "No" there to "Yes" when its item lands.
 | L1-9 | Encrypt at rest and in transit | Yes | Supabase encryption + HTTPS | ☑ |
 | L2-1 | Encrypt backups | Yes | Supabase backups are encrypted | ☑ |
 | L2-2 | Separate test and production | Yes | Dev store + local Supabase vs Tsunami + production project | ☑ |
-| L2-3 | Data loss prevention strategy | Yes (thin) | `docs/loyalty/DATA-PROTECTION.md` (draft 2026-10-13): backups, restore steps, append-only ledger, access | ◐ draft, J to review |
+| L2-3 | Data loss prevention strategy | Yes (thin) | `docs/loyalty/DATA-PROTECTION.md` (draft 2026-10-13): backups, restore steps, append-only ledger, access | ☑ reviewed 2026-10-13 |
 | L2-4 | Limit staff access | Yes | Staff-only admin route, RLS, only J has DB access | ☑ |
 | L2-5 | Strong staff passwords | **No** | Production Supabase Auth: minimum 12 characters + character requirements (local `config.toml` is 6, no rules). Consider MFA for staff | ☐ |
 | L2-6 | Access log for protected data | **No** → can flip to Yes once 0206 is in production | `loyalty_access_log` (append-only): every search, member view and change, written inside the staff RPCs so no caller can skip it. No export feature exists | ☑ built 2026-10-13 |
-| L2-7 | Security incident response policy | **No** | `DATA-PROTECTION.md` (draft): detect, contain, notify Tsunami within 72h (and Shopify for Phase 2), fix, review | ◐ draft, J to review |
+| L2-7 | Security incident response policy | **No** | `DATA-PROTECTION.md` (draft): detect, contain, notify Tsunami within 72h (and Shopify for Phase 2), fix, review | ☑ reviewed 2026-10-13 |
 
 **Do before real Tsunami data flows (before installing on tsunami.store):** L1-7, L1-8, L2-3, L2-5, L2-6, L2-7.
 Then update the Dev Dashboard answers.
@@ -223,3 +223,4 @@ Then update the Dev Dashboard answers.
 | 2026-10-13 | LumiLink | Fetched production's migration SQL (read-only, scratch copy): 0300/0301 are the outbound branch (`outbound_*` only; it plans to reuse loyalty's staff concept). No overlap with loyalty; applied all four on top of loyalty locally in a rollback, loyalty tests still 8/8. Decision: keep numbers, push with `--include-all` from main |
 | 2026-10-13 | LumiLink | `loyalty` merged into main (bb11036) and pushed. J pushed migrations 0200-0207 to production with `db push --include-all` (dry run first showed exactly those 8). The push needed outbound's 0300/0301 present locally: used untracked copies fetched from production's history, deleted after. Long-term fix: merge the outbound branch into main |
 | 2026-10-13 | LumiLink | Production setup: edge functions deployed (all `verify_jwt` false, probed), Vault URLs added, lumilinkhq@gmail.com added as platform staff, Tsunami program created (setup script), Shopify app deployed. Not installed on tsunami.store yet: waiting on the A1 data-protection items |
+| 2026-10-13 | LumiLink | `/loyalty` shows Wave Rewards (0 members) for staff. DATA-PROTECTION.md reviewed and agreed (L2-3, L2-7). Dev-store rehearsal added to CUTOVER.md (custom distribution allows dev-store installs) |

@@ -18,9 +18,33 @@ member, or every difference is explained. Then switch.
 | A3 | Deploy edge functions, all `--no-verify-jwt`: `loyalty-webhooks`, `loyalty-oauth`, `loyalty-backfill`, `loyalty-shopify`, `loyalty-proxy`, `loyalty-klaviyo`. Check `supabase functions list` shows `verify_jwt` false || ☑ 2026-10-13 |
 | A4 | Vault secrets: `loyalty_backfill_url`, `loyalty_shopify_url`, `loyalty_klaviyo_url` (provision runbook steps 4, 5, 7) || ☑ 2026-10-13 |
 | A5 | `setup-loyalty-program.sql` for Tsunami (confirm time zone first), then provision runbook steps 1-2 || ☑ 2026-10-13 |
-| A6 | `add-platform-staff.sql` for J; open `/loyalty` and see the program || ◐ lumilinkhq@gmail.com added 2026-10-13; see the program after A5 |
+| A6 | `add-platform-staff.sql` for J; open `/loyalty` and see the program || ☑ 2026-10-13 |
 | A7 | From `ll-loyalty/`: `npm run build:blocks && shopify app deploy` || ☑ 2026-10-13 |
 | A8 | Klaviyo key in Vault, `rewards_page_url` set, **`klaviyo_enabled_at` left empty** | ☐ |
+
+## A′. Dev-store rehearsal (before tsunami.store)
+
+Custom distribution allows installs on development stores, so run the whole flow there first. It
+uses the **production** backend with its own program row (data is keyed by shop domain, so it
+never mixes with Tsunami's) and is deleted at the end.
+
+1. **Program:** `setup-loyalty-program.sql` with `v_client` = LumiLink's own workspace (not
+   Tsunami's), `v_client_name` = its name, `v_shop` = the dev store's `*.myshopify.com`.
+2. **Register:** provision step 2 for the dev store, reusing the app's existing Vault secret
+   (same app, same client id and secret).
+3. **Install** by opening
+   `https://xqsxjxrzpxhosedkmufg.supabase.co/functions/v1/loyalty-oauth?shop=<dev>.myshopify.com`
+   and approving. **Don't use `shopify app dev`:** `automatically_update_urls_on_dev` would
+   repoint the App URL at a tunnel.
+4. **Backfill:** `select start_loyalty_backfill(id) from loyalty_programs where shop_domain = '<dev>.myshopify.com';`
+5. **Theme:** add the Wave Rewards block to a page on the dev store's theme.
+6. **QA:** run the Q1-Q10 table in section C (test orders with Shopify's Bogus gateway). Q11
+   (Klaviyo) needs a Klaviyo key on the dev program; use a test Klaviyo account or skip it.
+7. **Import:** make a small CSV for the dev members and run `scripts/joy-import.ts` import then
+   compare, to rehearse day 0 and the daily check.
+8. **Clean up:** uninstall the app from the dev store, then
+   `select loyalty_redact_shop('<dev>.myshopify.com');` deletes the dev program, its members,
+   tokens and receipts (the access log keeps its id-only rows).
 
 ## B. Day 0: install, backfill, opening balances
 
