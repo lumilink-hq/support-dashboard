@@ -41,7 +41,7 @@ Stages: `sourced` → `email_found` / `no_email` → `verified` / `invalid` → 
 - [ ] InboxKit: 10 Google mailboxes, 2 per domain, real first and last names. InboxKit sets up SPF, DKIM and DMARC.
 - [ ] Instantly Growth: connect all 10 mailboxes and turn warm-up on. **That day is the warm-up start date: record it here.**
 - [ ] Instantly campaign settings: LumiLink postal address in the footer and the unsubscribe link on (CAN-SPAM).
-- [ ] **Week-one test: confirm an Instantly API key can be created on Growth** and that `GET /api/v2/campaigns` works. If it can't, the plan changes to Hypergrowth ($97) before any Instantly code is written.
+- [ ] **On purchase, create an Instantly API key** (Settings → Integrations → API) and confirm `GET /api/v2/campaigns` works. Instantly's help center says API access is on all Outbound plans, so Growth includes it ("API V2" article, checked 2026-10-13); webhooks are Hypergrowth-only, which is why replies are polled. If the key can't be created anyway, move to Hypergrowth ($97). The code doesn't change.
 - [ ] Reoon: an account and the 10K credit pack ($11.90).
 - [ ] Supabase secrets: `INSTANTLY_API_KEY`, `REOON_API_KEY`. DataForSEO is already set.
 
@@ -168,7 +168,7 @@ Stages: `sourced` → `email_found` / `no_email` → `verified` / `invalid` → 
     - **Push again:** `nothing_verified`, so nothing was pushed twice.
     - **Wrong API key:** the run stopped at the first call with `stopped` set, and the pending lead was left verified and unclaimed.
   - `npm run check` passes (56 of 56).
-- **Not verified:** a real Instantly account, including whether Growth allows API keys (Phase 0), real response shapes, real rate limits on `/leads/list` and `DELETE`, whether deleting really frees uploaded-contacts space (Instantly's help center says so), and reply text from real mail clients.
+- **Not verified:** a real Instantly account, including creating the API key on Growth (Instantly's help center says it's included), real response shapes, real rate limits on `/leads/list` and `DELETE`, whether deleting really frees uploaded-contacts space (Instantly's help center says so), and reply text from real mail clients.
 
 ### Phase 3: portal UI (about 9–14 hrs; waits on the staff access model)
 1. Access policies plus the route group and sidebar entry, following whatever the loyalty staff concept becomes.
