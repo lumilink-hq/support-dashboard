@@ -100,6 +100,25 @@ function digitCount(s: string): number {
 }
 
 /**
+ * The public-copy checks shared with review replies (seo-draft/reviews.ts):
+ * null when fine, otherwise what's wrong ("contains a web address"). Same
+ * rules as the description's, minus length and claims.
+ */
+export function publicCopyProblem(text: string, businessName: string | null): string | null {
+  if (/[<>]/.test(text) || /```/.test(text)) return "contains markup";
+  if (URL_LIKE.test(text)) return "contains a web address";
+  if (EMAIL_LIKE.test(text)) return "contains an email address";
+  if (/\d[\d\s().+-]{5,}\d/.test(text) && digitCount(text) >= 7) return "contains a phone-number-like string";
+  if (EMOJI.test(text)) return "contains an emoji";
+  if (HASHTAG.test(text)) return "contains a hashtag";
+  const nameWords = new Set((businessName ?? "").split(/[^A-Za-z]+/).filter(Boolean).map((w) => w.toUpperCase()));
+  if ((text.match(/\b[A-Z]{5,}\b/g) ?? []).some((w) => !nameWords.has(w))) return "contains an ALL-CAPS word";
+  if (PROMO.test(text)) return "mentions a promotion or price, which Google doesn't allow";
+  if (MEDICAL.test(text)) return "makes a health or medical claim";
+  return null;
+}
+
+/**
  * The checks every description passes before a person sees it, and again if a
  * person edits it on /seo-approvals. `details` backs the claims RISKY_CLAIMS
  * would otherwise refuse (same rule as articles).

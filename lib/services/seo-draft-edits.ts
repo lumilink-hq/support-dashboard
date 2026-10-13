@@ -43,3 +43,35 @@ export async function saveDraftEdit(actionId: string, clientId: string, userId: 
   if (error) return { error: error.message };
   return (data ?? []).length === 1 ? "saved" : "gone";
 }
+
+/**
+ * A person's answer to an ESCALATED review (0090: 1-2 stars, no draft).
+ * Writing the reply is the approval, so the row goes straight to 'approved'
+ * with approved_by; declining marks it 'rejected'. Same safety as above: the
+ * caller read the row under RLS and validated the text with
+ * seo-draft/reviews.ts validateReviewReply; this pins id, client, action type
+ * and status = 'escalated'.
+ */
+export async function answerEscalatedReview(
+  actionId: string,
+  clientId: string,
+  userId: string,
+  answer: { reply: string; proposed_value: Record<string, unknown>; diff: Record<string, unknown> } | { decline: true; note: string | null },
+): Promise<"saved" | "gone" | { error: string }> {
+  const db = createServiceClient();
+  const now = new Date().toISOString();
+  const patch =
+    "decline" in answer
+      ? { status: "rejected", decision_note: answer.note, approved_by: userId, approved_at: now }
+      : { status: "approved", proposed_value: answer.proposed_value, diff: answer.diff, approved_by: userId, approved_at: now, edited_by: userId, edited_at: now };
+  const { data, error } = await db
+    .from("seo_actions")
+    .update(patch)
+    .eq("id", actionId)
+    .eq("client_id", clientId)
+    .eq("action_type", "review_reply")
+    .eq("status", "escalated")
+    .select("id");
+  if (error) return { error: error.message };
+  return (data ?? []).length === 1 ? "saved" : "gone";
+}

@@ -4,7 +4,7 @@ import { humanize, timeAgo } from "@/lib/format";
 import { SeoLocked } from "@/components/seo/locked";
 import { getSeoAccess } from "@/lib/seo-access";
 import { canAct, getMembership } from "@/lib/roles";
-import { approveDraft, confirmManualApply, editDraft, rejectDraft, requestRollback } from "./actions";
+import { approveDraft, confirmManualApply, declineEscalatedReview, editDraft, rejectDraft, replyToEscalatedReview, requestRollback } from "./actions";
 import { EDITABLE_FIELDS, htmlToEditText } from "@/lib/seo-draft-edit";
 
 // Each tab is one or more statuses. "In progress" groups everything the backend
@@ -22,7 +22,7 @@ const FILTER_LABELS: Record<Filter, string> = {
 };
 
 const FILTER_STATUSES: Record<Exclude<Filter, "all">, string[]> = {
-  pending_approval: ["pending_approval"],
+  pending_approval: ["pending_approval", "escalated"],
   manual_required: ["manual_required"],
   in_progress: ["approved", "publishing", "rollback_requested", "rolling_back"],
   published: ["published"],
@@ -40,9 +40,11 @@ const STATUS_BADGE: Record<string, string> = {
   rejected: "bg-gray-100 text-gray-500",
   rolled_back: "bg-gray-100 text-gray-500",
   failed: "bg-red-50 text-red-700",
+  escalated: "bg-red-50 text-red-700",
 };
 
 const STATUS_LABELS: Record<string, string> = {
+  escalated: "Low rating: needs your reply",
   manual_required: "Needs you to apply it",
   approved: "Approved, publishing soon",
   publishing: "Publishing",
@@ -58,6 +60,7 @@ const FIELD_LABELS: Record<string, string> = {
   local_business_schema: "LocalBusiness structured data",
   article: "Blog article",
   gbp_description: "Google Business Profile description",
+  gbp_review_reply: "Reply to a Google review",
   gbp_additional_categories: "Google Business Profile categories",
 };
 
@@ -257,9 +260,68 @@ function ManualBlock({ m, id, filter, canWrite }: { m: ManualInstructions; id: s
  * Structured data isn't editable here (it's built from the location's own
  * details, not written).
  */
+type ReviewSnapshot = { stars?: number | null; comment?: string | null; created?: string | null };
+
+/** The review (stars, date, text) and the proposed reply. The reviewer's name
+ * is not shown or stored on the action: it isn't needed to reply. */
+function ReviewReplyBlock({ item }: { item: ActionRow }) {
+  const r = ((item.proposed_value ?? {}) as { review?: ReviewSnapshot }).review ?? {};
+  const stars = typeof r.stars === "number" ? r.stars : null;
+  const reply = (item.proposed_value as { value?: string | null } | null)?.value ?? null;
+  return (
+    <div className="mt-3 grid gap-2 md:grid-cols-2">
+      <div>
+        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+          Review{r.created ? `, ${new Date(r.created).toLocaleDateString()}` : ""}
+        </p>
+        <div className="whitespace-pre-wrap break-words rounded-md bg-gray-50 p-3 text-sm text-gray-800">
+          <p className="font-medium text-gray-900">{stars ? `${"★".repeat(stars)}${"☆".repeat(5 - stars)}` : "No star rating"}</p>
+          {r.comment ? <p className="mt-1">{r.comment}</p> : <p className="mt-1 text-gray-400">No written review, just the rating.</p>}
+        </div>
+      </div>
+      <div>
+        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">{item.status === "escalated" ? "Your reply" : "Proposed reply"}</p>
+        <div className="whitespace-pre-wrap break-words rounded-md bg-green-50 p-3 text-sm text-green-900">
+          {reply ?? <span className="text-gray-400">Low-rated reviews aren&apos;t drafted by AI. Write the reply below, or choose not to reply.</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EscalatedReply({ item, filter }: { item: ActionRow; filter: Filter }) {
+  const input = "mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm";
+  return (
+    <div className="mt-3 space-y-3">
+      <form action={replyToEscalatedReview} className="space-y-2 text-sm">
+        <input type="hidden" name="id" value={item.id} />
+        <input type="hidden" name="filter" value={filter} />
+        <label className="block">
+          <span className="text-gray-700">Reply</span>
+          <textarea name="value" required rows={4} maxLength={600} className={input} />
+          <span className="mt-1 block text-xs text-gray-500">
+            40 to 600 characters, posted publicly under the business&apos;s name. No links, phone numbers, prices or offers. Posting it is the approval.
+          </span>
+        </label>
+        <button type="submit" className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">
+          Post this reply
+        </button>
+      </form>
+      <form action={declineEscalatedReview} className="flex flex-wrap gap-2">
+        <input type="hidden" name="id" value={item.id} />
+        <input type="hidden" name="filter" value={filter} />
+        <input name="note" maxLength={500} placeholder="Why not (optional)" className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm sm:max-w-sm" />
+        <button type="submit" className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100">
+          Don&apos;t reply
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function EditDraft({ item, filter }: { item: ActionRow; filter: Filter }) {
   const isArticle = item.action_type === "content_publish";
-  const isGbp = item.target_field === "gbp_description";
+  const isGbp = item.target_field === "gbp_description" || item.action_type === "review_reply";
   const editable = isArticle ? !!item.proposed_value?.body_html : isGbp || (EDITABLE_FIELDS as readonly string[]).includes(item.target_field ?? "");
   if (!editable) return null;
   const pv = item.proposed_value ?? {};
@@ -289,6 +351,12 @@ function EditDraft({ item, filter }: { item: ActionRow; filter: Filter }) {
               </span>
             </label>
           </>
+        ) : item.action_type === "review_reply" ? (
+          <label className="block">
+            <span className="text-gray-700">Reply</span>
+            <textarea name="value" required rows={4} maxLength={600} defaultValue={item.diff?.after ?? pv.value ?? ""} className={input} />
+            <span className="mt-1 block text-xs text-gray-500">40 to 600 characters. No links, phone numbers, prices or offers, and don&apos;t open the way a recent reply did.</span>
+          </label>
         ) : isGbp ? (
           <label className="block">
             <span className="text-gray-700">Description</span>
@@ -465,9 +533,13 @@ export default async function SeoApprovalsPage({
 
               {item.action_type === "content_publish" && item.proposed_value ? (
                 <ArticleBlock a={item.proposed_value} />
+              ) : item.action_type === "review_reply" ? (
+                <ReviewReplyBlock item={item} />
               ) : (
                 <DiffBlock diff={item.diff} field={item.target_field} />
               )}
+
+              {canWrite && item.status === "escalated" ? <EscalatedReply item={item} filter={active} /> : null}
 
               {item.publish_result?.image_error ? (
                 <p className="mt-2 text-xs text-amber-700">Published without its image: {item.publish_result.image_error}</p>
@@ -534,7 +606,7 @@ export default async function SeoApprovalsPage({
                     type="submit"
                     className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
                   >
-                    Roll back
+                    {item.action_type === "review_reply" ? "Take the reply down" : "Roll back"}
                   </button>
                 </form>
               ) : null}

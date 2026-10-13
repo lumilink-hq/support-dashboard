@@ -63,6 +63,16 @@ import {
 import { draftFactsFor, type SiteGroup, siteGroup, type SiteMember } from "../seo-crawl/stores.ts";
 import { buildGbpPayload, GBP_DRAFTABLE, GBP_SYSTEM_PROMPT, gbpIdempotencyKey, validateGbpDescription } from "./gbp.ts";
 import type { LocationDetails } from "../seo-content/details.ts";
+import {
+  buildReplyPayload,
+  opening,
+  pickReviews,
+  REPLY_SYSTEM_PROMPT,
+  REPLY_WINDOW_DAYS,
+  replyIdempotencyKey,
+  validateReviewReply,
+  type ReviewForReply,
+} from "./reviews.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const rawSecrets = Deno.env.get("SUPABASE_SECRET_KEYS");
@@ -265,6 +275,127 @@ async function draftLocation(loc: DraftLocation, group: SiteGroup<DraftLocation>
   out.skipped += gbp.skipped;
   out.failed += gbp.failed;
 
+  // ---- Module 4 part 3: review replies (only when switched on, 0090) --------
+  const replies = await draftReviewReplies(loc);
+  out.drafted += replies.drafted;
+  out.skipped += replies.skipped;
+  out.failed += replies.failed;
+
+  return out;
+}
+
+/**
+ * Replies to recent unanswered reviews (seo-draft/reviews.ts). Does nothing
+ * unless the client's review_replies_enabled is on. 3-5 stars: a model draft
+ * waiting for approval. 1-2 stars or no rating: escalated with no draft, for a
+ * person to answer.
+ */
+async function draftReviewReplies(loc: DraftLocation): Promise<Outcome> {
+  const out: Outcome = { drafted: 0, skipped: 0, failed: 0 };
+  const { data: settings } = await supabase.from("seo_client_settings").select("review_replies_enabled").eq("client_id", loc.client_id).maybeSingle();
+  if (!settings?.review_replies_enabled) return out;
+
+  const { data: listing } = await supabase
+    .from("seo_gbp_locations")
+    .select("location_name, account_name, maps_uri")
+    .eq("linked_location_id", loc.id)
+    .maybeSingle();
+  if (!listing) return out;
+
+  const since = new Date(Date.now() - REPLY_WINDOW_DAYS * 86_400_000).toISOString();
+  const [{ data: reviews, error: rErr }, { data: actions, error: aErr }, { data: answered }] = await Promise.all([
+    supabase
+      .from("seo_gbp_reviews")
+      .select("review_id, location_name, star_rating, comment, created_at_google, reply_comment")
+      .eq("location_id", loc.id)
+      .gte("created_at_google", since),
+    supabase.from("seo_actions").select("idempotency_key, status, proposed_value").eq("location_id", loc.id).eq("action_type", "review_reply"),
+    supabase
+      .from("seo_gbp_reviews")
+      .select("reply_comment")
+      .eq("location_id", loc.id)
+      .not("reply_comment", "is", null)
+      .order("reply_updated_at", { ascending: false, nullsFirst: false })
+      .limit(30),
+  ]);
+  if (rErr) throw new Error(`loading reviews failed: ${rErr.message}`);
+  if (aErr) throw new Error(`loading reply actions failed: ${aErr.message}`);
+
+  const keys = new Set(((actions ?? []) as { idempotency_key: string }[]).map((a) => a.idempotency_key));
+  const covered = new Set(
+    ((reviews ?? []) as ReviewForReply[]).filter((r) => keys.has(replyIdempotencyKey(r.location_name, r.review_id))).map((r) => r.review_id),
+  );
+  const pick = pickReviews((reviews ?? []) as ReviewForReply[], covered, new Date());
+
+  // Openings to avoid: the store's recent replies on Google and every reply
+  // still waiting or in flight here.
+  const avoid = [
+    ...((answered ?? []) as { reply_comment: string }[]).map((r) => r.reply_comment),
+    ...((actions ?? []) as { status: string; proposed_value: { value?: string } | null }[])
+      .filter((a) => ["pending_approval", "approved", "publishing", "published"].includes(a.status))
+      .map((a) => a.proposed_value?.value ?? "")
+      .filter(Boolean),
+  ];
+
+  const row = (r: ReviewForReply) => ({
+    client_id: loc.client_id,
+    location_id: loc.id,
+    action_type: "review_reply",
+    target_field: "gbp_review_reply",
+    target_url: listing.maps_uri,
+    previous_value: { value: null },
+    resource_ref: { platform: "gbp", account_name: listing.account_name, location_name: r.location_name, review_id: r.review_id },
+    idempotency_key: replyIdempotencyKey(r.location_name, r.review_id),
+  });
+  const review = (r: ReviewForReply) => ({ stars: r.star_rating, comment: r.comment, created: r.created_at_google });
+
+  for (const r of pick.escalate) {
+    const { error } = await supabase.from("seo_actions").insert({
+      ...row(r),
+      proposed_value: { value: null, review: review(r) },
+      diff: { field: "gbp_review_reply", before: null, after: null, scope: "store" },
+      status: "escalated",
+      drafted_by: "escalated",
+    });
+    if (error && error.code !== "23505") {
+      console.error(`seo-draft ${loc.id} review ${r.review_id}: escalation insert failed: ${error.message}`);
+      out.failed++;
+    } else {
+      out.drafted++;
+    }
+  }
+
+  if (pick.draft.length > 0 && !anthropic) throw new Error("ANTHROPIC_API_KEY is not set");
+  for (const r of pick.draft) {
+    let text: string;
+    try {
+      text = await callModel(buildReplyPayload({ businessName: loc.name, city: loc.city, review: r, avoidOpenings: avoid.map(opening) }), REPLY_SYSTEM_PROMPT);
+    } catch (e) {
+      console.error(`seo-draft ${loc.id} review ${r.review_id}: model call failed: ${e instanceof Error ? e.message : e}`);
+      out.failed++;
+      continue;
+    }
+    const verdict = validateReviewReply(text, { businessName: loc.name, avoidOpenings: avoid });
+    if (!verdict.ok) {
+      console.log(`seo-draft ${loc.id} review ${r.review_id}: reply rejected by validator: ${verdict.reason}`);
+      out.skipped++;
+      continue;
+    }
+    const { error } = await supabase.from("seo_actions").insert({
+      ...row(r),
+      proposed_value: { value: verdict.text, review: review(r) },
+      diff: { field: "gbp_review_reply", before: null, after: verdict.text, scope: "store" },
+      status: "pending_approval",
+      drafted_by: MODEL,
+    });
+    if (error && error.code !== "23505") {
+      console.error(`seo-draft ${loc.id} review ${r.review_id}: insert failed: ${error.message}`);
+      out.failed++;
+      continue;
+    }
+    avoid.push(verdict.text);
+    out.drafted++;
+  }
   return out;
 }
 

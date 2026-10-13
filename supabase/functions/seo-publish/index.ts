@@ -69,6 +69,7 @@ import {
 } from "./shopify.ts";
 import { checkRepo, deleteFile, GithubError, readFile, writeFile, type GhCtx } from "./github.ts";
 import { applyGbpField, GbpError, gbpManualInstructions, isWritable, revertGbpField, type GbpCtx, type GbpManualReason } from "./gbp.ts";
+import { deleteReply, postReply, type ReviewRef } from "./reviews.ts";
 import {
   articleFile,
   blogPath,
@@ -450,6 +451,111 @@ async function gbpTarget(action: ActionRow): Promise<GbpTarget> {
     ctx: { token: tok!.access_token_cache as string, fetch, sleep, base: Deno.env.get("GBP_INFO_API_BASE") || undefined },
     locationName: listing.location_name as string,
   };
+}
+
+// -----------------------------------------------------------------------------
+// Review replies (module 4 part 3, seo-publish/reviews.ts). Gated by the
+// client's review_replies_enabled (0090): while it's off nothing is posted.
+// -----------------------------------------------------------------------------
+
+async function repliesEnabled(clientId: string): Promise<boolean> {
+  const { data } = await supabase.from("seo_client_settings").select("review_replies_enabled").eq("client_id", clientId).maybeSingle();
+  return data?.review_replies_enabled === true;
+}
+
+function reviewRef(action: ActionRow): ReviewRef | null {
+  const r = (action.resource_ref ?? {}) as Record<string, unknown>;
+  return typeof r.account_name === "string" && typeof r.location_name === "string" && typeof r.review_id === "string"
+    ? { account_name: r.account_name, location_name: r.location_name, review_id: r.review_id }
+    : null;
+}
+
+async function publishReplyOne(action: ActionRow): Promise<"published" | "manual" | "retry" | "skipped"> {
+  if (!(await repliesEnabled(action.client_id))) {
+    await supabase.from("seo_actions").update({ error: "Review replies are switched off for this account, so it hasn't been posted." }).eq("id", action.id);
+    return "skipped";
+  }
+  const ref = reviewRef(action);
+  const text = String(action.proposed_value?.value ?? "").trim();
+  if (!ref || !text) {
+    await supabase.from("seo_actions").update({ status: "failed", error: "the reply has no review or no text" }).eq("id", action.id);
+    return "skipped";
+  }
+  const { data: claimed, error: claimErr } = await supabase.rpc("claim_seo_action", { p_action_id: action.id, p_kind: "publish" });
+  if (claimErr) throw new Error(`claim failed: ${claimErr.message}`);
+  if (!claimed) return "skipped";
+
+  const target = await gbpTarget(action);
+  if ("reason" in target) {
+    await supabase.from("seo_actions").update({ status: "approved", error: "LumiLink can't reach this Business Profile right now; the reply will post once Google is connected." }).eq("id", action.id);
+    return "retry";
+  }
+  const ctx = { token: target.ctx.token, fetch, sleep, base: Deno.env.get("GBP_V4_API_BASE") || undefined };
+  try {
+    const r = await postReply(ctx, ref, text);
+    const now = new Date().toISOString();
+    await supabase
+      .from("seo_actions")
+      .update({ status: "published", apply_mode: "api", published_at: now, error: null, publish_result: { written: text, verified: r.verified, noop: r.noop } })
+      .eq("id", action.id);
+    // Mirror it on our copy so the store's "unanswered" count drops before the next sync.
+    await supabase
+      .from("seo_gbp_reviews")
+      .update({ reply_comment: text, reply_updated_at: now })
+      .eq("client_id", action.client_id)
+      .eq("location_name", ref.location_name)
+      .eq("review_id", ref.review_id);
+    return "published";
+  } catch (e) {
+    if (e instanceof GbpError && e.kind !== "transient") {
+      // Already answered on Google, or Google refused: tell the person, don't retry.
+      await supabase.from("seo_actions").update({ status: "failed", error: e.message }).eq("id", action.id);
+      return "skipped";
+    }
+    const message = e instanceof Error ? e.message : String(e);
+    console.error(`seo-publish reply ${action.id}: ${message}`);
+    await supabase.from("seo_actions").update({ status: "approved", error: message }).eq("id", action.id);
+    return "retry";
+  }
+}
+
+async function rollbackReplyOne(action: ActionRow): Promise<"rolled_back" | "kept" | "retry" | "skipped"> {
+  const { data: claimed, error: claimErr } = await supabase.rpc("claim_seo_action", { p_action_id: action.id, p_kind: "rollback" });
+  if (claimErr) throw new Error(`claim failed: ${claimErr.message}`);
+  if (!claimed) return "skipped";
+  const keep = async (message: string) => {
+    await supabase.from("seo_actions").update({ status: "published", error: `Not taken down: ${message}` }).eq("id", action.id);
+  };
+  const ref = reviewRef(action);
+  const written = (action.publish_result as { written?: string } | null)?.written;
+  if (!ref || typeof written !== "string") {
+    await keep("LumiLink has no record of the reply it posted.");
+    return "kept";
+  }
+  const target = await gbpTarget(action);
+  if ("reason" in target) {
+    await keep("LumiLink no longer has working access to this Business Profile.");
+    return "kept";
+  }
+  try {
+    await deleteReply({ token: target.ctx.token, fetch, sleep, base: Deno.env.get("GBP_V4_API_BASE") || undefined }, ref, written);
+    await supabase.from("seo_actions").update({ status: "rolled_back", rolled_back_at: new Date().toISOString(), error: null }).eq("id", action.id);
+    await supabase
+      .from("seo_gbp_reviews")
+      .update({ reply_comment: null, reply_updated_at: null })
+      .eq("client_id", action.client_id)
+      .eq("location_name", ref.location_name)
+      .eq("review_id", ref.review_id);
+    return "rolled_back";
+  } catch (e) {
+    if (e instanceof GbpError && e.kind !== "transient") {
+      await keep(e.message);
+      return "kept";
+    }
+    const message = e instanceof Error ? e.message : String(e);
+    await supabase.from("seo_actions").update({ status: "rollback_requested", error: message }).eq("id", action.id);
+    return "retry";
+  }
 }
 
 async function toManualGbp(action: ActionRow, reason: GbpManualReason, detail?: string) {
@@ -1024,6 +1130,12 @@ async function runPublish(locationId: string, clientId: string): Promise<Record<
       continue;
     }
     const isRollback = a.status === "rollback_requested" || a.status === "rolling_back";
+    // Module 4 part 3: review replies go to Google too.
+    if (a.action_type === "review_reply") {
+      const o = isRollback ? await rollbackReplyOne(a) : await publishReplyOne(a);
+      tally[o as keyof typeof tally]++;
+      continue;
+    }
     // Module 4: profile edits go to Google, whatever the website runs on.
     if (a.action_type === "gbp_field_update") {
       const o = isRollback ? await rollbackGbpOne(a) : await publishGbpOne(a);
