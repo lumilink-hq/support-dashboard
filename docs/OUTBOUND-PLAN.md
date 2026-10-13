@@ -96,7 +96,34 @@ Stages: `sourced` → `email_found` / `no_email` → `verified` / `invalid` → 
      - The first run correctly returned `suppressed` for the two found addresses, because a local crawler-test client's site is also on `host.docker.internal`. That client was moved aside for one rerun and restored afterwards.
      - `npm run check` passes.
    - **Not verified:** real business sites, so the hit rate is unknown (§8 item); the `render-service` path (RENDER_SERVICE_URL isn't set locally); and CPU time on very large pages (HTML is capped at 1.5 MB).
-4. **`outbound-verify`**: Reoon single-email check. `valid` → `verified`; `invalid` → `invalid` plus a suppression entry; catch-all and unknown are kept, flagged, and sent last.
+4. **`outbound-verify`**: Reoon single-email check. `valid` → `verified`; `invalid` → `invalid` plus a suppression entry; catch-all and unknown are kept, flagged, and sent last. 🟡 **Built and locally verified against a mock Reoon (2026-10-13); no real Reoon call yet.**
+   - **`0303_outbound_verify.sql`** adds `outbound_record_verification(lead, verification, suppress, detail)`, the only writer of results.
+     - It acts only on leads still at `email_found`.
+     - It logs a `verify` event with the vendor detail every time.
+     - It checks suppression first: an address suppressed since it was found moves the lead to `suppressed` and the result isn't applied.
+     - `suppress = true` adds the address to `outbound_suppressions` (reason `invalid`, source `reoon`, with the status as a note).
+     - `scripts/test_outbound_verify.sql` passes.
+   - **`supabase/functions/outbound-verify`** (`index.ts` and `lib.ts`)
+     - **Checks:** Reoon power mode (`GET /api/v1/verify?mode=power`), 3 in parallel (Reoon asks for 5 or fewer), with a 75-second timeout per check and a 100-second run budget. Batch size is 1–20. Leads are claimed through `outbound_claim_leads('email_found', …)`.
+     - **Mapping (`mapReoon`):**
+       - `safe` → valid
+       - `role_account` → valid when Reoon says it's deliverable or safe to send (info@ is the inbox we want); catch_all if the domain is catch-all; otherwise unknown
+       - `catch_all` and `unknown` → kept at `verified` and flagged
+       - `inbox_full` → invalid, not suppressed
+       - `invalid`, `disabled` and `spamtrap` → invalid and suppressed
+       - `disposable` → disposable and suppressed
+       - an unexpected status is an error, never a guess
+     - **Errors:** a Reoon error releases the lead. An account error (credits, key, quota) stops the run and releases everything not yet checked.
+     - **Testing hook:** `REOON_API_BASE` exists only for tests.
+   - **Tests**
+     - `scripts/test-outbound-verify.ts`: 23 unit tests pass.
+     - **Local end-to-end** (`functions serve` plus a mock Reoon on a host port):
+       - one lead per status (8) → all 8 land on the right stage and verification
+       - only invalid, spamtrap and disposable are suppressed
+       - an out-of-credits answer on the oldest of 6 leads → the run stops; 2 checks already in flight finish; 4 are released with none left leased
+       - a wrong secret → 401
+     - `npm run check` passes (54 of 54).
+   - **Not verified:** a real Reoon response. The field names come from Reoon's API docs. Also unchecked: the exact error body Reoon sends when out of credits (the mapping matches on words like credit, key and quota), and real power-mode latency.
 5. Cron: source daily, enrich and verify every 15 minutes in batches. Migration `0301`.
 
 ### Phase 2: Instantly sync (about 4–8 hrs)
@@ -129,6 +156,9 @@ Hand-test at the end. Add items as each phase is built.
 - [ ] Deploy `outbound-enrich` with `--no-verify-jwt`.
   - Set `RENDER_SERVICE_URL` and `RENDER_SERVICE_SECRET` for it; they're the same values seo-crawl uses.
   - Run it on the leads from the real sourcing call. Record the hit rate, and hand-check 10 `no_email` events for missed addresses.
+- [ ] Deploy `outbound-verify` with `--no-verify-jwt` and set `REOON_API_KEY` (not `REOON_API_BASE`). Then:
+  - Verify 3 known addresses: one real, one made up on a real domain, one on a catch-all domain. Compare the results with Reoon's dashboard.
+  - Check what an empty-credits answer looks like, against the `fatal` matching in `lib.ts`.
 - [ ] Push 0300 to prod. It needs `supabase db push --include-all` if any lower-numbered migration landed first. Afterwards confirm the four tables and `outbound_funnel` exist, and that the anon key returns a permission error on `outbound_leads`.
 
 - [ ] A real DataForSEO listings call returns the expected fields for one dispensary profile. Check coverage for one state.
