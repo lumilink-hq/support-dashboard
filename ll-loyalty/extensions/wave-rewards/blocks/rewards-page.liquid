@@ -1,0 +1,99 @@
+{% comment %}
+  Wave Rewards page (LL Loyalty, module 5). Renders a shell; assets/wave-rewards.js
+  fills it from the app proxy (/apps/loyalty/state). Program rules, tiers and
+  rewards come from LumiLink, so copy here is only headings and the static
+  "How it works" steps. The shopper's identity is the proxy's signed
+  logged_in_customer_id, never anything this markup sends.
+{% endcomment %}
+
+<div
+  class="llr"
+  id="llr-{{ block.id }}"
+  data-proxy="{{ block.settings.proxy_path | default: '/apps/loyalty' | escape }}"
+  data-logged-in="{% if customer %}true{% else %}false{% endif %}"
+  data-login-url="{{ routes.account_login_url }}"
+  data-register-url="{{ routes.account_register_url }}"
+  data-instagram-url="{{ block.settings.instagram_url | escape }}"
+  data-ref-js="{{ 'wave-rewards-ref.js' | asset_url }}"
+  data-hero-title="{{ block.settings.hero_title | escape }}"
+  data-hero-subtitle="{{ block.settings.hero_subtitle | escape }}"
+  style="
+    --llr-accent: {{ block.settings.accent }};
+    --llr-accent-text: {{ block.settings.accent_text }};
+    --llr-tier-bg: {{ block.settings.tier_bg }};
+    --llr-tier-text: {{ block.settings.tier_text }};
+    --llr-band-bg: {{ block.settings.band_bg }};
+    --llr-icon: {{ block.settings.icon_color }};
+    --llr-hero-bg: {{ block.settings.hero_bg }};
+    --llr-hero-text: {{ block.settings.hero_text }};
+  "
+>
+  {% render 'llr-copy' %}
+  <section class="llr-hero" data-llr="hero">
+    <h2 class="llr-hero__title">{{ block.settings.hero_title | escape }}</h2>
+    <p class="llr-hero__subtitle">{{ block.settings.hero_subtitle | escape }}</p>
+    <p class="llr-muted" data-llr="loading">{{ 'wave_rewards.loading' | t }}</p>
+  </section>
+
+  <div data-llr="member"></div>
+  <div data-llr="referral"></div>
+
+  {% if block.settings.show_how %}
+    <section class="llr-how">
+      <h2 class="llr-heading">{{ block.settings.how_heading | escape }}</h2>
+      <p class="llr-sub">{{ block.settings.how_subheading | escape }}</p>
+      <ol class="llr-how__steps">
+        <li><h3>{{ block.settings.step1_title | escape }}</h3><p>{{ block.settings.step1_text | escape }}</p></li>
+        <li><h3>{{ block.settings.step2_title | escape }}</h3><p>{{ block.settings.step2_text | escape }}</p></li>
+        <li><h3>{{ block.settings.step3_title | escape }}</h3><p>{{ block.settings.step3_text | escape }}</p></li>
+      </ol>
+    </section>
+  {% endif %}
+
+  <div data-llr="earn" data-heading="{{ block.settings.earn_heading | escape }}" data-subheading="{{ block.settings.earn_subheading | escape }}"></div>
+  <div data-llr="tiers" data-heading="{{ block.settings.tiers_heading | escape }}" data-subheading="{{ block.settings.tiers_subheading | escape }}"></div>
+  <div data-llr="history"></div>
+  <p class="llr-status" role="status" aria-live="polite" data-llr="status"></p>
+</div>
+
+{% schema %}
+{
+  "name": "Wave Rewards page",
+  "target": "section",
+  "javascript": "wave-rewards.js",
+  "stylesheet": "wave-rewards.css",
+  "settings": [
+    { "type": "header", "content": "Hero" },
+    { "type": "text", "id": "hero_title", "label": "Title", "default": "Exclusive Perks for Our Valued Members" },
+    { "type": "text", "id": "hero_subtitle", "label": "Subtitle", "default": "Become a member and earn points & exclusive rewards every time you shop." },
+    { "type": "header", "content": "How it works" },
+    { "type": "checkbox", "id": "show_how", "label": "Show How it works", "default": true },
+    { "type": "text", "id": "how_heading", "label": "Heading", "default": "How it works" },
+    { "type": "text", "id": "how_subheading", "label": "Subheading", "default": "Grab your exclusive gifts by being part of our loyalty program" },
+    { "type": "text", "id": "step1_title", "label": "Step 1 title", "default": "Join" },
+    { "type": "text", "id": "step1_text", "label": "Step 1 text", "default": "Sign up with your email address to start earning points" },
+    { "type": "text", "id": "step2_title", "label": "Step 2 title", "default": "Earn" },
+    { "type": "text", "id": "step2_text", "label": "Step 2 text", "default": "Purchase and complete missions to earn more points" },
+    { "type": "text", "id": "step3_title", "label": "Step 3 title", "default": "Spend" },
+    { "type": "text", "id": "step3_text", "label": "Step 3 text", "default": "Spend points to get more rewards and coupons" },
+    { "type": "header", "content": "Ways to earn" },
+    { "type": "text", "id": "earn_heading", "label": "Heading", "default": "Ways to earn" },
+    { "type": "text", "id": "earn_subheading", "label": "Subheading", "default": "Earn more points for different actions, and turn those points into awesome rewards." },
+    { "type": "url", "id": "instagram_url", "label": "Instagram profile link" },
+    { "type": "header", "content": "VIP tiers" },
+    { "type": "text", "id": "tiers_heading", "label": "Heading", "default": "VIP Tiers" },
+    { "type": "text", "id": "tiers_subheading", "label": "Subheading", "default": "Elevate your shopping experience by joining our VIP program to access rewards and perks reserved just for you." },
+    { "type": "header", "content": "Colors" },
+    { "type": "color", "id": "accent", "label": "Buttons", "default": "#1A5AAD" },
+    { "type": "color", "id": "accent_text", "label": "Button text", "default": "#FFFFFF" },
+    { "type": "color", "id": "hero_bg", "label": "Hero background", "default": "#F6F6F6" },
+    { "type": "color", "id": "hero_text", "label": "Hero text", "default": "#000000" },
+    { "type": "color", "id": "band_bg", "label": "Ways to earn background", "default": "#F6F6F6" },
+    { "type": "color", "id": "icon_color", "label": "Icons", "default": "#144686" },
+    { "type": "color", "id": "tier_bg", "label": "Tier cards", "default": "#173E71" },
+    { "type": "color", "id": "tier_text", "label": "Tier card text", "default": "#FFFFFF" },
+    { "type": "header", "content": "Advanced" },
+    { "type": "text", "id": "proxy_path", "label": "App proxy path", "default": "/apps/loyalty", "info": "Only change this if the app proxy URL was customized in Shopify admin." }
+  ]
+}
+{% endschema %}

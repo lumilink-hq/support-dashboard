@@ -1,0 +1,43 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+# LL Loyalty: extension-only app. The backend is LumiLink (Supabase edge functions + the Next.js app).
+# See docs/loyalty/PLAN.md.
+
+client_id = "6bfc5441e16cbd1562db482f32edb56c"
+name = "LL Loyalty"
+# The App URL starts the install OAuth (loyalty-oauth edge function, 0201). Not embedded:
+# there is no merchant admin UI in Phase 1, so it opens in its own tab.
+application_url = "https://xqsxjxrzpxhosedkmufg.supabase.co/functions/v1/loyalty-oauth"
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = true
+
+[webhooks]
+api_version = "2026-10"
+# Deploy the loyalty-webhooks edge function (--no-verify-jwt) BEFORE `shopify app deploy`,
+# so Shopify never delivers to a missing endpoint.
+
+[[webhooks.subscriptions]]
+topics = [ "orders/paid", "refunds/create", "customers/create", "customers/update" ]
+uri = "https://xqsxjxrzpxhosedkmufg.supabase.co/functions/v1/loyalty-webhooks"
+
+[[webhooks.subscriptions]]
+compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+uri = "https://xqsxjxrzpxhosedkmufg.supabase.co/functions/v1/loyalty-webhooks"
+
+[access_scopes]
+# read_all_orders: the tier backfill reaches back to 2026-06-05, past the 60-day default window.
+# write_customers: tier metafield + tags. write_discounts: reward and perk discount codes.
+# write_orders: tag loyalty-assisted and referral orders (includes read_orders).
+# write_app_proxy: the storefront /apps/loyalty proxy the Wave Rewards block calls.
+scopes = "read_orders,write_orders,read_all_orders,read_customers,write_customers,write_discounts,read_products,write_app_proxy"
+
+[app_proxy]
+# Storefront https://<shop>/apps/loyalty/* -> the loyalty-proxy edge function (0204).
+# Deploy loyalty-proxy (--no-verify-jwt) before `shopify app deploy`.
+url = "https://xqsxjxrzpxhosedkmufg.supabase.co/functions/v1/loyalty-proxy"
+prefix = "apps"
+subpath = "loyalty"
+
+[auth]
+redirect_urls = [ "https://xqsxjxrzpxhosedkmufg.supabase.co/functions/v1/loyalty-oauth/callback" ]
