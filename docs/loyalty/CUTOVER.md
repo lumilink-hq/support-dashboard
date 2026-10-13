@@ -24,7 +24,10 @@ member, or every difference is explained. Then switch.
 
 ## A′. Dev-store rehearsal (before tsunami.store)
 
-Custom distribution allows installs on development stores, so run the whole flow there first. It
+Custom distribution allows installs on development stores **in the app's own organization**
+(LL Loyalty is in **Lumilink, 240443031**; create the dev store from that org in the Dev
+Dashboard). A dev store from another org fails the install with `invalid_link_organization`.
+Run the whole flow there first. It
 uses the **production** backend with its own program row (data is keyed by shop domain, so it
 never mixes with Tsunami's) and is deleted at the end.
 
