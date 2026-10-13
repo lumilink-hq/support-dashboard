@@ -9,6 +9,7 @@
 --      supabase functions deploy loyalty-webhooks --no-verify-jwt
 --      supabase functions deploy loyalty-oauth --no-verify-jwt
 --      supabase functions deploy loyalty-backfill --no-verify-jwt
+--      supabase functions deploy loyalty-shopify --no-verify-jwt
 --    Then, from ll-loyalty/:  shopify app deploy
 --    (ships the webhook subscriptions, App URL and redirect URL in
 --    shopify.app.toml). Functions FIRST, so Shopify never hits a missing URL.
@@ -34,5 +35,14 @@ select vault.create_secret('https://xqsxjxrzpxhosedkmufg.functions.supabase.co/l
 --    Then start it; pg_cron runs a slice every minute until done:
 select start_loyalty_backfill(id) from loyalty_programs where shop_domain = '<store>.myshopify.com';
 select * from loyalty_backfills;
--- 5. Webhooks arriving:
+-- 5. Shopify sync (codes, perks, member tier tags + metafields). Once per project:
+select vault.create_secret('https://xqsxjxrzpxhosedkmufg.functions.supabase.co/loyalty-shopify', 'loyalty_shopify_url', '');
+--    pg_cron calls it every minute for programs with work. Check:
+select key, shopify_discount_id, last_error from loyalty_perks;
+select status, count(*) from loyalty_discount_codes group by 1;
+select count(*) filter (where shopify_sync_error is not null) errors,
+       count(*) filter (where tier_key is distinct from shopify_synced_tier
+                           or points_balance is distinct from shopify_synced_points) due
+  from loyalty_members;
+-- 6. Webhooks arriving:
 select topic, outcome, error, received_at from loyalty_webhook_receipts order by received_at desc limit 20;

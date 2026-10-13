@@ -18,7 +18,8 @@
 // =============================================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
-import { API_VERSION, CUSTOMERS_QUERY, isThrottled, ORDERS_QUERY, ordersSearch, parseCustomersPage, parseOrdersPage, throttleWaitMs } from "./lib.ts";
+import { shopifyGraphql } from "../_loyalty/shopify.ts";
+import { CUSTOMERS_QUERY, ORDERS_QUERY, ordersSearch, parseCustomersPage, parseOrdersPage } from "./lib.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const rawSecrets = Deno.env.get("SUPABASE_SECRET_KEYS");
@@ -47,34 +48,6 @@ type Backfill = {
   orders_counted: number;
 };
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-async function gql(shop: string, token: string, query: string, variables: Record<string, unknown>): Promise<unknown> {
-  const url = SHOP_BASE ? `${SHOP_BASE}/${shop}/admin/api/${API_VERSION}/graphql.json` : `https://${shop}/admin/api/${API_VERSION}/graphql.json`;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
-      body: JSON.stringify({ query, variables }),
-    });
-    if (res.status === 429 || res.status >= 500) {
-      await sleep(2000 * (attempt + 1));
-      continue;
-    }
-    const j = (await res.json()) as { data?: unknown; errors?: unknown; extensions?: unknown };
-    if (res.status !== 200) throw new Error(`Shopify ${res.status}: ${JSON.stringify(j.errors ?? j).slice(0, 300)}`);
-    if (isThrottled(j.errors)) {
-      await sleep(Math.max(throttleWaitMs(j.extensions), 2000));
-      continue;
-    }
-    if (j.errors) throw new Error(`Shopify GraphQL: ${JSON.stringify(j.errors).slice(0, 300)}`);
-    const wait = throttleWaitMs(j.extensions);
-    if (wait > 0) await sleep(wait);
-    return j.data;
-  }
-  throw new Error("Shopify kept throttling or failing after 5 attempts");
-}
-
 async function save(b: Backfill, patch: Partial<Backfill> & { last_error?: string | null; finished_at?: string | null }) {
   const { error } = await supabase.from("loyalty_backfills").update(patch).eq("program_id", b.program_id);
   if (error) throw new Error(`saving backfill progress failed: ${error.message}`);
@@ -91,7 +64,7 @@ async function slice(b: Backfill): Promise<Backfill> {
   await save(b, { status: "running" });
   while (Date.now() - started < BUDGET_MS) {
     if (b.phase === "customers") {
-      const p = parseCustomersPage(await gql(shop, token, CUSTOMERS_QUERY, { cursor: b.cursor }));
+      const p = parseCustomersPage(await shopifyGraphql(shop, token, CUSTOMERS_QUERY, { cursor: b.cursor }, SHOP_BASE));
       const { data: n, error: e } = await supabase.rpc("loyalty_sync_customers", { p_program: b.program_id, p_customers: p.nodes });
       if (e) throw new Error(`loyalty_sync_customers: ${e.message}`);
       await save(b, {
@@ -100,7 +73,7 @@ async function slice(b: Backfill): Promise<Backfill> {
         ...(p.hasNext ? { cursor: p.cursor } : { phase: "orders", cursor: null }),
       });
     } else {
-      const p = parseOrdersPage(await gql(shop, token, ORDERS_QUERY, { cursor: b.cursor, q: ordersSearch(b.before) }));
+      const p = parseOrdersPage(await shopifyGraphql(shop, token, ORDERS_QUERY, { cursor: b.cursor, q: ordersSearch(b.before) }, SHOP_BASE));
       const { data: counts, error: e } = await supabase.rpc("loyalty_record_orders", { p_program: b.program_id, p_orders: p.nodes, p_source: "backfill" });
       if (e) throw new Error(`loyalty_record_orders: ${e.message}`);
       await save(b, {

@@ -22,7 +22,7 @@ export function asTopic(t: string | null | undefined): Topic | null {
   return (TOPICS as readonly string[]).includes(s) ? (s as Topic) : null;
 }
 
-export async function hmacBase64(secret: string, body: Uint8Array): Promise<string> {
+export async function hmacBase64(secret: string, body: Uint8Array<ArrayBuffer>): Promise<string> {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, body));
   let bin = "";
@@ -38,7 +38,7 @@ function constantTimeEqual(a: string, b: string): boolean {
 }
 
 /** True when the header is Shopify's signature of the body under any of the secrets. */
-export async function verifyWebhook(body: Uint8Array, header: string | null, secrets: string[]): Promise<boolean> {
+export async function verifyWebhook(body: Uint8Array<ArrayBuffer>, header: string | null, secrets: string[]): Promise<boolean> {
   const given = (header ?? "").trim();
   if (!/^[A-Za-z0-9+/]{43}=$/.test(given)) return false;
   let ok = false;

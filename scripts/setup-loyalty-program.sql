@@ -1,6 +1,6 @@
 -- =============================================================================
 -- setup-loyalty-program.sql — create or update a store's LL Loyalty program
--- (needs 0200-0202). Defaults below are Joy's live Tsunami settings, read
+-- (needs 0200-0203). Defaults below are Joy's live Tsunami settings, read
 -- 2026-10-09 (docs/loyalty/PLAN.md §3).
 --
 -- Supabase Dashboard -> SQL Editor (or the local db container). Fill in
@@ -73,17 +73,27 @@ begin
 
   insert into loyalty_rewards (program_id, key, name, kind, points_cost, value_cents, min_order_cents) values
     (v_prog, 'five_off',           '$5 off',                    'amount_off_order', 750,  500,  0),
-    (v_prog, 'referral_friend',    '$10 off your first order',  'amount_off_order', null, 1000, 0),
-    (v_prog, 'gold_free_shipping', 'Free shipping on $75+',     'free_shipping',    null, 0,    7500)
+    (v_prog, 'referral_friend',    '$10 off your first order',  'amount_off_order', null, 1000, 0)
   on conflict (program_id, key) do update
      set name = excluded.name, kind = excluded.kind, points_cost = excluded.points_cost,
          value_cents = excluded.value_cents, min_order_cents = excluded.min_order_cents;
 
-  raise notice 'program % for % (%): % tiers, % earn rules, % rewards',
+  -- Tier perks: automatic Shopify discounts for the tier and above (0203).
+  -- Gold "members-only discounts on select products" is added once Tsunami
+  -- names the products and the discount (plan §9): kind 'percent_off_products'
+  -- with collection_gids or product_gids.
+  insert into loyalty_perks (program_id, key, tier_key, title, kind, min_subtotal_cents) values
+    (v_prog, 'gold_free_shipping', 'gold', 'Gold: free shipping on $75+', 'free_shipping', 7500)
+  on conflict (program_id, key) do update
+     set tier_key = excluded.tier_key, title = excluded.title, kind = excluded.kind,
+         min_subtotal_cents = excluded.min_subtotal_cents;
+
+  raise notice 'program % for % (%): % tiers, % earn rules, % rewards, % perks',
     v_prog, v_client_name, lower(v_shop),
     (select count(*) from loyalty_tiers where program_id = v_prog),
     (select count(*) from loyalty_earn_rules where program_id = v_prog),
-    (select count(*) from loyalty_rewards where program_id = v_prog);
+    (select count(*) from loyalty_rewards where program_id = v_prog),
+    (select count(*) from loyalty_perks where program_id = v_prog);
 
   if v_dry_run then
     raise exception 'DRY RUN: rolled back. Set v_dry_run = false to apply.';
