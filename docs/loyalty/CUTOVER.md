@@ -14,7 +14,7 @@ member, or every difference is explained. Then switch.
 | # | Step | Done |
 |---|---|---|
 | A1 | Data protection items that must land before real data (PLAN §8b): L1-7 agreement with Tsunami, L1-8 retention + privacy webhooks (built), L2-3/L2-7 `DATA-PROTECTION.md`, L2-5 strong staff passwords on production Supabase Auth, L2-6 access log (built) | ☐ |
-| A2 | Merge `loyalty` into main, then from main `supabase db push --include-all` (production already has 0300/0301 from the outbound branch, so 0200-0207 are "lower"; checked 2026-10-13 that they don't overlap). Do **not** run the `migration repair` commands `db pull` suggests | ☐ |
+| A2 | Merge `loyalty` into main, then from main `supabase db push --include-all` (production already has 0300/0301 from the outbound branch, so 0200-0207 are "lower"; checked 2026-10-13 that they don't overlap). Do **not** run the `migration repair` commands `db pull` suggests || ☑ 2026-10-13 |
 | A3 | Deploy edge functions, all `--no-verify-jwt`: `loyalty-webhooks`, `loyalty-oauth`, `loyalty-backfill`, `loyalty-shopify`, `loyalty-proxy`, `loyalty-klaviyo`. Check `supabase functions list` shows `verify_jwt` false | ☐ |
 | A4 | Vault secrets: `loyalty_backfill_url`, `loyalty_shopify_url`, `loyalty_klaviyo_url` (provision runbook steps 4, 5, 7) | ☐ |
 | A5 | `setup-loyalty-program.sql` for Tsunami (confirm time zone first), then provision runbook steps 1-2 | ☐ |
