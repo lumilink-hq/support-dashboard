@@ -1,6 +1,6 @@
 -- =============================================================================
 -- setup-loyalty-program.sql — create or update a store's LL Loyalty program
--- (needs 0090). Defaults below are Joy's live Tsunami settings, read
+-- (needs 0200). Defaults below are Joy's live Tsunami settings, read
 -- 2026-10-09 (docs/loyalty/PLAN.md §3).
 --
 -- Supabase Dashboard -> SQL Editor (or the local db container). Fill in

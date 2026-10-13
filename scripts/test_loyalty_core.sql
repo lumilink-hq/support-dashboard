@@ -1,5 +1,5 @@
 -- =============================================================================
--- test_loyalty_core.sql — non-destructive test of 0090 (LL Loyalty module 1):
+-- test_loyalty_core.sql — non-destructive test of 0200 (LL Loyalty module 1):
 -- enrollment, order points x tier multiplier, tier up on spend and down on
 -- refund, idempotent posting, overdraw guard, milestones, the append-only
 -- ledger, cached balances matching the ledger, and no tenant access.

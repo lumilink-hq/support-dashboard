@@ -26,6 +26,7 @@ Update the module checklist and the session log as work lands. Committed on the 
 | Settings-driven | All rules, tiers, rewards and copy read from config tables, nothing Tsunami-specific in code | Games and Phase 2 reuse it |
 | Admin UI | Staff-only. Never client-facing in the LumiLink portal | Phase 2 merchants get an embedded admin inside Shopify instead |
 | Pricing | Out of scope for now | Boss asked to focus on cost |
+| Migration numbers | Loyalty migrations use the **0200 block** (`0200_`, `0201_`, …) on this branch. The `loyalty` branch never runs `supabase db push`. Before merging to main, renumber them to follow main's latest migration (only comments reference the numbers) | SEO work continues on main with 0090+ in parallel. Duplicate versions break the CLI, and `db push` rejects a migration numbered below one already in production |
 
 ## 2. Architecture
 
@@ -92,7 +93,7 @@ Before cutover: list every `Joy:` metric in Klaviyo and confirm each one has an 
 
 | # | Module | Hrs | Status |
 |---|---|---|---|
-| 1 | Points ledger, tiers, rules engine (config tables, append-only ledger, RLS) | 12-16 | ☑ 2026-10-13 (`0090_loyalty_core.sql`, `test_loyalty_core.sql`, `setup-loyalty-program.sql`). Not pushed to production |
+| 1 | Points ledger, tiers, rules engine (config tables, append-only ledger, RLS) | 12-16 | ☑ 2026-10-13 (`0200_loyalty_core.sql`, `test_loyalty_core.sql`, `setup-loyalty-program.sql`). Not pushed to production |
 | 2 | Shopify order, refund, customer sync + historical backfill | 8-10 | ☐ |
 | 3 | Earning rules, milestones, referrals, expiry, demotion (pg_cron jobs) | 12-16 | ☐ |
 | 4 | Rewards and perks as Shopify discounts ($5, $10 referral, Gold free shipping, members-only prices) | 8-10 | ☐ |
@@ -186,4 +187,4 @@ Then update the Dev Dashboard answers.
 |---|---|---|
 | 2026-10-09 | Tsunami | Scoped the build, walked Joy's admin, wrote the scope brief (Drafts 1-4) |
 | 2026-10-12 | Tsunami | Phase 1 approved. Created `loyalty` branch and this plan. LumiLink Partner account and dev store created. Scaffolded `ll-loyalty/`, set scopes, excluded it from root tsconfig |
-| 2026-10-13 | LumiLink | Module 1 written: migration 0090 (programs, tiers, earn rules, rewards, members, append-only ledger + tier history, service-role only), Joy config setup script, SQL test. Local db had only 0001-0004 applied; `supabase migration up --local` brought it to 0090. `test_loyalty_core.sql` passes. Full suite 39/41: `test_seo_competitor_gaps` and `test_seo_keyword_research` fail on pull-forward (unrelated to loyalty) |
+| 2026-10-13 | LumiLink | Module 1 written: migration 0200 (first numbered 0090; renumbered so SEO work on main can keep 0090+) (programs, tiers, earn rules, rewards, members, append-only ledger + tier history, service-role only), Joy config setup script, SQL test. Local db had only 0001-0004 applied; `supabase migration up --local` brought it up to date. `test_loyalty_core.sql` passes. Full suite 39/41: `test_seo_competitor_gaps` and `test_seo_keyword_research` fail on pull-forward (unrelated to loyalty) |

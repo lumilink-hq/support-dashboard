@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0090_loyalty_core.sql — LL Loyalty module 1: config tables, members, an
+-- 0200_loyalty_core.sql — LL Loyalty module 1: config tables, members, an
 -- append-only points ledger, and the rules engine every later module calls.
 -- Plan: docs/loyalty/PLAN.md (Joy replacement for Tsunami).
 --
