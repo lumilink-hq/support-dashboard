@@ -1,6 +1,6 @@
 -- =============================================================================
 -- setup-loyalty-program.sql — create or update a store's LL Loyalty program
--- (needs 0200). Defaults below are Joy's live Tsunami settings, read
+-- (needs 0200-0202). Defaults below are Joy's live Tsunami settings, read
 -- 2026-10-09 (docs/loyalty/PLAN.md §3).
 --
 -- Supabase Dashboard -> SQL Editor (or the local db container). Fill in
@@ -19,6 +19,9 @@ declare
   v_client       uuid    := '00000000-0000-0000-0000-000000000000';   -- FILL IN
   v_client_name  text    := 'Tsunami';             -- safety check on v_client
   v_shop         text    := 'FILL-IN.myshopify.com';
+  -- Birthdays and anniversaries pay on the store's local date. CONFIRM in
+  -- Shopify admin > Settings > General > Time zone (an IANA name).
+  v_timezone     text    := 'America/Los_Angeles';
   v_prog         uuid;
 begin
   if not exists (select 1 from clients where id = v_client and name = v_client_name) then
@@ -27,9 +30,9 @@ begin
 
   insert into loyalty_programs (client_id, shop_domain, name, points_per_dollar, tier_spend_since,
                                 demote_after_inactive, demotion_warning_days, points_expire_after,
-                                discount_code_prefix)
+                                discount_code_prefix, timezone)
   values (v_client, lower(v_shop), 'Wave Rewards', 3, '2026-06-05',
-          '6 months', 7, '1 year', 'WAVE-')
+          '6 months', 7, '1 year', 'WAVE-', v_timezone)
   on conflict (shop_domain) do update
      set name                  = excluded.name,
          points_per_dollar     = excluded.points_per_dollar,
@@ -37,7 +40,8 @@ begin
          demote_after_inactive = excluded.demote_after_inactive,
          demotion_warning_days = excluded.demotion_warning_days,
          points_expire_after   = excluded.points_expire_after,
-         discount_code_prefix  = excluded.discount_code_prefix
+         discount_code_prefix  = excluded.discount_code_prefix,
+         timezone              = excluded.timezone
    where loyalty_programs.client_id = excluded.client_id
   returning id into v_prog;
   if v_prog is null then

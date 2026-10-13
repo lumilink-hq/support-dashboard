@@ -95,7 +95,7 @@ Before cutover: list every `Joy:` metric in Klaviyo and confirm each one has an 
 |---|---|---|---|
 | 1 | Points ledger, tiers, rules engine (config tables, append-only ledger, RLS) | 12-16 | ☑ 2026-10-13 (`0200_loyalty_core.sql`, `test_loyalty_core.sql`, `setup-loyalty-program.sql`). Not pushed to production |
 | 2 | Shopify order, refund, customer sync + historical backfill | 8-10 | ◐ code + tests done 2026-10-13 (`0201_loyalty_shopify_sync.sql`, edge fns `loyalty-webhooks` / `loyalty-oauth` / `loyalty-backfill`, `provision-loyalty-shopify-app.sql`). Not deployed; not yet tested against a real store |
-| 3 | Earning rules, milestones, referrals, expiry, demotion (pg_cron jobs) | 12-16 | ☐ |
+| 3 | Earning rules, milestones, referrals, expiry, demotion (pg_cron jobs) | 12-16 | ☑ 2026-10-13 (`0202_loyalty_earning_jobs.sql`, `test_loyalty_earning_jobs.sql`; webhook parsing extended). Referral discount codes and the Instagram-follow claim endpoint come with modules 4 and 5 (SQL side ready: `loyalty_referrals.discount_code`, `loyalty_award_action`) |
 | 4 | Rewards and perks as Shopify discounts ($5, $10 referral, Gold free shipping, members-only prices) | 8-10 | ☐ |
 | 5 | Wave Rewards page as a theme app block, reusing the current layout | 6-10 | ☐ |
 | 6 | Klaviyo events + profile properties (section 4) | 4-6 | ☐ |
@@ -176,6 +176,9 @@ Then update the Dev Dashboard answers.
 - Does Tsunami still need the "Redeem in cart" block, or is the rewards page enough?
 - Instagram follow (100 pts): honor-system click, same as Joy?
 - Enrollment rule (module 2): a customer joins when their Shopify customer `state` is `enabled` (has an account), or anyone if `enroll_guests` is on. Check on the dev store that Shopify's **new customer accounts** (code login) set `state` to `enabled`; if not, the rule needs another signal.
+- Tsunami's store time zone (birthdays and anniversaries pay on the local date). `setup-loyalty-program.sql` assumes America/Los_Angeles.
+- Birthday abuse: a member who edits their birthday to today gets 225 points. Joy may limit edits; module 5 should allow setting it once (or lock it for N days).
+- A member demoted for inactivity goes straight back to their spend tier on their next order (tier spend isn't reset by demotion). Confirm that's Joy's behaviour.
 - Order points are on the subtotal after discounts, before shipping and tax. Confirm that matches Joy (spot-check a few orders in the parallel run).
 
 ## 10. Risks
@@ -184,6 +187,7 @@ Then update the Dev Dashboard answers.
 - **Klaviyo names drift:** flows silently stop. Section 4 is the contract.
 - **Double-awarding:** Shopify retries webhooks. Ledger writes must be idempotent on (order id, rule).
 - **Refunds:** points must claw back on refund, including tier spend.
+- **Joy import (module 8) must set dates, not just balances:** `enrolled_at` (anniversaries), `last_activity_at` (expiry) and `last_order_at` (demotion) come from Joy/Shopify history. Leave them at import time and every expiry and demotion clock restarts at cutover. Import before the hourly `loyalty-jobs` cron can act on the program.
 
 ## 11. Session log
 
@@ -193,3 +197,4 @@ Then update the Dev Dashboard answers.
 | 2026-10-12 | Tsunami | Phase 1 approved. Created `loyalty` branch and this plan. LumiLink Partner account and dev store created. Scaffolded `ll-loyalty/`, set scopes, excluded it from root tsconfig |
 | 2026-10-13 | LumiLink | Module 1 written: migration 0200 (first numbered 0090; renumbered so SEO work on main can keep 0090+) (programs, tiers, earn rules, rewards, members, append-only ledger + tier history, service-role only), Joy config setup script, SQL test. Local db had only 0001-0004 applied; `supabase migration up --local` brought it up to date. `test_loyalty_core.sql` passes. Full suite 39/41: `test_seo_competitor_gaps` and `test_seo_keyword_research` fail on pull-forward (unrelated to loyalty) |
 | 2026-10-13 | LumiLink | Loyalty migrations moved to the 0200 block (SEO on main keeps 0090+). Module 2 written: migration 0201 (app/token registry, webhook receipts, per-order refund tracking, enrollment rule, privacy redact, backfill state + pg_cron), three edge functions, `shopify.app.toml` webhooks/App URL/redirect (validated with `shopify app config validate`), backfill GraphQL validated against 2026-10. SQL + unit tests pass. Fixed `node_modules` links on this machine |
+| 2026-10-13 | LumiLink | Module 3: migration 0202 (live-only signup/newsletter/milestones so nothing Joy already paid is paid again, referrals with Joy's checks, events outbox for Klaviyo, hourly `run_loyalty_jobs`: expiry, one-tier demotion + 7-day warning, birthdays + pre-birthday, anniversaries, in the program's time zone). All loyalty SQL + unit tests pass |

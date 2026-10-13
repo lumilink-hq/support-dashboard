@@ -74,6 +74,8 @@ async function main() {
       subtotal_price: "99.00",
       subtotal_price_set: { shop_money: { amount: "100.99" }, presentment_money: { amount: "140.00" } },
       total_price: "120.00",
+      email: "alice@example.com",
+      discount_codes: [{ code: " WAVE-REF-1 ", amount: "10.00", type: "fixed_amount" }, { code: "" }, {}],
       customer: { id: 77, email: " a@example.com ", first_name: "Alice", last_name: "", state: "enabled", created_at: "2026-01-01T00:00:00Z", phone: "+15555550100" },
     }),
     {
@@ -81,7 +83,9 @@ async function main() {
       name: "#1042",
       processed_at: "2026-10-13T10:00:00-07:00",
       eligible_cents: 10099,
-      customer: { id: 77, email: "a@example.com", first_name: "Alice", last_name: null, state: "enabled", created_at: "2026-01-01T00:00:00Z" },
+      email: "alice@example.com",
+      discount_codes: ["WAVE-REF-1"],
+      customer: { id: 77, email: "a@example.com", first_name: "Alice", last_name: null, state: "enabled", created_at: "2026-01-01T00:00:00Z", email_marketing_consent: null },
     },
   );
   eq("order: no phone or address passed through", Object.keys(parseOrder({ id: 1, customer: { id: 2, phone: "x" } })!.customer!).includes("phone"), false);
@@ -109,6 +113,12 @@ async function main() {
   eq("refund: no order id", parseRefund({ id: 1 }), null);
 
   eq("customer: needs an id", parseCustomer({ email: "a@example.com" }), null);
+  eq(
+    "customer: marketing consent kept (state + when)",
+    parseCustomer({ id: 5, email_marketing_consent: { state: "subscribed", opt_in_level: "single_opt_in", consent_updated_at: "2026-10-07T00:00:00Z" } })?.email_marketing_consent,
+    { state: "subscribed", consent_updated_at: "2026-10-07T00:00:00Z" },
+  );
+  eq("order: no discount codes", parseOrder({ id: 1 })?.discount_codes, []);
   eq("redact: customer id", parseRedactCustomerId({ shop_domain: "x.myshopify.com", customer: { id: 191167, email: "j@example.com" } }), 191167);
   eq("redact: missing", parseRedactCustomerId({}), null);
 

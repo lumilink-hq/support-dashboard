@@ -65,13 +65,24 @@ function shopMoney(set: unknown, plain: unknown): number | null {
   return moneyToCents(amt ?? plain);
 }
 
-export type CustomerIn = { id: number; email: string | null; first_name: string | null; last_name: string | null; state: string | null; created_at: string | null };
+export type ConsentIn = { state: string | null; consent_updated_at: string | null };
+export type CustomerIn = {
+  id: number;
+  email: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  state: string | null;
+  created_at: string | null;
+  email_marketing_consent: ConsentIn | null;
+};
 
 export function parseCustomer(c: unknown): CustomerIn | null {
   const o = c as Record<string, unknown> | null;
   const id = Number(o?.id);
   if (!o || !Number.isSafeInteger(id) || id <= 0) return null;
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  // Newsletter points (0202) need the opt-in and when it happened.
+  const consent = o.email_marketing_consent as Record<string, unknown> | null | undefined;
   return {
     id,
     email: str(o.email),
@@ -79,10 +90,20 @@ export function parseCustomer(c: unknown): CustomerIn | null {
     last_name: str(o.last_name),
     state: str(o.state),
     created_at: str(o.created_at),
+    email_marketing_consent:
+      consent && typeof consent === "object" ? { state: str(consent.state), consent_updated_at: str(consent.consent_updated_at) } : null,
   };
 }
 
-export type OrderIn = { id: number; name: string | null; processed_at: string | null; eligible_cents: number; customer: CustomerIn | null };
+export type OrderIn = {
+  id: number;
+  name: string | null;
+  processed_at: string | null;
+  eligible_cents: number;
+  email: string | null;
+  discount_codes: string[];
+  customer: CustomerIn | null;
+};
 
 /**
  * orders/paid. Eligible = subtotal after discounts, before shipping and tax,
@@ -98,6 +119,12 @@ export function parseOrder(p: unknown): OrderIn | null {
     name: typeof o.name === "string" ? o.name : null,
     processed_at: typeof o.processed_at === "string" ? o.processed_at : typeof o.created_at === "string" ? o.created_at : null,
     eligible_cents: Math.max(cents ?? 0, 0),
+    // Referral completion (0202) matches the friend's code and checks the email.
+    email: typeof o.email === "string" && o.email.trim() ? o.email.trim() : null,
+    discount_codes: (Array.isArray(o.discount_codes) ? o.discount_codes : [])
+      .map((d) => (d as { code?: unknown })?.code)
+      .filter((c): c is string => typeof c === "string" && c.trim() !== "")
+      .map((c) => c.trim()),
     customer: parseCustomer(o.customer),
   };
 }

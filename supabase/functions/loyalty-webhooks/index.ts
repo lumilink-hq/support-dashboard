@@ -2,9 +2,10 @@
 // loyalty-webhooks — Shopify webhooks for LL Loyalty (0201).
 //
 //   POST /loyalty-webhooks   (Shopify only; topic in X-Shopify-Topic)
-//     orders/paid             count the order, earn points
+//     orders/paid             count the order, earn points + milestones, complete a referral
 //     refunds/create          claw back points and tier spend
-//     customers/create|update enroll account holders, refresh name/email
+//     customers/create|update enroll account holders, refresh name/email; signup and
+//                             newsletter points when they happen after go-live (0202)
 //     customers/redact        delete the member (privacy, plan §8b L1-8)
 //     shop/redact             delete the store's program (48h after uninstall)
 //     customers/data_request  logged for staff to answer by hand
@@ -68,7 +69,7 @@ async function handle(topic: Topic, shop: string, programId: string, payload: un
     case "customers/update": {
       const customer = parseCustomer(payload);
       if (!customer) return "ignored: no customer id";
-      const id = await rpc<string | null>("loyalty_sync_customer", { p_program: programId, p_customer: customer });
+      const id = await rpc<string | null>("loyalty_sync_customer", { p_program: programId, p_customer: customer, p_live: true });
       return id ? "member" : "not_member";
     }
     case "customers/redact": {
