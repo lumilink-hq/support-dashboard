@@ -28,7 +28,7 @@ Update the module checklist and the session log as work lands. Committed on the 
 | Custom → public switch (Phase 2) | `shopify app config link` creates the public app and `shopify.app.public.toml`; same extensions, deploy with `--config public`. Backend keys tokens by shop + app. Tsunami installs the public app, token swapped, theme block re-added, custom app uninstalled. Est. 2-4 hrs | Shopify doesn't allow changing distribution on an existing app |
 | Shopify token | Issued by OAuth on install, stored in Supabase Vault | Same storage pattern as `seo-publish`. Do **not** reuse the SEO custom-app token. |
 | Settings-driven | All rules, tiers, rewards and copy read from config tables, nothing Tsunami-specific in code | Games and Phase 2 reuse it |
-| Admin UI | Staff-only. Never client-facing in the LumiLink portal | Phase 2 merchants get an embedded admin inside Shopify instead |
+| Admin UI | Staff-only. Never client-facing in the LumiLink portal. `/loyalty`, not in the sidebar. Staff = `platform_staff` (added by SQL only, `scripts/add-platform-staff.sql`), not a workspace role: Tsunami's own admin can't open it. Enforced inside SECURITY DEFINER RPCs under the user's own session (no service role), pages 404 for everyone else | Phase 2 merchants get an embedded admin inside Shopify instead. Workspace roles are per client, so they can't mean "LumiLink staff" |
 | Pricing | Out of scope for now | Boss asked to focus on cost |
 | Migration numbers | Loyalty migrations use the **0200 block** (`0200_`, `0201_`, …) on this branch. The `loyalty` branch never runs `supabase db push`. Before merging to main, renumber them to follow main's latest migration (only comments reference the numbers) | SEO work continues on main with 0090+ in parallel. Duplicate versions break the CLI, and `db push` rejects a migration numbered below one already in production |
 
@@ -107,7 +107,7 @@ Before cutover: list every `Joy:` metric in Klaviyo and confirm each one has an 
 | 4 | Rewards and perks as Shopify discounts ($5, $10 referral, Gold free shipping, members-only prices) | 8-10 | ◐ code + tests done 2026-10-13 (`0203_loyalty_rewards_shopify.sql`, edge fn `loyalty-shopify`, shared `_loyalty/shopify.ts`). All GraphQL + inputs validated against 2026-10. Members-only prices waits on §9 (which products, what %). Not tested against a real store |
 | 5 | Wave Rewards page as a theme app block, reusing the current layout | 6-10 | ◐ code + tests done 2026-10-13 (`0204_loyalty_storefront.sql`, edge fn `loyalty-proxy`, theme extension `ll-loyalty/extensions/wave-rewards`, JS source `ll-loyalty/src/`). Both known page bugs fixed. Rendered and clicked through in a local harness with a mocked proxy; not yet on a real store. Order tags (§3) added |
 | 6 | Klaviyo events + profile properties (section 4) | 4-6 | ◐ code + tests done 2026-10-13 (`0205_loyalty_klaviyo.sql`, edge fn `loyalty-klaviyo`). End-to-end run against a mock Klaviyo passed (names, formats, skips, 429 retry, no re-sends). Waits on: the two unknown event names, a Klaviyo key, and cutover to turn it on |
-| 7 | Staff admin: member lookup, point adjustments | 4-6 | ☐ |
+| 7 | Staff admin: member lookup, point adjustments | 4-6 | ☑ 2026-10-13 (`0206_loyalty_staff_admin.sql`, `/loyalty` + `/loyalty/members/[id]`, `scripts/add-platform-staff.sql`). Run locally against local Supabase as a test staff user: search, member page, adjust (+ overdraw refused), tier change, access log, and 404 once staff access was removed. Not deployed |
 | 8 | Joy data migration, 30-day parallel run, QA | 12-16 | ☐ |
 
 **Cutover rule:** keep Joy on until the parallel run shows our balances and tiers match Joy's for
@@ -144,6 +144,7 @@ theme block packaging; listing and review prep. $19 one-time App Store registrat
 | Keep the Joy export **out of git** (customer PII) | J | ☐ |
 | Klaviyo private key with events:write and profiles:write (into Vault, runbook step 7) | J | ☐ |
 | Docker Desktop running for `npx supabase start` | J | ☑ 2026-10-13 |
+| Add J to `platform_staff` in production after 0206 is pushed (`scripts/add-platform-staff.sql`) | J | ☐ |
 | Shopify CLI 4.9.3 installed globally on the Tsunami machine (`npm i -g @shopify/cli --allow-scripts=esbuild`) | J | ☑ 2026-10-12 |
 | `node_modules` links point at the repo's old path: `pnpm install --frozen-lockfile --force` (plain install is a no-op), then `npx next typegen` | J | ☑ LumiLink machine 2026-10-13; ☐ Tsunami machine |
 
@@ -170,7 +171,7 @@ Dashboard on 2026-10-12. Flip each "No" there to "Yes" when its item lands.
 | L2-3 | Data loss prevention strategy | Yes (thin) | Write `docs/loyalty/DATA-PROTECTION.md`: Supabase daily backups, restore steps, who has access | ☐ |
 | L2-4 | Limit staff access | Yes | Staff-only admin route, RLS, only J has DB access | ☑ |
 | L2-5 | Strong staff passwords | **No** | Production Supabase Auth: minimum 12 characters + character requirements (local `config.toml` is 6, no rules). Consider MFA for staff | ☐ |
-| L2-6 | Access log for protected data | **No** | `loyalty_access_log` table; staff admin writes a row on every member lookup and export (module 7) | ☐ |
+| L2-6 | Access log for protected data | **No** → can flip to Yes once 0206 is in production | `loyalty_access_log` (append-only): every search, member view and change, written inside the staff RPCs so no caller can skip it. No export feature exists | ☑ built 2026-10-13 |
 | L2-7 | Security incident response policy | **No** | One page in `DATA-PROTECTION.md`: detect, contain, notify Tsunami (and Shopify for Phase 2), fix, review | ☐ |
 
 **Do before real Tsunami data flows (before installing on tsunami.store):** L1-7, L1-8, L2-3, L2-5, L2-6, L2-7.
@@ -213,3 +214,4 @@ Then update the Dev Dashboard answers.
 | 2026-10-13 | LumiLink | Module 4: migration 0203 (reward codes debit-first with refund on failure, referral coupon trigger, codes marked used, tier perks as segment-limited automatic discounts, member tier tag + metafield sync, dispatcher that only fires with work) and edge fn `loyalty-shopify`. GraphQL documents and builder inputs validated against 2026-10; all four loyalty functions pass `deno check` (`DENO_NO_PACKAGE_JSON=1 npx deno@2.5.6 check …`). Gold free shipping moved from rewards to `loyalty_perks` in the setup script |
 | 2026-10-13 | LumiLink | Module 5: migration 0204 (storefront state/writes, set-once birthday, claimable actions, referral form with daily cap, order tags), edge fn `loyalty-proxy` (app proxy signature + timestamp), Wave Rewards theme app block (theme check clean, JS 9.9 KB + lazy friend form). `write_orders`, `write_app_proxy` and `[app_proxy]` added to the toml. Harness test caught and fixed missing point values in the earn copy. Codes: no expiry, single use (confirmed) |
 | 2026-10-13 | LumiLink | Module 6: migration 0205 (Klaviyo names as config with Joy defaults, events from tier changes / milestones / reward thresholds, quiet mode for backfill, profile properties by hash, off until `klaviyo_enabled_at`) and edge fn `loyalty-klaviyo` (revision 2026-07-15). Served locally against a mock Klaviyo: correct names and MM/DD/YYYY birthdays, skips for pre-enable / unnamed / no-email, 429 retried, nothing re-sent on the next run |
+| 2026-10-13 | LumiLink | Module 7: migration 0206 (platform_staff, append-only access log, staff-checked SECURITY DEFINER RPCs for search / member detail / adjust / tier / birthday / data requests) and the `/loyalty` pages. Data-request webhooks now record the customer id. Verified in the browser against local Supabase (test staff user, then removed) and all test data cleaned up. Local dev preview config `support-dashboard-local` lives in `Lumilink/.claude/launch.json` (outside the repo) |

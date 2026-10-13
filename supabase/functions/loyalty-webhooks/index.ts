@@ -85,10 +85,13 @@ async function handle(topic: Topic, shop: string, programId: string, payload: un
       const n = await rpc<number>("loyalty_redact_shop", { p_shop: shop });
       return `redacted shop ${n}`;
     }
-    case "customers/data_request":
-      // Rare; answered by staff from the admin (module 7). The receipt is the to-do.
-      console.warn(`loyalty-webhooks ${shop}: customers/data_request received, needs a manual reply`);
-      return "manual: data request";
+    case "customers/data_request": {
+      // Rare; answered by staff from /loyalty (module 7), which lists these
+      // receipts. The customer id (no other PII) is what staff look up.
+      const id = parseRedactCustomerId(payload);
+      console.warn(`loyalty-webhooks ${shop}: customers/data_request for customer ${id ?? "?"}, needs a manual reply`);
+      return `manual: data request, customer ${id ?? "unknown"}`;
+    }
   }
 }
 
