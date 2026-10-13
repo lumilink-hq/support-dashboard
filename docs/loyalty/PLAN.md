@@ -94,7 +94,7 @@ Before cutover: list every `Joy:` metric in Klaviyo and confirm each one has an 
 | # | Module | Hrs | Status |
 |---|---|---|---|
 | 1 | Points ledger, tiers, rules engine (config tables, append-only ledger, RLS) | 12-16 | ☑ 2026-10-13 (`0200_loyalty_core.sql`, `test_loyalty_core.sql`, `setup-loyalty-program.sql`). Not pushed to production |
-| 2 | Shopify order, refund, customer sync + historical backfill | 8-10 | ☐ |
+| 2 | Shopify order, refund, customer sync + historical backfill | 8-10 | ◐ code + tests done 2026-10-13 (`0201_loyalty_shopify_sync.sql`, edge fns `loyalty-webhooks` / `loyalty-oauth` / `loyalty-backfill`, `provision-loyalty-shopify-app.sql`). Not deployed; not yet tested against a real store |
 | 3 | Earning rules, milestones, referrals, expiry, demotion (pg_cron jobs) | 12-16 | ☐ |
 | 4 | Rewards and perks as Shopify discounts ($5, $10 referral, Gold free shipping, members-only prices) | 8-10 | ☐ |
 | 5 | Wave Rewards page as a theme app block, reusing the current layout | 6-10 | ☐ |
@@ -129,13 +129,15 @@ theme block packaging; listing and review prep. $19 one-time App Store registrat
 | Protected customer data: Name + Email selected, data protection answers saved (see 8b). First save returned "not approved": select a distribution method first | J | ◐ |
 | Set distribution to **Custom** (Tsunami's store) in the Dev Dashboard | J | ☑ 2026-10-12 |
 | Confirm protected customer data (name, email) shows as available after custom distribution | J | ☐ |
+| Deploy `loyalty-webhooks`, `loyalty-oauth`, `loyalty-backfill` (`--no-verify-jwt`) **before** `shopify app deploy` (the toml now subscribes webhooks to them). Runbook: `scripts/provision-loyalty-shopify-app.sql` | J + Claude | ☐ |
 | `shopify app deploy` the config, then install on the dev store | J + Claude | ☐ |
+| Decide: the toml points webhooks at **production** Supabase, so a dev-store install writes to production (conflicts with L2-2). Options: a second dev app config (`shopify.app.dev.toml`) pointing at a tunnel to local functions, or accept prod with a throwaway program row | J | ☐ |
 | Joy member export (members, balances, tiers); check Joy Settings → Developers for an API key for points history | J | ☐ |
 | Keep the Joy export **out of git** (customer PII) | J | ☐ |
 | Klaviyo key with events:write and profiles:write | J | ☐ |
 | Docker Desktop running for `npx supabase start` | J | ☑ 2026-10-13 |
 | Shopify CLI 4.9.3 installed globally on the Tsunami machine (`npm i -g @shopify/cli --allow-scripts=esbuild`) | J | ☑ 2026-10-12 |
-| Tsunami machine: `node_modules` links point at the repo's old path; run `pnpm install` before `npm run check` there | J | ☐ |
+| `node_modules` links point at the repo's old path: `pnpm install --frozen-lockfile --force` (plain install is a no-op), then `npx next typegen` | J | ☑ LumiLink machine 2026-10-13; ☐ Tsunami machine |
 
 ## 8b. Data protection (Shopify protected customer data)
 
@@ -173,6 +175,8 @@ Then update the Dev Dashboard answers.
 - Gold "members-only discounts (select products)": which products, what discount?
 - Does Tsunami still need the "Redeem in cart" block, or is the rewards page enough?
 - Instagram follow (100 pts): honor-system click, same as Joy?
+- Enrollment rule (module 2): a customer joins when their Shopify customer `state` is `enabled` (has an account), or anyone if `enroll_guests` is on. Check on the dev store that Shopify's **new customer accounts** (code login) set `state` to `enabled`; if not, the rule needs another signal.
+- Order points are on the subtotal after discounts, before shipping and tax. Confirm that matches Joy (spot-check a few orders in the parallel run).
 
 ## 10. Risks
 
@@ -188,3 +192,4 @@ Then update the Dev Dashboard answers.
 | 2026-10-09 | Tsunami | Scoped the build, walked Joy's admin, wrote the scope brief (Drafts 1-4) |
 | 2026-10-12 | Tsunami | Phase 1 approved. Created `loyalty` branch and this plan. LumiLink Partner account and dev store created. Scaffolded `ll-loyalty/`, set scopes, excluded it from root tsconfig |
 | 2026-10-13 | LumiLink | Module 1 written: migration 0200 (first numbered 0090; renumbered so SEO work on main can keep 0090+) (programs, tiers, earn rules, rewards, members, append-only ledger + tier history, service-role only), Joy config setup script, SQL test. Local db had only 0001-0004 applied; `supabase migration up --local` brought it up to date. `test_loyalty_core.sql` passes. Full suite 39/41: `test_seo_competitor_gaps` and `test_seo_keyword_research` fail on pull-forward (unrelated to loyalty) |
+| 2026-10-13 | LumiLink | Loyalty migrations moved to the 0200 block (SEO on main keeps 0090+). Module 2 written: migration 0201 (app/token registry, webhook receipts, per-order refund tracking, enrollment rule, privacy redact, backfill state + pg_cron), three edge functions, `shopify.app.toml` webhooks/App URL/redirect (validated with `shopify app config validate`), backfill GraphQL validated against 2026-10. SQL + unit tests pass. Fixed `node_modules` links on this machine |
