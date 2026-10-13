@@ -52,7 +52,7 @@ begin
   insert into loyalty_tiers (program_id, key, name, rank, min_spend_cents, earn_multiplier, perks) values
     (v_prog, 'bronze', 'Bronze', 0, 0,      1.0, '[]'),
     (v_prog, 'silver', 'Silver', 1, 50000,  1.1, '["Early access", "1.1x points"]'),
-    (v_prog, 'gold',   'Gold',   2, 120000, 1.2, '["Members-only discounts on select products", "1.2x points", "Free shipping on orders $75+"]')
+    (v_prog, 'gold',   'Gold',   2, 120000, 1.2, '["1.2x points", "Free shipping on orders $75+"]')
   on conflict (program_id, key) do update
      set name = excluded.name, rank = excluded.rank, min_spend_cents = excluded.min_spend_cents,
          earn_multiplier = excluded.earn_multiplier, perks = excluded.perks;
@@ -81,9 +81,10 @@ begin
          value_cents = excluded.value_cents, min_order_cents = excluded.min_order_cents;
 
   -- Tier perks: automatic Shopify discounts for the tier and above (0203).
-  -- Gold "members-only discounts on select products" is added once Tsunami
-  -- names the products and the discount (plan §9): kind 'percent_off_products'
-  -- with collection_gids or product_gids.
+  -- Gold "members-only discounts on select products" is not offered yet (no
+  -- products chosen, 2026-10-13), so it's also left out of Gold's perks text
+  -- above. To add it: a 'percent_off_products' perk with collection_gids or
+  -- product_gids, and the line back in Gold's perks.
   insert into loyalty_perks (program_id, key, tier_key, title, kind, min_subtotal_cents) values
     (v_prog, 'gold_free_shipping', 'gold', 'Gold: free shipping on $75+', 'free_shipping', 7500)
   on conflict (program_id, key) do update

@@ -185,7 +185,7 @@ Then update the Dev Dashboard answers.
 - Tier At Risk segment (TenXzZ): what does it filter on? If it's a Joy event, we need its name for `event_demotion_warning`; we already queue a warning 7 days before demotion.
 - Which tier downgrades should email: we send inactivity and refund drops, not staff changes.
 - Do Joy's tier counts (4,593) include guest customers? Decides who we import.
-- Gold "members-only discounts (select products)": **no products have it yet** (confirmed 2026-10-13), so no `percent_off_products` perk is created. But Gold's perks text (setup script, shown on the Wave Rewards page) still promises "Members-only discounts on select products", as Joy's page does. Keep the line, or drop it until products are chosen?
+- Gold "members-only discounts (select products)": **no products have it yet** (confirmed 2026-10-13), so no `percent_off_products` perk is created. But Gold's perks text (setup script, shown on the Wave Rewards page) still promises "Members-only discounts on select products", as Joy's page does. **Decided 2026-10-13: dropped** from Gold's perks text until products are chosen (setup script).
 - Does Tsunami still need the "Redeem in cart" block, or is the rewards page enough?
 - Instagram follow (100 pts): honor-system click, same as Joy?
 - Enrollment rule (module 2): a customer joins when their Shopify customer `state` is `enabled` (has an account), or anyone if `enroll_guests` is on. Check on the dev store that Shopify's **new customer accounts** (code login) set `state` to `enabled`; if not, the rule needs another signal.
