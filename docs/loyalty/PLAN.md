@@ -92,7 +92,7 @@ Before cutover: list every `Joy:` metric in Klaviyo and confirm each one has an 
 
 | # | Module | Hrs | Status |
 |---|---|---|---|
-| 1 | Points ledger, tiers, rules engine (config tables, append-only ledger, RLS) | 12-16 | ☐ |
+| 1 | Points ledger, tiers, rules engine (config tables, append-only ledger, RLS) | 12-16 | ☑ 2026-10-13 (`0090_loyalty_core.sql`, `test_loyalty_core.sql`, `setup-loyalty-program.sql`). Not pushed to production |
 | 2 | Shopify order, refund, customer sync + historical backfill | 8-10 | ☐ |
 | 3 | Earning rules, milestones, referrals, expiry, demotion (pg_cron jobs) | 12-16 | ☐ |
 | 4 | Rewards and perks as Shopify discounts ($5, $10 referral, Gold free shipping, members-only prices) | 8-10 | ☐ |
@@ -132,7 +132,7 @@ theme block packaging; listing and review prep. $19 one-time App Store registrat
 | Joy member export (members, balances, tiers); check Joy Settings → Developers for an API key for points history | J | ☐ |
 | Keep the Joy export **out of git** (customer PII) | J | ☐ |
 | Klaviyo key with events:write and profiles:write | J | ☐ |
-| Docker Desktop running for `npx supabase start` | J | ☐ |
+| Docker Desktop running for `npx supabase start` | J | ☑ 2026-10-13 |
 | Shopify CLI 4.9.3 installed globally on the Tsunami machine (`npm i -g @shopify/cli --allow-scripts=esbuild`) | J | ☑ 2026-10-12 |
 | Tsunami machine: `node_modules` links point at the repo's old path; run `pnpm install` before `npm run check` there | J | ☐ |
 
@@ -186,3 +186,4 @@ Then update the Dev Dashboard answers.
 |---|---|---|
 | 2026-10-09 | Tsunami | Scoped the build, walked Joy's admin, wrote the scope brief (Drafts 1-4) |
 | 2026-10-12 | Tsunami | Phase 1 approved. Created `loyalty` branch and this plan. LumiLink Partner account and dev store created. Scaffolded `ll-loyalty/`, set scopes, excluded it from root tsconfig |
+| 2026-10-13 | LumiLink | Module 1 written: migration 0090 (programs, tiers, earn rules, rewards, members, append-only ledger + tier history, service-role only), Joy config setup script, SQL test. Local db had only 0001-0004 applied; `supabase migration up --local` brought it to 0090. `test_loyalty_core.sql` passes. Full suite 39/41: `test_seo_competitor_gaps` and `test_seo_keyword_research` fail on pull-forward (unrelated to loyalty) |
