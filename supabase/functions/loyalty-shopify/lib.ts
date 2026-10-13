@@ -57,8 +57,14 @@ export const CODE_BASIC_CREATE = `mutation LoyaltyCodeCreate($input: DiscountCod
   }
 }`;
 
+// Title too: an existing code is only adopted as ours if the title matches
+// (Joy's WAVE- codes live in the same store; a random collision must not
+// hand a member someone else's code).
 export const CODE_LOOKUP = `query LoyaltyCodeLookup($code: String!) {
-  codeDiscountNodeByCode(code: $code) { id }
+  codeDiscountNodeByCode(code: $code) {
+    id
+    codeDiscount { ... on DiscountCodeBasic { title } }
+  }
 }`;
 
 export const METAFIELDS_SET = `mutation LoyaltyMetafieldsSet($metafields: [MetafieldsSetInput!]!) {

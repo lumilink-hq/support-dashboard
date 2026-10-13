@@ -30,6 +30,7 @@ Update the module checklist and the session log as work lands. Committed on the 
 | Settings-driven | All rules, tiers, rewards and copy read from config tables, nothing Tsunami-specific in code | Games and Phase 2 reuse it |
 | Admin UI | Staff-only. Never client-facing in the LumiLink portal. `/loyalty`, not in the sidebar. Staff = `platform_staff` (added by SQL only, `scripts/add-platform-staff.sql`), not a workspace role: Tsunami's own admin can't open it. Enforced inside SECURITY DEFINER RPCs under the user's own session (no service role), pages 404 for everyone else | Phase 2 merchants get an embedded admin inside Shopify instead. Workspace roles are per client, so they can't mean "LumiLink staff" |
 | Pricing | Out of scope for now | Boss asked to focus on cost |
+| Joy import | Each import **sets** members to Joy's balance and tier (one ledger entry for the gap, both numbers in the note). Day 0 = opening balances; cutover = final true-up. A snapshot applies once; an older one than the last applied is refused. Compare is read-only | Joy redemptions/claims during the parallel run never reach our ledger, so balances drift by design; only a set-to-Joy at cutover lands exact. Adding Joy's balance would double count orders both systems saw |
 | Migration numbers | Loyalty migrations use the **0200 block** (`0200_`, `0201_`, …) on this branch. The `loyalty` branch never runs `supabase db push`. Before merging to main, renumber them to follow main's latest migration (only comments reference the numbers) | SEO work continues on main with 0090+ in parallel. Duplicate versions break the CLI, and `db push` rejects a migration numbered below one already in production |
 
 ## 2. Architecture
@@ -108,10 +109,11 @@ Before cutover: list every `Joy:` metric in Klaviyo and confirm each one has an 
 | 5 | Wave Rewards page as a theme app block, reusing the current layout | 6-10 | ◐ code + tests done 2026-10-13 (`0204_loyalty_storefront.sql`, edge fn `loyalty-proxy`, theme extension `ll-loyalty/extensions/wave-rewards`, JS source `ll-loyalty/src/`). Both known page bugs fixed. Rendered and clicked through in a local harness with a mocked proxy; not yet on a real store. Order tags (§3) added |
 | 6 | Klaviyo events + profile properties (section 4) | 4-6 | ◐ code + tests done 2026-10-13 (`0205_loyalty_klaviyo.sql`, edge fn `loyalty-klaviyo`). End-to-end run against a mock Klaviyo passed (names, formats, skips, 429 retry, no re-sends). Waits on: the two unknown event names, a Klaviyo key, and cutover to turn it on |
 | 7 | Staff admin: member lookup, point adjustments | 4-6 | ☑ 2026-10-13 (`0206_loyalty_staff_admin.sql`, `/loyalty` + `/loyalty/members/[id]`, `scripts/add-platform-staff.sql`). Run locally against local Supabase as a test staff user: search, member page, adjust (+ overdraw refused), tier change, access log, and 404 once staff access was removed. Not deployed |
-| 8 | Joy data migration, 30-day parallel run, QA | 12-16 | ☐ |
+| 8 | Joy data migration, 30-day parallel run, QA | 12-16 | ◐ tooling done 2026-10-13 (`0207_loyalty_joy_migration.sql`, `scripts/joy-import.ts`, runbook [CUTOVER.md](CUTOVER.md), draft [DATA-PROTECTION.md](DATA-PROTECTION.md)). Import + compare run end to end on the local stack with a synthetic export. The migration itself, parallel run and QA happen on the live store (CUTOVER.md B-D) |
 
 **Cutover rule:** keep Joy on until the parallel run shows our balances and tiers match Joy's for
-every member. Then switch Klaviyo flows, swap the page block, cancel Joy.
+every member (or every difference is explained: Joy-side redemptions and claims are expected). Then
+true-up import, switch Klaviyo flows, swap the page block, cancel Joy. Step by step: [CUTOVER.md](CUTOVER.md).
 
 ## 6. Phase 1b: games (32-47 hrs) — after Phase 1
 
@@ -140,7 +142,7 @@ theme block packaging; listing and review prep. $19 one-time App Store registrat
 | Deploy `loyalty-webhooks`, `loyalty-oauth`, `loyalty-backfill`, `loyalty-shopify`, `loyalty-proxy`, `loyalty-klaviyo` (`--no-verify-jwt`) **before** `shopify app deploy` (the toml now subscribes webhooks to them). Runbook: `scripts/provision-loyalty-shopify-app.sql` | J + Claude | ☐ |
 | `shopify app deploy` the config, then install on the dev store | J + Claude | ☐ |
 | Decide: the toml points webhooks at **production** Supabase, so a dev-store install writes to production (conflicts with L2-2). Options: a second dev app config (`shopify.app.dev.toml`) pointing at a tunnel to local functions, or accept prod with a throwaway program row | J | ☐ |
-| Joy member export (members, balances, tiers); check Joy Settings → Developers for an API key for points history | J | ☐ |
+| Joy member export (members, balances, tiers, birthdays, join dates); check Joy Settings → Developers for an API key for points history. Run `scripts/joy-import.ts` on it **without** `--apply` first: it reports the column mapping and problem rows | J | ☐ |
 | Keep the Joy export **out of git** (customer PII) | J | ☐ |
 | Klaviyo private key with events:write and profiles:write (into Vault, runbook step 7) | J | ☐ |
 | Docker Desktop running for `npx supabase start` | J | ☑ 2026-10-13 |
@@ -164,15 +166,15 @@ Dashboard on 2026-10-12. Flip each "No" there to "Yes" when its item lands.
 | L1-5 | Respect opt-out of data sharing | N/A | We don't sell data | ☑ |
 | L1-6 | Automated decisions | N/A | Points and tiers aren't legally significant | ☑ |
 | L1-7 | Privacy agreement with merchants | **No** | Write a short data processing agreement, LumiLink ↔ Tsunami; reuse as the Phase 2 terms | ☐ |
-| L1-8 | Retention periods | **No** | Written retention rule + handle `customers/redact`, `customers/data_request`, `shop/redact` webhooks; delete member PII on redact and after uninstall | ☐ |
+| L1-8 | Retention periods | **No** | Redact webhooks built (module 2), data requests listed in `/loyalty` (module 7), retention table in `DATA-PROTECTION.md` (draft). Still to build: a monthly purge of webhook receipts (90 days) and access log (2 years) | ◐ |
 | L1-9 | Encrypt at rest and in transit | Yes | Supabase encryption + HTTPS | ☑ |
 | L2-1 | Encrypt backups | Yes | Supabase backups are encrypted | ☑ |
 | L2-2 | Separate test and production | Yes | Dev store + local Supabase vs Tsunami + production project | ☑ |
-| L2-3 | Data loss prevention strategy | Yes (thin) | Write `docs/loyalty/DATA-PROTECTION.md`: Supabase daily backups, restore steps, who has access | ☐ |
+| L2-3 | Data loss prevention strategy | Yes (thin) | `docs/loyalty/DATA-PROTECTION.md` (draft 2026-10-13): backups, restore steps, append-only ledger, access | ◐ draft, J to review |
 | L2-4 | Limit staff access | Yes | Staff-only admin route, RLS, only J has DB access | ☑ |
 | L2-5 | Strong staff passwords | **No** | Production Supabase Auth: minimum 12 characters + character requirements (local `config.toml` is 6, no rules). Consider MFA for staff | ☐ |
 | L2-6 | Access log for protected data | **No** → can flip to Yes once 0206 is in production | `loyalty_access_log` (append-only): every search, member view and change, written inside the staff RPCs so no caller can skip it. No export feature exists | ☑ built 2026-10-13 |
-| L2-7 | Security incident response policy | **No** | One page in `DATA-PROTECTION.md`: detect, contain, notify Tsunami (and Shopify for Phase 2), fix, review | ☐ |
+| L2-7 | Security incident response policy | **No** | `DATA-PROTECTION.md` (draft): detect, contain, notify Tsunami within 72h (and Shopify for Phase 2), fix, review | ◐ draft, J to review |
 
 **Do before real Tsunami data flows (before installing on tsunami.store):** L1-7, L1-8, L2-3, L2-5, L2-6, L2-7.
 Then update the Dev Dashboard answers.
@@ -199,6 +201,7 @@ Then update the Dev Dashboard answers.
 - **Klaviyo names drift:** flows silently stop. Section 4 is the contract.
 - **Double-awarding:** Shopify retries webhooks. Ledger writes must be idempotent on (order id, rule).
 - **Refunds:** points must claw back on refund, including tier spend.
+- **Shared `WAVE-` prefix with Joy's live codes:** a random collision with a Joy code is now refused (the existing code is only adopted if its title is ours) rather than handed to a member.
 - **Joy import (module 8) must run quiet** (`set_config('loyalty.quiet', 'on', true)`), or every imported tier and reward threshold queues a Klaviyo event.
 - **Joy import (module 8) must set dates, not just balances:** `enrolled_at` (anniversaries), `last_activity_at` (expiry) and `last_order_at` (demotion) come from Joy/Shopify history. Leave them at import time and every expiry and demotion clock restarts at cutover. Import before the hourly `loyalty-jobs` cron can act on the program.
 
@@ -215,3 +218,4 @@ Then update the Dev Dashboard answers.
 | 2026-10-13 | LumiLink | Module 5: migration 0204 (storefront state/writes, set-once birthday, claimable actions, referral form with daily cap, order tags), edge fn `loyalty-proxy` (app proxy signature + timestamp), Wave Rewards theme app block (theme check clean, JS 9.9 KB + lazy friend form). `write_orders`, `write_app_proxy` and `[app_proxy]` added to the toml. Harness test caught and fixed missing point values in the earn copy. Codes: no expiry, single use (confirmed) |
 | 2026-10-13 | LumiLink | Module 6: migration 0205 (Klaviyo names as config with Joy defaults, events from tier changes / milestones / reward thresholds, quiet mode for backfill, profile properties by hash, off until `klaviyo_enabled_at`) and edge fn `loyalty-klaviyo` (revision 2026-07-15). Served locally against a mock Klaviyo: correct names and MM/DD/YYYY birthdays, skips for pre-enable / unnamed / no-email, 429 retried, nothing re-sent on the next run |
 | 2026-10-13 | LumiLink | Module 7: migration 0206 (platform_staff, append-only access log, staff-checked SECURITY DEFINER RPCs for search / member detail / adjust / tier / birthday / data requests) and the `/loyalty` pages. Data-request webhooks now record the customer id. Verified in the browser against local Supabase (test staff user, then removed) and all test data cleaned up. Local dev preview config `support-dashboard-local` lives in `Lumilink/.claude/launch.json` (outside the repo) |
+| 2026-10-13 | LumiLink | Module 8 tooling: migration 0207 (Joy snapshots; import sets balances/tiers with the gap recorded, carries join/activity dates and birthdays, quiet; read-only compare; purge), `scripts/joy-import.ts` (alias-mapped CSV, dry run by default, explicit `LOYALTY_*` env to apply), CUTOVER.md runbook with QA script, DATA-PROTECTION.md draft. Design changed mid-module from import-once to set-to-Joy true-up after tracing the parallel run. Module 4 fix: code lookup checks the title before adopting an existing code |

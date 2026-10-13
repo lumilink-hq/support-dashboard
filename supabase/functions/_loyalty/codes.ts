@@ -1,7 +1,8 @@
 // Shared by loyalty-shopify (the minute queue) and loyalty-proxy (a shopper
 // redeeming right now): create one pending code in Shopify and record the
-// outcome. A code that already exists (an earlier attempt landed) is looked
-// up, not duplicated.
+// outcome. A code that already exists with OUR title (an earlier attempt
+// landed) is looked up, not duplicated; one with another title is an error,
+// and after 5 the points come back (the shopper redeems again for a new code).
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.49.1";
 import { CODE_BASIC_CREATE, CODE_LOOKUP, type CodeRow, codeDiscountInput, isCodeTaken, userErrorText } from "../loyalty-shopify/lib.ts";
@@ -23,7 +24,10 @@ export async function issueCode(
     let id = r?.codeDiscountNode?.id ?? null;
     if (!id && isCodeTaken(r?.userErrors)) {
       const found = await shopifyGraphql(shop, token, CODE_LOOKUP, { code: row.code }, shopBase);
-      id = (found.codeDiscountNodeByCode as { id?: string } | null)?.id ?? null;
+      const node = found.codeDiscountNodeByCode as { id?: string; codeDiscount?: { title?: string } } | null;
+      // Ours only if the title matches; otherwise it's someone else's code (e.g. Joy's).
+      if (node?.id && node.codeDiscount?.title !== row.title) throw new Error(`code ${row.code} already exists in Shopify and isn't ours`);
+      id = node?.id ?? null;
     }
     if (!id) throw new Error(userErrorText(r?.userErrors) || "no id returned");
     const { error } = await supabase.rpc("loyalty_code_issued", { p_code: row.id, p_shopify_discount_id: id });
