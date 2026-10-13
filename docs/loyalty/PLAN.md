@@ -134,7 +134,7 @@ theme block packaging; listing and review prep. $19 one-time App Store registrat
 | Item | Owner | Status |
 |---|---|---|
 | Decide which account owns the app: LumiLink Partner account | J | ☑ 2026-10-12 |
-| Free development store for testing | J | ☑ 2026-10-12 |
+| Free development store for testing: **LL Dev store, `ll-dev-store-meumbtld.myshopify.com`**, in the app's org (Lumilink 240443031) | J | ☑ 2026-10-12 |
 | `shopify app init` → `ll-loyalty/`; sample FAQ extensions and nested `.git` removed; scopes set | J + Claude | ☑ 2026-10-12 |
 | Protected customer data: Name + Email selected, data protection answers saved (see 8b). First save returned "not approved": select a distribution method first | J | ◐ |
 | Set distribution to **Custom** (Tsunami's store) in the Dev Dashboard | J | ☑ 2026-10-12 |
@@ -225,3 +225,4 @@ Then update the Dev Dashboard answers.
 | 2026-10-13 | LumiLink | Production setup: edge functions deployed (all `verify_jwt` false, probed), Vault URLs added, lumilinkhq@gmail.com added as platform staff, Tsunami program created (setup script), Shopify app deployed. Not installed on tsunami.store yet: waiting on the A1 data-protection items |
 | 2026-10-13 | LumiLink | `/loyalty` shows Wave Rewards (0 members) for staff. DATA-PROTECTION.md reviewed and agreed (L2-3, L2-7). Dev-store rehearsal added to CUTOVER.md (custom distribution allows dev-store installs) |
 | 2026-10-13 | LumiLink | Dev-store install failed: `invalid_link_organization` (the dev store is in a different org than the app; app org is Lumilink 240443031). Our side worked (store registered, OAuth reached Shopify). Fix: new dev store in the Lumilink org, redact the old dev program |
+| 2026-10-13 | LumiLink | Correction: the app's org does own a dev store (`ll-dev-store-meumbtld`, `shopify store list`). The failed install was against a different, unregistered-in-this-org store; `ll-dev-store-meumbtld` wasn't registered yet (install link 404). Rehearse on `ll-dev-store-meumbtld` |
