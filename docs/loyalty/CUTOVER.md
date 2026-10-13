@@ -17,9 +17,9 @@ member, or every difference is explained. Then switch.
 | A2 | Merge `loyalty` into main, then from main `supabase db push --include-all` (production already has 0300/0301 from the outbound branch, so 0200-0207 are "lower"; checked 2026-10-13 that they don't overlap). Do **not** run the `migration repair` commands `db pull` suggests || ☑ 2026-10-13 |
 | A3 | Deploy edge functions, all `--no-verify-jwt`: `loyalty-webhooks`, `loyalty-oauth`, `loyalty-backfill`, `loyalty-shopify`, `loyalty-proxy`, `loyalty-klaviyo`. Check `supabase functions list` shows `verify_jwt` false || ☑ 2026-10-13 |
 | A4 | Vault secrets: `loyalty_backfill_url`, `loyalty_shopify_url`, `loyalty_klaviyo_url` (provision runbook steps 4, 5, 7) || ☑ 2026-10-13 |
-| A5 | `setup-loyalty-program.sql` for Tsunami (confirm time zone first), then provision runbook steps 1-2 | ☐ |
+| A5 | `setup-loyalty-program.sql` for Tsunami (confirm time zone first), then provision runbook steps 1-2 || ☑ 2026-10-13 |
 | A6 | `add-platform-staff.sql` for J; open `/loyalty` and see the program || ◐ lumilinkhq@gmail.com added 2026-10-13; see the program after A5 |
-| A7 | From `ll-loyalty/`: `npm run build:blocks && shopify app deploy` | ☐ |
+| A7 | From `ll-loyalty/`: `npm run build:blocks && shopify app deploy` || ☑ 2026-10-13 |
 | A8 | Klaviyo key in Vault, `rewards_page_url` set, **`klaviyo_enabled_at` left empty** | ☐ |
 
 ## B. Day 0: install, backfill, opening balances
