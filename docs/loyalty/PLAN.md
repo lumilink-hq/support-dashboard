@@ -93,6 +93,10 @@ Tsunami's flows and segments read Joy's names. Emit the **exact same** names or 
 
 Before cutover: list every `Joy:` metric in Klaviyo and confirm each one has an emitter here.
 
+**Built (module 6):** names live in `loyalty_programs.klaviyo_names` (defaults above; unknown = null = not sent). Events: `reward_eligible` (balance crosses a reward cost), `tier_up` (spend/staff), `tier_down` (inactivity/refund), `milestone`, `pre_birthday`, `birthday`, `demotion_warning` (no Joy name known, so off). Each event also carries `points_balance`, `tier`, `referral_url`. **Sending is off until `klaviyo_enabled_at` is set at cutover**; events queued before it are skipped. Backfill (and the module 8 import, which must set `loyalty.quiet`) queue no events.
+
+**Check before cutover:** open one recent event of each `Joy:` metric in Klaviyo and compare its properties with ours. Flow emails that use `{{ event.… }}` need the same property names, which Joy's docs don't list. Also confirm the values Joy uses for `Joy member status` (we send `member`).
+
 ## 5. Phase 1: replace Joy (66-90 hrs)
 
 | # | Module | Hrs | Status |
@@ -102,7 +106,7 @@ Before cutover: list every `Joy:` metric in Klaviyo and confirm each one has an 
 | 3 | Earning rules, milestones, referrals, expiry, demotion (pg_cron jobs) | 12-16 | ☑ 2026-10-13 (`0202_loyalty_earning_jobs.sql`, `test_loyalty_earning_jobs.sql`; webhook parsing extended). Referral discount codes and the Instagram-follow claim endpoint come with modules 4 and 5 (SQL side ready: `loyalty_referrals.discount_code`, `loyalty_award_action`) |
 | 4 | Rewards and perks as Shopify discounts ($5, $10 referral, Gold free shipping, members-only prices) | 8-10 | ◐ code + tests done 2026-10-13 (`0203_loyalty_rewards_shopify.sql`, edge fn `loyalty-shopify`, shared `_loyalty/shopify.ts`). All GraphQL + inputs validated against 2026-10. Members-only prices waits on §9 (which products, what %). Not tested against a real store |
 | 5 | Wave Rewards page as a theme app block, reusing the current layout | 6-10 | ◐ code + tests done 2026-10-13 (`0204_loyalty_storefront.sql`, edge fn `loyalty-proxy`, theme extension `ll-loyalty/extensions/wave-rewards`, JS source `ll-loyalty/src/`). Both known page bugs fixed. Rendered and clicked through in a local harness with a mocked proxy; not yet on a real store. Order tags (§3) added |
-| 6 | Klaviyo events + profile properties (section 4) | 4-6 | ☐ |
+| 6 | Klaviyo events + profile properties (section 4) | 4-6 | ◐ code + tests done 2026-10-13 (`0205_loyalty_klaviyo.sql`, edge fn `loyalty-klaviyo`). End-to-end run against a mock Klaviyo passed (names, formats, skips, 429 retry, no re-sends). Waits on: the two unknown event names, a Klaviyo key, and cutover to turn it on |
 | 7 | Staff admin: member lookup, point adjustments | 4-6 | ☐ |
 | 8 | Joy data migration, 30-day parallel run, QA | 12-16 | ☐ |
 
@@ -133,12 +137,12 @@ theme block packaging; listing and review prep. $19 one-time App Store registrat
 | Protected customer data: Name + Email selected, data protection answers saved (see 8b). First save returned "not approved": select a distribution method first | J | ◐ |
 | Set distribution to **Custom** (Tsunami's store) in the Dev Dashboard | J | ☑ 2026-10-12 |
 | Confirm protected customer data (name, email) shows as available after custom distribution | J | ☐ |
-| Deploy `loyalty-webhooks`, `loyalty-oauth`, `loyalty-backfill`, `loyalty-shopify`, `loyalty-proxy` (`--no-verify-jwt`) **before** `shopify app deploy` (the toml now subscribes webhooks to them). Runbook: `scripts/provision-loyalty-shopify-app.sql` | J + Claude | ☐ |
+| Deploy `loyalty-webhooks`, `loyalty-oauth`, `loyalty-backfill`, `loyalty-shopify`, `loyalty-proxy`, `loyalty-klaviyo` (`--no-verify-jwt`) **before** `shopify app deploy` (the toml now subscribes webhooks to them). Runbook: `scripts/provision-loyalty-shopify-app.sql` | J + Claude | ☐ |
 | `shopify app deploy` the config, then install on the dev store | J + Claude | ☐ |
 | Decide: the toml points webhooks at **production** Supabase, so a dev-store install writes to production (conflicts with L2-2). Options: a second dev app config (`shopify.app.dev.toml`) pointing at a tunnel to local functions, or accept prod with a throwaway program row | J | ☐ |
 | Joy member export (members, balances, tiers); check Joy Settings → Developers for an API key for points history | J | ☐ |
 | Keep the Joy export **out of git** (customer PII) | J | ☐ |
-| Klaviyo key with events:write and profiles:write | J | ☐ |
+| Klaviyo private key with events:write and profiles:write (into Vault, runbook step 7) | J | ☐ |
 | Docker Desktop running for `npx supabase start` | J | ☑ 2026-10-13 |
 | Shopify CLI 4.9.3 installed globally on the Tsunami machine (`npm i -g @shopify/cli --allow-scripts=esbuild`) | J | ☑ 2026-10-12 |
 | `node_modules` links point at the repo's old path: `pnpm install --frozen-lockfile --force` (plain install is a no-op), then `npx next typegen` | J | ☑ LumiLink machine 2026-10-13; ☐ Tsunami machine |
@@ -174,7 +178,9 @@ Then update the Dev Dashboard answers.
 
 ## 9. Open questions
 
-- Tier achieved and milestone event names in Klaviyo (section 4).
+- Tier achieved and milestone event names in Klaviyo (section 4). Until set, those events aren't sent.
+- Tier At Risk segment (TenXzZ): what does it filter on? If it's a Joy event, we need its name for `event_demotion_warning`; we already queue a warning 7 days before demotion.
+- Which tier downgrades should email: we send inactivity and refund drops, not staff changes.
 - Do Joy's tier counts (4,593) include guest customers? Decides who we import.
 - Gold "members-only discounts (select products)": which products, what discount?
 - Does Tsunami still need the "Redeem in cart" block, or is the rewards page enough?
@@ -192,6 +198,7 @@ Then update the Dev Dashboard answers.
 - **Klaviyo names drift:** flows silently stop. Section 4 is the contract.
 - **Double-awarding:** Shopify retries webhooks. Ledger writes must be idempotent on (order id, rule).
 - **Refunds:** points must claw back on refund, including tier spend.
+- **Joy import (module 8) must run quiet** (`set_config('loyalty.quiet', 'on', true)`), or every imported tier and reward threshold queues a Klaviyo event.
 - **Joy import (module 8) must set dates, not just balances:** `enrolled_at` (anniversaries), `last_activity_at` (expiry) and `last_order_at` (demotion) come from Joy/Shopify history. Leave them at import time and every expiry and demotion clock restarts at cutover. Import before the hourly `loyalty-jobs` cron can act on the program.
 
 ## 11. Session log
@@ -205,3 +212,4 @@ Then update the Dev Dashboard answers.
 | 2026-10-13 | LumiLink | Module 3: migration 0202 (live-only signup/newsletter/milestones so nothing Joy already paid is paid again, referrals with Joy's checks, events outbox for Klaviyo, hourly `run_loyalty_jobs`: expiry, one-tier demotion + 7-day warning, birthdays + pre-birthday, anniversaries, in the program's time zone). All loyalty SQL + unit tests pass |
 | 2026-10-13 | LumiLink | Module 4: migration 0203 (reward codes debit-first with refund on failure, referral coupon trigger, codes marked used, tier perks as segment-limited automatic discounts, member tier tag + metafield sync, dispatcher that only fires with work) and edge fn `loyalty-shopify`. GraphQL documents and builder inputs validated against 2026-10; all four loyalty functions pass `deno check` (`DENO_NO_PACKAGE_JSON=1 npx deno@2.5.6 check …`). Gold free shipping moved from rewards to `loyalty_perks` in the setup script |
 | 2026-10-13 | LumiLink | Module 5: migration 0204 (storefront state/writes, set-once birthday, claimable actions, referral form with daily cap, order tags), edge fn `loyalty-proxy` (app proxy signature + timestamp), Wave Rewards theme app block (theme check clean, JS 9.9 KB + lazy friend form). `write_orders`, `write_app_proxy` and `[app_proxy]` added to the toml. Harness test caught and fixed missing point values in the earn copy. Codes: no expiry, single use (confirmed) |
+| 2026-10-13 | LumiLink | Module 6: migration 0205 (Klaviyo names as config with Joy defaults, events from tier changes / milestones / reward thresholds, quiet mode for backfill, profile properties by hash, off until `klaviyo_enabled_at`) and edge fn `loyalty-klaviyo` (revision 2026-07-15). Served locally against a mock Klaviyo: correct names and MM/DD/YYYY birthdays, skips for pre-enable / unnamed / no-email, 429 retried, nothing re-sent on the next run |

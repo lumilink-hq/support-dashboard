@@ -11,6 +11,7 @@
 --      supabase functions deploy loyalty-backfill --no-verify-jwt
 --      supabase functions deploy loyalty-shopify --no-verify-jwt
 --      supabase functions deploy loyalty-proxy --no-verify-jwt
+--      supabase functions deploy loyalty-klaviyo --no-verify-jwt
 --    Then, from ll-loyalty/:  npm run build:blocks && shopify app deploy
 --    (ships the webhook subscriptions, App URL, redirect URL and app proxy in
 --    shopify.app.toml, and the Wave Rewards theme block). Functions FIRST, so
@@ -49,5 +50,20 @@ select count(*) filter (where shopify_sync_error is not null) errors,
 -- 6. Storefront: Online Store > Themes > Customize > the Wave Rewards page >
 --    Add block > Apps > "Wave Rewards page". Set the Instagram link. Check
 --    https://<store>/apps/loyalty/state returns JSON (proxy wired).
--- 7. Webhooks arriving:
+-- 7. Klaviyo (0205). Private key with events:write + profiles:write into Vault,
+--    the page URL for referral links, and the sender URL (once per project):
+select vault.create_secret('<pk_… private key>', 'll-loyalty-klaviyo:<store>');
+update loyalty_programs set klaviyo_key_ref = 'll-loyalty-klaviyo:<store>',
+       rewards_page_url = 'https://<storefront domain>/pages/wave-rewards'
+ where shop_domain = '<store>.myshopify.com';
+select vault.create_secret('https://xqsxjxrzpxhosedkmufg.functions.supabase.co/loyalty-klaviyo', 'loyalty_klaviyo_url', '');
+--    NOTHING is sent until klaviyo_enabled_at is set. Do that at cutover only
+--    (Joy sends the same names until then). To test during the parallel run,
+--    rename the events first so Tsunami's flows don't fire, e.g.:
+--      update loyalty_programs set klaviyo_names = klaviyo_names
+--        || '{"event_tier_down":"LL: Tier Downgrade", "prop_tier":"LL Vip tier"}' …
+--    At cutover: restore Joy's names, then
+--      update loyalty_programs set klaviyo_enabled_at = now() where shop_domain = '<store>.myshopify.com';
+select status, kind, count(*) from loyalty_events group by 1, 2 order by 1, 2;
+-- 8. Webhooks arriving:
 select topic, outcome, error, received_at from loyalty_webhook_receipts order by received_at desc limit 20;

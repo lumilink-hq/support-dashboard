@@ -135,7 +135,7 @@ begin
   perform loyalty_set_tier(v_erin, 'gold', 'staff', 'test');
   perform loyalty_post_entry(v_erin, 0, 'order', 'test:erin-order', 0, null, null, null, null, 'test', '2026-03-01T00:00:00Z');
   perform run_loyalty_jobs('2026-08-20T00:00:00Z');
-  select count(*) into v_n from loyalty_events where member_id = v_erin;
+  select count(*) into v_n from loyalty_events where member_id = v_erin and kind = 'demotion_warning';
   assert v_n = 0, 'demotion: no warning before the window';
   perform run_loyalty_jobs('2026-08-26T00:00:00Z');
   perform run_loyalty_jobs('2026-08-27T00:00:00Z');
