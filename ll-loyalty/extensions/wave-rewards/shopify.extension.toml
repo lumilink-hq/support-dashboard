@@ -1,0 +1,5 @@
+# Wave Rewards: the LL Loyalty rewards page as a theme app block (module 5).
+# Data comes from the app proxy /apps/loyalty (loyalty-proxy edge function).
+name = "Wave Rewards"
+type = "theme"
+uid = "2a84db91-398d-f3cd-c60e-427df150f0ce6f99fa73"

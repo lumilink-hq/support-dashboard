@@ -28,7 +28,16 @@ uri = "https://xqsxjxrzpxhosedkmufg.supabase.co/functions/v1/loyalty-webhooks"
 [access_scopes]
 # read_all_orders: the tier backfill reaches back to 2026-06-05, past the 60-day default window.
 # write_customers: tier metafield + tags. write_discounts: reward and perk discount codes.
-scopes = "read_orders,read_all_orders,read_customers,write_customers,write_discounts,read_products"
+# write_orders: tag loyalty-assisted and referral orders (includes read_orders).
+# write_app_proxy: the storefront /apps/loyalty proxy the Wave Rewards block calls.
+scopes = "read_orders,write_orders,read_all_orders,read_customers,write_customers,write_discounts,read_products,write_app_proxy"
+
+[app_proxy]
+# Storefront https://<shop>/apps/loyalty/* -> the loyalty-proxy edge function (0204).
+# Deploy loyalty-proxy (--no-verify-jwt) before `shopify app deploy`.
+url = "https://xqsxjxrzpxhosedkmufg.supabase.co/functions/v1/loyalty-proxy"
+prefix = "apps"
+subpath = "loyalty"
 
 [auth]
 redirect_urls = [ "https://xqsxjxrzpxhosedkmufg.supabase.co/functions/v1/loyalty-oauth/callback" ]

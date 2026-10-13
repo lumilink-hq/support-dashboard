@@ -111,6 +111,22 @@ export function tierTagsMutation(members: { customerId: number; tierName: string
   return { query: `mutation LoyaltyTierTags(${defs.join(", ")}) {\n  ${body.join("\n  ")}\n}`, variables };
 }
 
+export const orderGid = (id: number | string) => `gid://shopify/Order/${id}`;
+
+/** One request that tags several orders (aliased tagsAdd). */
+export function orderTagsMutation(orders: { orderId: number; tags: string[] }[]): { query: string; variables: Record<string, unknown> } {
+  const defs: string[] = [];
+  const body: string[] = [];
+  const variables: Record<string, unknown> = {};
+  orders.forEach((o, i) => {
+    defs.push(`$id${i}: ID!`, `$tags${i}: [String!]!`);
+    body.push(`o${i}: tagsAdd(id: $id${i}, tags: $tags${i}) { userErrors { field message } }`);
+    variables[`id${i}`] = orderGid(o.orderId);
+    variables[`tags${i}`] = o.tags;
+  });
+  return { query: `mutation LoyaltyOrderTags(${defs.join(", ")}) {\n  ${body.join("\n  ")}\n}`, variables };
+}
+
 /** metafieldsSet inputs for members' tier + points (max 25 per call: 12 members). */
 export function memberMetafields(members: { customerId: number; tierName: string; points: number }[]) {
   return members.flatMap((m) => [

@@ -1,6 +1,6 @@
 -- =============================================================================
 -- setup-loyalty-program.sql — create or update a store's LL Loyalty program
--- (needs 0200-0203). Defaults below are Joy's live Tsunami settings, read
+-- (needs 0200-0204). Defaults below are Joy's live Tsunami settings, read
 -- 2026-10-09 (docs/loyalty/PLAN.md §3).
 --
 -- Supabase Dashboard -> SQL Editor (or the local db container). Fill in
@@ -57,19 +57,21 @@ begin
      set name = excluded.name, rank = excluded.rank, min_spend_cents = excluded.min_spend_cents,
          earn_multiplier = excluded.earn_multiplier, perks = excluded.perks;
 
-  insert into loyalty_earn_rules (program_id, key, kind, points, order_count) values
-    (v_prog, 'signup',           'action',    100, null),
-    (v_prog, 'instagram_follow', 'action',    100, null),
-    (v_prog, 'newsletter',       'action',    75,  null),
-    (v_prog, 'birthday',         'action',    225, null),
-    (v_prog, 'anniversary',      'action',    225, null),
-    (v_prog, 'referral',         'referral',  300, null),
-    (v_prog, 'order_1',          'milestone', 100, 1),
-    (v_prog, 'order_10',         'milestone', 300, 10),
-    (v_prog, 'order_20',         'milestone', 300, 20),
-    (v_prog, 'order_30',         'milestone', 300, 30)
+  -- claimable: the shopper claims it on the Wave Rewards page (honor system, as Joy).
+  insert into loyalty_earn_rules (program_id, key, kind, points, order_count, claimable) values
+    (v_prog, 'signup',           'action',    100, null, false),
+    (v_prog, 'instagram_follow', 'action',    100, null, true),
+    (v_prog, 'newsletter',       'action',    75,  null, false),
+    (v_prog, 'birthday',         'action',    225, null, false),
+    (v_prog, 'anniversary',      'action',    225, null, false),
+    (v_prog, 'referral',         'referral',  300, null, false),
+    (v_prog, 'order_1',          'milestone', 100, 1,    false),
+    (v_prog, 'order_10',         'milestone', 300, 10,   false),
+    (v_prog, 'order_20',         'milestone', 300, 20,   false),
+    (v_prog, 'order_30',         'milestone', 300, 30,   false)
   on conflict (program_id, key) do update
-     set kind = excluded.kind, points = excluded.points, order_count = excluded.order_count;
+     set kind = excluded.kind, points = excluded.points, order_count = excluded.order_count,
+         claimable = excluded.claimable;
 
   insert into loyalty_rewards (program_id, key, name, kind, points_cost, value_cents, min_order_cents) values
     (v_prog, 'five_off',           '$5 off',                    'amount_off_order', 750,  500,  0),

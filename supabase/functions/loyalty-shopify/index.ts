@@ -9,7 +9,8 @@
 //   3. tier perks as automatic discounts limited to those segments
 //      (config changed: delete the old discount, create the new one)
 //   4. pending reward / referral codes -> discountCodeBasicCreate
-//   5. members whose tier or points changed -> tier tag + metafields
+//   5. order tags on paid orders that used our codes (0204; needs write_orders)
+//   6. members whose tier or points changed -> tier tag + metafields
 // pg_cron (run_due_loyalty_shopify) calls it every minute, but only for
 // programs with work. Everything is safe to repeat: a code that already
 // exists in Shopify (an earlier attempt landed) is looked up, not duplicated.
@@ -20,19 +21,16 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { shopifyGraphql } from "../_loyalty/shopify.ts";
+import { issueCode, type PendingCode } from "../_loyalty/codes.ts";
 import {
   AUTOMATIC_BASIC_CREATE,
   AUTOMATIC_DELETE,
-  CODE_BASIC_CREATE,
-  CODE_LOOKUP,
-  type CodeRow,
-  codeDiscountInput,
   FREE_SHIPPING_CREATE,
-  isCodeTaken,
   METAFIELD_DEFINITION_CREATE,
   METAFIELD_DEFINITIONS,
   memberMetafields,
   METAFIELDS_SET,
+  orderTagsMutation,
   type PerkRow,
   perkDiscountInput,
   SEGMENT_CREATE,
@@ -140,27 +138,38 @@ async function perks(c: Ctx, w: Work) {
 }
 
 async function codes(c: Ctx) {
-  const rows = await rpc<(CodeRow & { id: string })[]>("loyalty_codes_to_issue", { p_program: c.programId, p_limit: 25 });
+  const rows = await rpc<PendingCode[]>("loyalty_codes_to_issue", { p_program: c.programId, p_limit: 25 });
   let issued = 0;
   for (const row of rows) {
     if (!timeLeft(c)) break;
-    try {
-      const data = await gql(c, CODE_BASIC_CREATE, { input: codeDiscountInput(row, now()) });
-      const r = data.discountCodeBasicCreate as { codeDiscountNode?: { id: string } | null; userErrors?: unknown };
-      let id = r?.codeDiscountNode?.id ?? null;
-      if (!id && isCodeTaken(r?.userErrors)) {
-        id = ((await gql(c, CODE_LOOKUP, { code: row.code })).codeDiscountNodeByCode as { id?: string } | null)?.id ?? null;
-      }
-      if (!id) throw new Error(userErrorText(r?.userErrors) || "no id returned");
-      await rpc("loyalty_code_issued", { p_code: row.id, p_shopify_discount_id: id });
-      issued++;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const final = await rpc<boolean>("loyalty_code_failed", { p_code: row.id, p_error: msg, p_max_attempts: 5 });
-      console.error(`loyalty-shopify ${c.shop}: code ${row.id}${final ? " FAILED (points returned)" : ""}: ${msg}`);
-    }
+    const r = await issueCode(supabase, c.shop, c.token, row, SHOP_BASE);
+    if (r.ok) issued++;
+    else console.error(`loyalty-shopify ${c.shop}: code ${row.id}${r.final ? " FAILED (points returned)" : ""}: ${r.error}`);
   }
   if (issued) c.log.push(`${issued} codes`);
+}
+
+const ORDER_TAG_BATCH = 10;
+
+async function orderTags(c: Ctx) {
+  const rows = await rpc<{ order_id: number; tags: string[] }[]>("loyalty_order_tags_to_apply", { p_program: c.programId, p_limit: 50 });
+  let done = 0;
+  for (let i = 0; i < rows.length && timeLeft(c); i += ORDER_TAG_BATCH) {
+    const batch = rows.slice(i, i + ORDER_TAG_BATCH);
+    let results: (string | null)[];
+    try {
+      const { query, variables } = orderTagsMutation(batch.map((r) => ({ orderId: r.order_id, tags: r.tags })));
+      const data = await gql(c, query, variables);
+      results = batch.map((_, j) => userErrorText((data[`o${j}`] as { userErrors?: unknown })?.userErrors) || null);
+    } catch (e) {
+      results = batch.map(() => e instanceof Error ? e.message : String(e));
+    }
+    for (const [j, r] of batch.entries()) {
+      await rpc("loyalty_order_tags_result", { p_program: c.programId, p_order_id: r.order_id, p_error: results[j] });
+      if (!results[j]) done++;
+    }
+  }
+  if (done) c.log.push(`${done} order tags`);
 }
 
 type SyncMember = { member_id: string; customer_id: number; tier_key: string; tier_name: string; points: number; tier_changed: boolean };
@@ -232,6 +241,7 @@ Deno.serve(async (req) => {
     if (await segments(c, w)) w = await rpc<Work>("loyalty_shopify_work", { p_program: programId }); // segment ids feed the perk hash
     await perks(c, w);
     if (timeLeft(c)) await codes(c);
+    if (timeLeft(c)) await orderTags(c);
     if (timeLeft(c)) await members(c);
 
     console.log(`loyalty-shopify ${c.shop}: ${c.log.join(", ") || "nothing to do"} (${Date.now() - c.started}ms)`);

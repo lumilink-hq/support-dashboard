@@ -10,9 +10,11 @@
 --      supabase functions deploy loyalty-oauth --no-verify-jwt
 --      supabase functions deploy loyalty-backfill --no-verify-jwt
 --      supabase functions deploy loyalty-shopify --no-verify-jwt
---    Then, from ll-loyalty/:  shopify app deploy
---    (ships the webhook subscriptions, App URL and redirect URL in
---    shopify.app.toml). Functions FIRST, so Shopify never hits a missing URL.
+--      supabase functions deploy loyalty-proxy --no-verify-jwt
+--    Then, from ll-loyalty/:  npm run build:blocks && shopify app deploy
+--    (ships the webhook subscriptions, App URL, redirect URL and app proxy in
+--    shopify.app.toml, and the Wave Rewards theme block). Functions FIRST, so
+--    Shopify never hits a missing URL.
 -- 1. The app's Client ID and Client secret (Dev Dashboard > LL Loyalty >
 --    Settings) into Vault. The secret also verifies every webhook.
 select vault.create_secret(
@@ -44,5 +46,8 @@ select count(*) filter (where shopify_sync_error is not null) errors,
        count(*) filter (where tier_key is distinct from shopify_synced_tier
                            or points_balance is distinct from shopify_synced_points) due
   from loyalty_members;
--- 6. Webhooks arriving:
+-- 6. Storefront: Online Store > Themes > Customize > the Wave Rewards page >
+--    Add block > Apps > "Wave Rewards page". Set the Instagram link. Check
+--    https://<store>/apps/loyalty/state returns JSON (proxy wired).
+-- 7. Webhooks arriving:
 select topic, outcome, error, received_at from loyalty_webhook_receipts order by received_at desc limit 20;

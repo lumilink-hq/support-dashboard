@@ -11,12 +11,18 @@
     "dev": "shopify app dev",
     "info": "shopify app info",
     "generate": "shopify app generate",
-    "deploy": "shopify app deploy"
+    "deploy": "shopify app deploy",
+    "build:blocks": "esbuild src/wave-rewards.js src/wave-rewards-ref.js --minify --target=es2019 --outdir=extensions/wave-rewards/assets"
   },
-  "dependencies": {},
   "trustedDependencies": [
     "@shopify/plugin-cloudflare"
   ],
   "author": "Manal",
-  "private": true
+  "private": true,
+  "allowScripts": {
+    "esbuild": true
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10"
+  }
 }
