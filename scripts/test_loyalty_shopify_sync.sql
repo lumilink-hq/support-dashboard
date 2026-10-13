@@ -68,6 +68,15 @@ begin
     'enroll: a guest who makes an account is enrolled on update';
   assert loyalty_sync_customer(v_prog, '{"state":"enabled"}') is null, 'enroll: no customer id, nothing';
 
+  -- New customer accounts: state stays 'disabled' even after sign-up, so a
+  -- program with enroll_guests on (Tsunami) enrolls every customer.
+  update loyalty_programs set enroll_guests = true where id = v_prog;
+  assert loyalty_sync_customer(v_prog, '{"id":50,"email":"code-login@example.com","state":"disabled"}') is not null,
+    'enroll: enroll_guests on enrolls a disabled-state customer (new customer accounts)';
+  assert loyalty_sync_customer(v_prog, '{"email":"no-id@example.com","state":"disabled"}') is null,
+    'enroll: still nothing without a customer id';
+  update loyalty_programs set enroll_guests = false where id = v_prog;
+
   -- --- webhook order: earns points, counts spend ---
   v_r := loyalty_record_order(v_prog, jsonb_build_object(
     'id', 9001, 'name', '#9001', 'processed_at', now(), 'eligible_cents', 10000,

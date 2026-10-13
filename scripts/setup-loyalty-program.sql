@@ -30,9 +30,13 @@ begin
 
   insert into loyalty_programs (client_id, shop_domain, name, points_per_dollar, tier_spend_since,
                                 demote_after_inactive, demotion_warning_days, points_expire_after,
-                                discount_code_prefix, timezone)
+                                discount_code_prefix, timezone, enroll_guests)
   values (v_client, lower(v_shop), 'Wave Rewards', 3, '2026-06-05',
-          '6 months', 7, '1 year', 'WAVE-', v_timezone)
+          '6 months', 7, '1 year', 'WAVE-', v_timezone,
+          -- Every customer is a member. Tsunami uses Shopify's NEW customer
+          -- accounts (code sign-in), where customer.state never becomes
+          -- 'enabled', so "has an account" can't be detected (2026-10-13).
+          true)
   on conflict (shop_domain) do update
      set name                  = excluded.name,
          points_per_dollar     = excluded.points_per_dollar,
@@ -41,7 +45,8 @@ begin
          demotion_warning_days = excluded.demotion_warning_days,
          points_expire_after   = excluded.points_expire_after,
          discount_code_prefix  = excluded.discount_code_prefix,
-         timezone              = excluded.timezone
+         timezone              = excluded.timezone,
+         enroll_guests         = excluded.enroll_guests
    where loyalty_programs.client_id = excluded.client_id
   returning id into v_prog;
   if v_prog is null then

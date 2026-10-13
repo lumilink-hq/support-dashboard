@@ -102,7 +102,7 @@ Use a test customer account on tsunami.store and a hidden duplicate page (e.g.
 
 | # | Do | Expect |
 |---|---|---|
-| Q1 | Create an account | Member in `/loyalty`, +100 signup, Bronze |
+| Q1 | Create an account (new customer accounts: sign in with the emailed code) | Member in `/loyalty`, +100 signup, Bronze. A guest checkout also creates a member (every customer is one) |
 | Q2 | Place a $20 order (subtotal) | +60 points, 1st-order milestone +100, order tagged nothing (no code used) |
 | Q3 | Refund half of it | −30 points, tier spend −$10 |
 | Q4 | Set a birthday on the hidden page; try again | Saved once; second try refused |
