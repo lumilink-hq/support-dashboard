@@ -1,8 +1,9 @@
 -- =============================================================================
 -- test_loyalty_staff_admin.sql — non-destructive test of 0206 (LL Loyalty
 -- module 7): only platform_staff can use the staff RPCs (a workspace admin
--- can't), every member read and change writes the access log, adjustments
--- need a note and can't double-post or overdraw, and the log is append-only.
+-- can't), staff need an MFA-verified session (aal2, 0210), every member read
+-- and change writes the access log, adjustments need a note and can't
+-- double-post or overdraw, and the log is append-only.
 --
 -- Run:  docker exec -i supabase_db_support-dashboard psql -U postgres -v ON_ERROR_STOP=1 < scripts/test_loyalty_staff_admin.sql
 --
@@ -11,6 +12,8 @@
 --     -> "gate: a workspace admin can't view a member" fails.
 --   * in loyalty_staff_member drop the loyalty_log_access('view', …) call
 --     -> "log: viewing a member is logged" fails.
+--   * in loyalty_require_staff drop the aal2 check
+--     -> "mfa: a password-only staff session can't view a member" fails.
 --
 -- Wraps everything in a transaction and ROLLS BACK.
 -- =============================================================================
@@ -53,6 +56,7 @@ declare
   v_alice  uuid := (select v from t where k = 'alice');
 begin
   assert not current_user_is_staff(), 'gate: workspace admin is not staff';
+  assert loyalty_staff_access() = 'none', 'mfa: a workspace admin''s access status is none';
   begin
     perform loyalty_staff_member(v_alice);
     v_denied := false;
@@ -86,8 +90,44 @@ begin
 end $$;
 reset role;
 
--- --- staff ---
-select set_config('request.jwt.claim.sub', (select v::text from t where k = 'staff'), true);
+-- --- staff, password only (aal1): refused until MFA ---
+-- auth.uid() reads request.jwt.claim.sub before request.jwt.claims: clear the admin's.
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', json_build_object('sub', (select v from t where k = 'staff'), 'aal', 'aal1')::text, true);
+set local role authenticated;
+do $$
+declare
+  v_ok    boolean;
+  v_alice uuid := (select v from t where k = 'alice');
+begin
+  assert current_user_is_staff(), 'mfa: still recognised as staff';
+  assert loyalty_staff_access() = 'enroll', 'mfa: staff with no authenticator must set one up';
+  begin
+    perform loyalty_staff_member(v_alice);
+    v_ok := false;
+  exception when insufficient_privilege then v_ok := sqlerrm = 'mfa_required';
+  end;
+  assert v_ok, 'mfa: a password-only staff session can''t view a member';
+  begin
+    perform loyalty_staff_adjust(v_alice, 10, 'no mfa', 'req-nomfa-0001');
+    v_ok := false;
+  exception when insufficient_privilege then v_ok := sqlerrm = 'mfa_required';
+  end;
+  assert v_ok, 'mfa: a password-only staff session can''t adjust points';
+end $$;
+reset role;
+-- An enrolled authenticator, session still aal1: needs the code.
+insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret)
+values (gen_random_uuid(), (select v from t where k = 'staff'), 'test', 'totp', 'verified', now(), now(), 'x');
+set local role authenticated;
+do $$
+begin
+  assert loyalty_staff_access() = 'verify', 'mfa: enrolled staff on a password-only session must enter a code';
+end $$;
+reset role;
+
+-- --- staff, MFA-verified session (aal2) ---
+select set_config('request.jwt.claims', json_build_object('sub', (select v from t where k = 'staff'), 'aal', 'aal2')::text, true);
 set local role authenticated;
 do $$
 declare
@@ -97,6 +137,7 @@ declare
   v_ok    boolean;
 begin
   assert current_user_is_staff(), 'gate: staff is staff';
+  assert loyalty_staff_access() = 'ok', 'mfa: staff on an aal2 session are through';
   v_r := loyalty_staff_programs();
   assert jsonb_array_length(v_r) >= 1 and exists (select 1 from jsonb_array_elements(v_r) p where p->>'shop_domain' = 'staff-test.myshopify.com'
            and (p->>'members')::int = 1 and (p->>'points_outstanding')::int = 500), 'programs: listed with counts';
