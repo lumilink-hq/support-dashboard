@@ -1,6 +1,6 @@
 /* Wave Rewards page (LL Loyalty). Scoped to .llr. Colors come from the block's
    settings as --llr-* custom properties; headings are real h2/h3 so they take
-   the theme's heading font. */
+   the theme's heading font. Sizes are in px on purpose (see .llr). */
 
 .llr {
   --llr-ink: #0f1b2d;
@@ -12,6 +12,9 @@
   display: block;
   width: 100%;
   color: var(--llr-ink);
+  /* Pixels, not rem: many themes set html { font-size: 62.5% }, which made rem text tiny. */
+  font-size: 17px;
+  line-height: 1.5;
 }
 .llr *, .llr *::before, .llr *::after { box-sizing: border-box; }
 .llr h2, .llr h3, .llr p, .llr ul, .llr ol { margin: 0; }
@@ -24,7 +27,7 @@
 .llr-h { font-size: clamp(28px, 4vw, 40px); line-height: 1.05; text-align: center; letter-spacing: 0.01em; }
 .llr-h--left { text-align: left; }
 .llr-sub { max-width: 620px; margin: 10px auto 32px !important; text-align: center; color: var(--llr-muted); }
-.llr-muted { color: var(--llr-muted); font-size: 0.875rem; }
+.llr-muted { color: var(--llr-muted); font-size: 15px; }
 .llr-empty { padding: 64px 20px; text-align: center; color: var(--llr-muted); }
 .llr code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; letter-spacing: 0.04em; }
 
@@ -41,17 +44,17 @@
 .llr-btn[disabled] { opacity: 0.4; cursor: not-allowed; transform: none; filter: none; }
 .llr-btn--ghost { background: transparent; color: var(--llr-accent); border-color: currentColor; }
 .llr-btn--light { background: #fff; color: var(--llr-card-bg); }
-.llr-btn--sm { min-height: 36px; padding: 6px 16px; font-size: 0.875rem; }
+.llr-btn--sm { min-height: 36px; padding: 6px 16px; font-size: 15px; }
 
 /* Pills and badges */
 .llr-pill {
   display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px;
   background: color-mix(in srgb, var(--llr-accent) 10%, #fff); color: var(--llr-accent);
-  font-size: 0.8125rem; font-weight: 700; white-space: nowrap;
+  font-size: 14px; font-weight: 700; white-space: nowrap;
 }
 .llr-pill--on { background: var(--llr-accent); color: var(--llr-accent-text); }
 .llr-badge {
-  padding: 4px 12px; border-radius: 999px; font-size: 0.75rem; font-weight: 800;
+  padding: 4px 12px; border-radius: 999px; font-size: 14px; font-weight: 800;
   letter-spacing: 0.08em; text-transform: uppercase; background: rgba(255, 255, 255, 0.16); color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.35);
 }
@@ -72,14 +75,14 @@
 }
 .llr--hero-image .llr-hero { background: linear-gradient(rgba(10, 20, 40, 0.55), rgba(10, 20, 40, 0.55)), var(--llr-hero-image) center / cover; color: #fff; }
 .llr-hero__title { font-size: clamp(36px, 6vw, 64px); line-height: 1; letter-spacing: 0.01em; }
-.llr-hero__sub { max-width: 560px; margin: 16px auto 0 !important; font-size: 1.0625rem; opacity: 0.85; }
+.llr-hero__sub { max-width: 560px; margin: 16px auto 0 !important; font-size: 18px; opacity: 0.85; }
 .llr-hero--loading .llr-muted { margin-top: 24px; }
 .llr-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 28px; }
 .llr-actions .llr-btn { min-width: 160px; }
 .llr--hero-image .llr-hero .llr-btn--ghost { color: #fff; }
 .llr-chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 36px !important; }
 .llr-chips li {
-  padding: 8px 16px; border-radius: 999px; font-size: 0.9375rem; font-weight: 600;
+  padding: 8px 16px; border-radius: 999px; font-size: 16px; font-weight: 600;
   background: var(--llr-surface); color: var(--llr-ink); box-shadow: var(--llr-shadow);
 }
 
@@ -98,11 +101,11 @@
   border: 40px solid rgba(255, 255, 255, 0.05); pointer-events: none;
 }
 .llr-mc__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.llr-mc__label { font-size: 1rem; opacity: 0.85; }
+.llr-mc__label { font-size: 17px; opacity: 0.85; }
 .llr-mc__pts { margin: 18px 0 22px; line-height: 1; }
 .llr-mc__pts b { font-size: clamp(48px, 9vw, 80px); font-weight: 800; letter-spacing: -0.02em; }
-.llr-mc__pts span { font-size: 1rem; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.1em; margin-left: 6px; }
-.llr-mc__note { margin-top: 10px !important; font-size: 0.9375rem; opacity: 0.85; }
+.llr-mc__pts span { font-size: 17px; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.1em; margin-left: 6px; }
+.llr-mc__note { margin-top: 10px !important; font-size: 16px; opacity: 0.85; }
 .llr-mc__next {
   display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
   margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.15); font-weight: 600;
@@ -117,22 +120,22 @@
 .llr-tile { display: flex; gap: 14px; padding: 18px; }
 .llr-tile__body { flex: 1; min-width: 0; }
 .llr-tile__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
-.llr-tile h3 { font-size: 1.125rem; line-height: 1.2; }
-.llr-tile p { color: var(--llr-muted); font-size: 0.9375rem; }
+.llr-tile h3 { font-size: 20px; line-height: 1.2; }
+.llr-tile p { color: var(--llr-muted); font-size: 16px; }
 .llr-tile .llr-btn, .llr-tile .llr-inline { margin-top: 12px; }
 .llr-tile--done { background: color-mix(in srgb, var(--llr-accent) 4%, #fff); }
 .llr-done { margin-top: 10px !important; color: var(--llr-accent) !important; font-weight: 700; }
 .llr-reward { padding: 22px; text-align: center; }
-.llr-reward__value { font-size: 1.75rem; font-weight: 800; line-height: 1.1; }
+.llr-reward__value { font-size: 30px; font-weight: 800; line-height: 1.1; }
 .llr-reward__cost { margin-top: 4px; color: var(--llr-muted); font-weight: 600; }
 .llr-reward .llr-btn { width: 100%; margin-top: 14px; }
 
 .llr-steps { display: flex; gap: 6px; margin-top: 12px !important; flex-wrap: wrap; }
 .llr-steps li {
   display: flex; flex-direction: column; align-items: center; min-width: 58px; padding: 6px 8px;
-  border-radius: 10px; background: var(--llr-band-bg); font-size: 0.75rem; color: var(--llr-muted);
+  border-radius: 10px; background: var(--llr-band-bg); font-size: 14px; color: var(--llr-muted);
 }
-.llr-steps b { color: var(--llr-ink); font-size: 0.875rem; }
+.llr-steps b { color: var(--llr-ink); font-size: 15px; }
 .llr-steps .is-done { background: var(--llr-accent); color: var(--llr-accent-text); }
 .llr-steps .is-done b { color: inherit; }
 
@@ -156,9 +159,9 @@
 .llr-how li { text-align: center; padding: 8px 12px; }
 .llr-how span {
   display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; margin-bottom: 14px;
-  border-radius: 50%; background: var(--llr-card-bg); color: var(--llr-card-text); font-size: 1.25rem; font-weight: 800;
+  border-radius: 50%; background: var(--llr-card-bg); color: var(--llr-card-text); font-size: 22px; font-weight: 800;
 }
-.llr-how h3 { font-size: 1.375rem; margin-bottom: 6px; }
+.llr-how h3 { font-size: 24px; margin-bottom: 6px; }
 .llr-how p { color: var(--llr-muted); }
 
 /* Tier ladder */
@@ -178,11 +181,11 @@
 .llr-step__card { padding: 22px; height: 100%; }
 .llr-step.is-current .llr-step__card { background: var(--llr-card-bg); color: var(--llr-card-text); border-color: transparent; }
 .llr-step__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.llr-step h3 { font-size: 1.75rem; line-height: 1; }
+.llr-step h3 { font-size: 30px; line-height: 1; }
 .llr-step__unlock { margin-top: 6px !important; font-weight: 600; color: var(--llr-muted); }
 .llr-step.is-current .llr-step__unlock { color: inherit; opacity: 0.8; }
 .llr-step ul { margin-top: 14px !important; display: grid; gap: 8px; }
-.llr-step li { position: relative; padding-left: 22px; font-size: 0.9375rem; }
+.llr-step li { position: relative; padding-left: 22px; font-size: 16px; }
 .llr-step li::before {
   content: ""; position: absolute; left: 0; top: 0.45em; width: 12px; height: 7px;
   border-left: 2px solid var(--llr-accent); border-bottom: 2px solid var(--llr-accent); transform: rotate(-45deg);
@@ -191,7 +194,7 @@
 
 /* Codes, referral, invite, forms */
 .llr-codes { max-width: 640px; margin: 28px auto 0; padding: 20px 22px; border: 1px dashed var(--llr-line); border-radius: var(--llr-radius); }
-.llr-codes h3 { font-size: 1.125rem; margin-bottom: 8px; }
+.llr-codes h3 { font-size: 20px; margin-bottom: 8px; }
 .llr-codes li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid var(--llr-line); }
 .llr-codes li:last-child { border-bottom: 0; }
 .llr-codes li .llr-btn { margin-left: auto; }
@@ -219,7 +222,7 @@
 .llr-activity { margin-top: 24px !important; background: var(--llr-surface); border: 1px solid var(--llr-line); border-radius: var(--llr-radius); }
 .llr-activity li { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--llr-line); }
 .llr-activity li:last-child { border-bottom: 0; }
-.llr-activity small { display: block; color: var(--llr-muted); font-size: 0.8125rem; }
+.llr-activity small { display: block; color: var(--llr-muted); font-size: 14px; }
 .llr-plus { color: #13804a; font-weight: 800; }
 .llr-minus { color: #b42318; font-weight: 800; }
 

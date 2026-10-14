@@ -37,8 +37,11 @@
   var U = { H: H, R: R, n: n, money: money, pct: pct, rkey: rkey, day: day };
 
   function Page(root) {
-    var c = root.querySelector('[data-llr="copy"]');
+    var c = root.querySelector('[data-llr="copy"]'), d = document.createElement("textarea"), k;
     this.copy = c ? JSON.parse(c.textContent) : {};
+    // Shopify's `t` filter HTML-escapes copy ("you&#39;re"); decode it once here.
+    // H`…` escapes again when it renders, so this is display-only.
+    for (k in this.copy) { d.innerHTML = this.copy[k]; this.copy[k] = d.value; }
     this.root = root;
     this.app = root.querySelector('[data-llr="app"]');
     this.proxy = (root.dataset.proxy || "/apps/loyalty").replace(/\/+$/, "");
