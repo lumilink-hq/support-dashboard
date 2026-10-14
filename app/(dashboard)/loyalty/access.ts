@@ -1,0 +1,31 @@
+import { notFound, redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+
+// Who may open a /loyalty page (0206 staff + 0210 MFA). The database enforces
+// the same thing inside every staff RPC; this only picks the right page:
+//   not staff                      -> 404 (tenants never learn it exists)
+//   staff, no authenticator yet    -> /loyalty/security to set one up
+//   staff, session not MFA-checked -> /loyalty/security to enter a code
+export type StaffAccess = "none" | "enroll" | "verify" | "ok";
+
+export async function staffAccess(): Promise<StaffAccess> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("loyalty_staff_access");
+  return (["none", "enroll", "verify", "ok"].includes(data as string) ? data : "none") as StaffAccess;
+}
+
+export function securityPath(next: string): string {
+  return `/loyalty/security?next=${encodeURIComponent(next)}`;
+}
+
+/** Call at the top of every /loyalty page except /loyalty/security. */
+export async function requireStaffPage(path: string): Promise<void> {
+  const access = await staffAccess();
+  if (access === "none") notFound();
+  if (access !== "ok") redirect(securityPath(path));
+}
+
+/** Only same-area paths, so ?next= can't send anyone off-site. */
+export function safeNext(next: string | undefined): string {
+  return next && /^\/loyalty(\/[\w\-/]*)?(\?[\w=&%\-]*)?$/.test(next) ? next : "/loyalty";
+}

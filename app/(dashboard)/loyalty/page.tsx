@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { requireStaffPage } from "./access";
 import { num, when } from "./format";
 
 // LL Loyalty staff admin: programs and member lookup (0206). LumiLink staff
-// only (platform_staff), checked here for the 404 and again inside every RPC.
+// only (platform_staff) with MFA (0210), checked here for the 404 / MFA step
+// and again inside every RPC.
 // Not in the sidebar: tenants never see it exists.
 
 const inputCls =
@@ -40,11 +41,9 @@ export default async function LoyaltyAdminPage({
 }: {
   searchParams: Promise<{ program?: string; q?: string }>;
 }) {
-  const supabase = await createClient();
-  const { data: isStaff } = await supabase.rpc("current_user_is_staff");
-  if (isStaff !== true) notFound();
-
   const { program: programParam, q } = await searchParams;
+  await requireStaffPage(`/loyalty${programParam ? `?program=${encodeURIComponent(programParam)}` : ""}`);
+  const supabase = await createClient();
   const { data: programData, error } = await supabase.rpc("loyalty_staff_programs");
   const programs = (programData ?? []) as Program[];
   const program = programs.find((p) => p.id === programParam) ?? (programs.length === 1 ? programs[0] : undefined);

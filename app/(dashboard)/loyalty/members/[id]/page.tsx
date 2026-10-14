@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { ConfirmSubmit } from "@/components/confirm-submit";
+import { requireStaffPage } from "../../access";
 import { adjustPoints, setBirthday, setTier } from "../../actions";
 import { day, money, num, REASON_LABEL, when } from "../../format";
 
@@ -72,9 +73,8 @@ export default async function LoyaltyMemberPage({
   const { saved, error } = await searchParams;
   if (!UUID.test(id)) notFound();
 
+  await requireStaffPage(`/loyalty/members/${id}`);
   const supabase = await createClient();
-  const { data: isStaff } = await supabase.rpc("current_user_is_staff");
-  if (isStaff !== true) notFound();
 
   const { data, error: loadError } = await supabase.rpc("loyalty_staff_member", { p_member: id });
   if (loadError) {

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { securityPath } from "./access";
 
 // LL Loyalty staff admin (0206). Every action is one staff RPC under the
 // signed-in user's own session: the RPC refuses anyone not in platform_staff,
@@ -21,6 +22,8 @@ function done(memberId: string, notice: string): never {
 }
 
 function fail(memberId: string, message: string): never {
+  // 0210: a session without its MFA code goes to the code step, then back here.
+  if (message === "mfa_required") redirect(securityPath(memberPath(memberId)));
   redirect(`${memberPath(memberId)}?error=${encodeURIComponent(message)}`);
 }
 
@@ -34,6 +37,7 @@ function readMember(formData: FormData): string {
 function message(error: { message: string }): string {
   if (error.message.startsWith("insufficient_points")) return "That would take the balance below zero.";
   if (error.message === "not_staff") return "Only LumiLink staff can do that.";
+  if (error.message === "mfa_required") return "mfa_required";
   return error.message;
 }
 
