@@ -1,58 +1,65 @@
 {% comment %}
-  Wave Rewards page (LL Loyalty, module 5). Renders a shell; assets/wave-rewards.js
-  fills it from the app proxy (/apps/loyalty/state). Program rules, tiers and
-  rewards come from LumiLink, so copy here is only headings and the static
-  "How it works" steps. The shopper's identity is the proxy's signed
-  logged_in_customer_id, never anything this markup sends.
+  Wave Rewards page (LL Loyalty). A shell that assets/wave-rewards.js fills from
+  the app proxy (/apps/loyalty/state). Program rules, tiers and rewards come
+  from LumiLink; this block holds only headings, colors and the "How it works"
+  steps. Member views load from assets/wave-rewards-member.js. The shopper's
+  identity is the proxy's signed logged_in_customer_id, never anything here.
 {% endcomment %}
 
 <div
-  class="llr"
+  class="llr{% if block.settings.hero_image %} llr--hero-image{% endif %}"
   id="llr-{{ block.id }}"
   data-proxy="{{ block.settings.proxy_path | default: '/apps/loyalty' | escape }}"
-  data-logged-in="{% if customer %}true{% else %}false{% endif %}"
   data-login-url="{{ routes.account_login_url }}"
   data-register-url="{{ routes.account_register_url }}"
   data-instagram-url="{{ block.settings.instagram_url | escape }}"
+  data-member-js="{{ 'wave-rewards-member.js' | asset_url }}"
   data-ref-js="{{ 'wave-rewards-ref.js' | asset_url }}"
   data-hero-title="{{ block.settings.hero_title | escape }}"
   data-hero-subtitle="{{ block.settings.hero_subtitle | escape }}"
+  data-earn-heading="{{ block.settings.earn_heading | escape }}"
+  data-earn-subheading="{{ block.settings.earn_subheading | escape }}"
+  data-tiers-heading="{{ block.settings.tiers_heading | escape }}"
+  data-tiers-subheading="{{ block.settings.tiers_subheading | escape }}"
   style="
     --llr-accent: {{ block.settings.accent }};
     --llr-accent-text: {{ block.settings.accent_text }};
-    --llr-tier-bg: {{ block.settings.tier_bg }};
-    --llr-tier-text: {{ block.settings.tier_text }};
+    --llr-card-bg: {{ block.settings.tier_bg }};
+    --llr-card-text: {{ block.settings.tier_text }};
     --llr-band-bg: {{ block.settings.band_bg }};
     --llr-icon: {{ block.settings.icon_color }};
     --llr-hero-bg: {{ block.settings.hero_bg }};
     --llr-hero-text: {{ block.settings.hero_text }};
+    {% if block.settings.hero_image %}--llr-hero-image: url('{{ block.settings.hero_image | image_url: width: 2400 }}');{% endif %}
   "
 >
   {% render 'llr-copy' %}
-  <section class="llr-hero" data-llr="hero">
-    <h2 class="llr-hero__title">{{ block.settings.hero_title | escape }}</h2>
-    <p class="llr-hero__subtitle">{{ block.settings.hero_subtitle | escape }}</p>
-    <p class="llr-muted" data-llr="loading">{{ 'wave_rewards.loading' | t }}</p>
-  </section>
 
-  <div data-llr="member"></div>
-  <div data-llr="referral"></div>
+  {%- if block.settings.show_how -%}
+    <template data-llr="how">
+      <section class="llr-sec">
+        <div class="llr-wrap">
+          <h2 class="llr-h">{{ block.settings.how_heading | escape }}</h2>
+          <p class="llr-sub">{{ block.settings.how_subheading | escape }}</p>
+          <ol class="llr-how">
+            <li><span>1</span><h3>{{ block.settings.step1_title | escape }}</h3><p>{{ block.settings.step1_text | escape }}</p></li>
+            <li><span>2</span><h3>{{ block.settings.step2_title | escape }}</h3><p>{{ block.settings.step2_text | escape }}</p></li>
+            <li><span>3</span><h3>{{ block.settings.step3_title | escape }}</h3><p>{{ block.settings.step3_text | escape }}</p></li>
+          </ol>
+        </div>
+      </section>
+    </template>
+  {%- endif -%}
 
-  {% if block.settings.show_how %}
-    <section class="llr-how">
-      <h2 class="llr-heading">{{ block.settings.how_heading | escape }}</h2>
-      <p class="llr-sub">{{ block.settings.how_subheading | escape }}</p>
-      <ol class="llr-how__steps">
-        <li><h3>{{ block.settings.step1_title | escape }}</h3><p>{{ block.settings.step1_text | escape }}</p></li>
-        <li><h3>{{ block.settings.step2_title | escape }}</h3><p>{{ block.settings.step2_text | escape }}</p></li>
-        <li><h3>{{ block.settings.step3_title | escape }}</h3><p>{{ block.settings.step3_text | escape }}</p></li>
-      </ol>
+  <div data-llr="app">
+    <section class="llr-hero llr-hero--loading">
+      <div class="llr-wrap">
+        <h2 class="llr-hero__title">{{ block.settings.hero_title | escape }}</h2>
+        <p class="llr-hero__sub">{{ block.settings.hero_subtitle | escape }}</p>
+        <p class="llr-muted">{{ 'wave_rewards.loading' | t }}</p>
+      </div>
     </section>
-  {% endif %}
-
-  <div data-llr="earn" data-heading="{{ block.settings.earn_heading | escape }}" data-subheading="{{ block.settings.earn_subheading | escape }}"></div>
-  <div data-llr="tiers" data-heading="{{ block.settings.tiers_heading | escape }}" data-subheading="{{ block.settings.tiers_subheading | escape }}"></div>
-  <div data-llr="history"></div>
+  </div>
   <p class="llr-status" role="status" aria-live="polite" data-llr="status"></p>
 </div>
 
@@ -66,6 +73,7 @@
     { "type": "header", "content": "Hero" },
     { "type": "text", "id": "hero_title", "label": "Title", "default": "Exclusive Perks for Our Valued Members" },
     { "type": "text", "id": "hero_subtitle", "label": "Subtitle", "default": "Become a member and earn points & exclusive rewards every time you shop." },
+    { "type": "image_picker", "id": "hero_image", "label": "Hero background image", "info": "Optional. Shown behind the welcome section for signed-out visitors." },
     { "type": "header", "content": "How it works" },
     { "type": "checkbox", "id": "show_how", "label": "Show How it works", "default": true },
     { "type": "text", "id": "how_heading", "label": "Heading", "default": "How it works" },
@@ -90,8 +98,8 @@
     { "type": "color", "id": "hero_text", "label": "Hero text", "default": "#000000" },
     { "type": "color", "id": "band_bg", "label": "Ways to earn background", "default": "#F6F6F6" },
     { "type": "color", "id": "icon_color", "label": "Icons", "default": "#144686" },
-    { "type": "color", "id": "tier_bg", "label": "Tier cards", "default": "#173E71" },
-    { "type": "color", "id": "tier_text", "label": "Tier card text", "default": "#FFFFFF" },
+    { "type": "color", "id": "tier_bg", "label": "Member card and tiers", "default": "#173E71" },
+    { "type": "color", "id": "tier_text", "label": "Member card text", "default": "#FFFFFF" },
     { "type": "header", "content": "Advanced" },
     { "type": "text", "id": "proxy_path", "label": "App proxy path", "default": "/apps/loyalty", "info": "Only change this if the app proxy URL was customized in Shopify admin." }
   ]

@@ -91,6 +91,21 @@
     "reason_redeem_reversal": "Reward refunded",
     "reason_expire": "Points expired",
     "reason_adjust": "Adjustment",
-    "reason_import": "Balance carried over"
+    "reason_import": "Balance carried over",
+    "member_card_label": "Wave Rewards member",
+    "points_balance": "points",
+    "next_reward_ready": "You have enough for {reward}",
+    "next_reward_progress": "{points} points to {reward}",
+    "chip_earn": "{points} points per $1",
+    "chip_redeem": "{points} points = {reward}",
+    "chip_tier": "Up to {mult}x points as {tier}",
+    "join_cta": "Join now",
+    "rewards_note": "Codes work once, on your account. Enter them at checkout.",
+    "per_dollar": "per $1",
+    "reached": "Unlocked",
+    "you_are_here": "You're here",
+    "orders_count": "{count} orders so far",
+    "copy_link": "Copy link",
+    "share_title": "Give {amount}, get {points} points"
   }
 }

@@ -12,7 +12,7 @@
     "info": "shopify app info",
     "generate": "shopify app generate",
     "deploy": "shopify app deploy",
-    "build:blocks": "esbuild src/wave-rewards.js src/wave-rewards-ref.js --minify --target=es2019 --outdir=extensions/wave-rewards/assets"
+    "build:blocks": "node scripts/build-blocks.mjs"
   },
   "trustedDependencies": [
     "@shopify/plugin-cloudflare"
