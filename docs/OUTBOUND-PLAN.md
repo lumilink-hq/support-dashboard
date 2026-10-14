@@ -9,7 +9,7 @@ Cold-email lead generation inside the LumiLink portal. Approved 2026-10-13, base
 | **Branch** | `outbound`, cut from `main` on 2026-10-13 |
 | **Migrations** | **0300 and up**, reserved for this work. Main is at 0091 and growing; loyalty uses 200 and up. When this branch merges after a lower-numbered migration has already reached prod, `supabase db push` refuses to apply out of order and needs `--include-all`. |
 | **Effort** | 26–40 hours: 20–30 of build plus 6–10 of live testing |
-| **Tools** | Instantly Growth $47/mo, InboxKit 10 Google mailboxes $30/mo, 5 Cloudflare .com domains about $52/yr, Reoon 10K checks $11.90 once, DataForSEO (existing account) |
+| **Tools** | Instantly Growth $47/mo, Zapmail Starter 10 Google mailboxes $39/mo, 5 Cloudflare .com domains about $52/yr, Reoon 25K checks about $29 once, DataForSEO (existing account). That's **$86/mo at launch, $136/mo on Instantly Hypergrowth, about $81 once**, the budget in the scope version sent to leadership (2026-10-13). InboxKit ($30/mo) was considered and not chosen, to stay with what was approved. |
 | **Critical path** | Mailbox warm-up, 2–3 weeks from purchase. Phase 0 starts it, and the build happens while it runs. |
 
 ## Decisions
@@ -38,11 +38,11 @@ Stages: `sourced` → `email_found` / `no_email` → `verified` / `invalid` → 
 ### Phase 0: accounts and warm-up (week 1, no code; user and boss)
 - [ ] Buy getlumilink.com, trylumilink.com, uselumilink.com, lumilinkhq.com and hellolumilink.com on Cloudflare. Recheck availability first; all five were unregistered on 2026-10-08.
 - [ ] Point each domain's website at `https://www.lumilinkhub.com` with a redirect.
-- [ ] InboxKit: 10 Google mailboxes, 2 per domain, real first and last names. InboxKit sets up SPF, DKIM and DMARC.
+- [ ] Zapmail Starter: 10 Google mailboxes on our own 5 domains, 2 per domain. Use the real first and last names of the people who will handle replies, so the From line is honest (CAN-SPAM). Zapmail sets up SPF, DKIM and DMARC. Check them on each domain, with DMARC at `p=none` to start. Use the standard plan, not Zapmail's pre-warmed plan, which comes with generic domains.
 - [ ] Instantly Growth: connect all 10 mailboxes and turn warm-up on. **That day is the warm-up start date: record it here.**
 - [ ] Instantly campaign settings: LumiLink postal address in the footer and the unsubscribe link on (CAN-SPAM).
 - [ ] **On purchase, create an Instantly API key** (Settings → Integrations → API) and confirm `GET /api/v2/campaigns` works. Instantly's help center says API access is on all Outbound plans, so Growth includes it ("API V2" article, checked 2026-10-13); webhooks are Hypergrowth-only, which is why replies are polled. If the key can't be created anyway, move to Hypergrowth ($97). The code doesn't change.
-- [ ] Reoon: an account and the 10K credit pack ($11.90).
+- [ ] Reoon: an account and the 25K credit pack (about $29, never expires; the approved line item).
 - [ ] Supabase secrets: `INSTANTLY_API_KEY`, `REOON_API_KEY`. DataForSEO is already set.
 
 ### Phase 1: lead pipeline, server-side only (about 7–10 hrs)
