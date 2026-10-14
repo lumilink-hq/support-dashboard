@@ -5,6 +5,8 @@ budtender) scope. It is written to be picked up on either machine: the
 LumiLink machine and the PACKS machine both add to it.
 
 - **Brief:** `docs/LumiLink-AI-Concierge-Scope.docx` (Draft 2, 2026-10-15)
+- **PACKS in-house build (detail):** `docs/PACKS-AI-Budtender-In-House-Scope.docx`
+  (brief plus appendix). Rebuild it with `python scripts/build-packs-inhouse-scope.py`
 - **Summary of the brief:** `docs/ai-concierge-scope-summary.md`
 - **Rebuild the brief:** edit the content section of
   `scripts/build-ai-concierge-scope.py`, then run
@@ -23,8 +25,8 @@ delete someone else's finding; strike it through and say why.
 | Item | State |
 |---|---|
 | Format | One doc. LumiLink add-on scope, with a PACKS "on LL vs in-house" comparison as the last section (decided 2026-10-15) |
-| Why the comparison exists | To make the case to leadership that the budtender belongs under LumiLink, with PACKS as client #1, instead of PACKS building and maintaining its own stack |
-| Recommendation | Build under LL; launch PACKS first |
+| Why the comparison exists | To make the case to leadership that the budtender belongs under LumiLink, with PACKS as client #1, instead of PACKS building and maintaining its own stack. [PACKS 2026-10-15] Kept honest: if PACKS alone comes out better, the docs should show it |
+| Recommendation | ~~Build under LL; launch PACKS first~~ [PACKS 2026-10-15] Build under LL if it will be sold to other clients; for PACKS alone both paths cost about the same (see §7) |
 | Vendor | Not chosen. Bake-off: HeyGen LiveAvatar vs D-ID |
 | Price of the LL add-on | Not set. This is the first question leadership will ask |
 | Biggest PACKS unknown | ~~Menu data source after AIQ Dispense is dropped~~ [PACKS 2026-10-15] Resolved: the budtender reads AIQ Dispense's API for now (see §8 Q1). Still open: whether one Dispense key reads all four stores |
@@ -127,11 +129,11 @@ Safari. That's where an overrun would come from.
 
 | | On LumiLink | In-house at PACKS |
 |---|---|---|
-| Build hours | 8-14 after the add-on ships | ~~45-65~~ 53-79 [PACKS 2026-10-15, see below] |
+| Build hours | 8-14 after the add-on ships | ~~45-65~~ ~~53-79~~ 48-69 [PACKS 2026-10-15, see below] |
 | Monthly upkeep | 1-2 h PACKS-specific; platform upkeep shared | 4-8 h, carried alone |
 | Vendor/model change | Fixed once for every client | PACKS fixes its own copy |
 | Running cost | Usage + LL add-on fee (TBD) | Usage + its own vendor plans (~$99/mo avatar + ElevenLabs plan) |
-| Owner | LL; PACKS sets persona, look, menu | ~~PACKS's developers~~ PACKS's one developer, or paid contractors [PACKS 2026-10-15] |
+| Owner | LL; PACKS sets persona, look, menu | ~~PACKS's developers~~ PACKS's one developer [PACKS 2026-10-15] |
 
 **45-65 derivation:** LL subtotal 38-54, minus billing (1-2) and the multi-client
 dashboard (4-5) = 33-47. Add 12-18 to rebuild what PACKS wouldn't inherit:
@@ -141,8 +143,24 @@ KB ingest, product sync/lookup, conversation logging, secure token service.
 8-14 h of PACKS-specific setup (cannabis guardrails, 21+ gate, menu feed, store
 context), and an in-house build needs that too. It also drops the whole dashboard
 row, but in-house still needs a kill switch and minute caps. 45-65 + 8-14 = 53-79.
-That's the like-for-like comparison with "8-14 on LL", and it strengthens the LL case.
+That's the in-house total. See the next entry for the fair comparison with LL.
 An independent bottom-up estimate on the PACKS machine came to 52-78.
+
+**[PACKS 2026-10-15] 53-79 became 48-69:** the detailed in-house scope
+(`docs/PACKS-AI-Budtender-In-House-Scope.docx`, built by
+`scripts/build-packs-inhouse-scope.py`) estimates bottom-up and finds two shortcuts.
+First, an in-house build would use ElevenLabs' built-in knowledge base, not rebuild
+`kb-ingest`. Second, PACKS already has a Cloudflare Worker that proxies the Dispense API
+(`PACKS_Site\CLOUDFLARE WORKER PROXY AIQ BP\dispense-worker.js`). That Worker keeps the
+key on the server and queries all four venues with one key. Is it deployed? Unconfirmed.
+
+**[PACKS 2026-10-15] Fair comparison:** the table's "8-14 after the add-on ships"
+leaves out the 38-54 h add-on build itself. If one developer builds either path, the
+totals are LL 46-68 vs in-house 48-69, about equal. Platform upkeep (4-8 h/month) is
+shared only once LL has other avatar clients. Until then it lands on LL in full. The
+LL route also adds an add-on fee (not set) and puts PACKS transcripts in LL's systems.
+LL comes out ahead only if it sells the budtender to other clients. Both briefs now
+say this; the recommendation is conditional, not "build under LL".
 
 **Upkeep (estimates, not measured):** vendor SDK/model changes, prompt and
 guardrail tuning, menu-feed breakages, monitoring, transcript review.
@@ -152,9 +170,8 @@ in-house build? Is there an existing stack (site platform, hosting) that
 changes the 45-65? Is there anything PACKS already pays for that overlaps?
 
 **[PACKS 2026-10-15] Answers:**
-- **Own developers:** one. PACKS has a single in-house developer and outsources anything
-  beyond that. So an in-house build and its 4-8 h/month of upkeep land on one person or on
-  paid contractors, which makes it a key-person risk. Outsourced hours are cash, not internal time.
+- **Own developers:** one. An in-house build and its 4-8 h/month of upkeep would land
+  on that one person, which makes it a key-person risk.
 - **Existing stack:** packsclub.com is a Shopify theme. A move to Next.js plus Flowhub is
   planned but not started. PACKS already runs a Cloudflare Worker proxy for AIQ, which
   could host an in-house token server. That trims the in-house backend a little; it
@@ -166,7 +183,7 @@ changes the 45-65? Is there anything PACKS already pays for that overlaps?
 
 | # | Question | Owner | Answer |
 |---|---|---|---|
-| 1 | What replaces AIQ Dispense for the menu, and does it have an API with per-store inventory? | PACKS | [PACKS] Nothing yet: the Flowhub Ecomm build hasn't started. Use AIQ Dispense's Blueprint API (`api.dispenseapp.com/2023-03`, `/products` returns `quantityAvailable` per venue). Swapping to the Flowhub Ecomm API (`/v3/products`, `/v3/deals`) later costs 4-6 h if the menu tool sits behind one interface. To confirm: one Dispense key reads all four venues, and the key stays on the server |
+| 1 | What replaces AIQ Dispense for the menu, and does it have an API with per-store inventory? | PACKS | [PACKS] Nothing yet: the Flowhub Ecomm build hasn't started. Use AIQ Dispense's Blueprint API (`api.dispenseapp.com/2023-03`, `/products` returns `quantityAvailable` per venue). Swapping to the Flowhub Ecomm API (`/v3/products`, `/v3/deals`) later costs 4-6 h if the menu tool sits behind one interface. To confirm: one Dispense key reads all four venues, and the key stays on the server. PACKS's existing Dispense proxy Worker already queries all four venues with one key, which is strong evidence; is it deployed? Unconfirmed |
 | 2 | Avatar look, name and personality | PACKS | |
 | 3 | Which states, and which cannabis advertising rules apply to an on-site avatar? | PACKS / counsel | [PACKS] California only (SGV, OC, San Bernardino, Hollywood). California cannabis advertising rules apply, plus two-party recording consent and the bot-disclosure law (see §10). Counsel to confirm |
 | 4 | How does the avatar know which store the shopper is browsing? | PACKS + LL | [PACKS] The theme's `assets/packs-location-handler.js` already maps store slug to Dispense venue: san-gabriel-valley `998fff4d8f02c2fa`, orange-county `9a0a86a6a5bb3cde`, san-bernardino `537b23523e4ab8cc`, south-los-angeles `e954a82c8f72a4e2` (now Hollywood; never rename the slug or ID). Read the store from the picker or menu path |
@@ -194,5 +211,7 @@ for peptides, but both points apply to PACKS because every store is in Californi
 - 2026-10-14 [LL] Hours cut to realistic pace: 38-54 + 8-14; original kept as ceiling.
 - 2026-10-15 [LL] Draft 2: one doc; PACKS on-LL vs in-house comparison added as the last section; this findings file and the build script committed.
 - 2026-10-15 [LL] Committed `docs/restricted-vertical-compliance.md` and `docs/shopify-gated-widget-plan.md` so both machines have the guardrail and secure-session templates.
-- 2026-10-15 [PACKS] Answered §8 Q1, Q3, Q4, Q7 and the §7 checks (PACKS has one developer and outsources the rest). Added §10.
+- 2026-10-15 [PACKS] Answered §8 Q1, Q3, Q4, Q7 and the §7 checks (PACKS has one developer). Added §10.
 - 2026-10-15 [PACKS] In-house build hours 45-65 → 53-79 (adds the PACKS setup work). Brief: Rules and Risks gains California recording consent and AI disclosure; the PACKS next step becomes testing the Dispense API; Basis bullet corrected to "Outbound phases 1, 2 and 4 took about 3 hours". The build script and the summary were changed to match.
+- 2026-10-15 [PACKS] Two docs again: the LL brief stays, and `docs/PACKS-AI-Budtender-In-House-Scope.docx` adds a detailed in-house build (2-page brief plus appendix: hours by row, stack, upkeep breakdown). In-house hours 53-79 → 48-69 in both docs.
+- 2026-10-15 [PACKS] Made the comparison like-for-like: LL 46-68 vs in-house 48-69 in total, upkeep shared only once other clients join, add-on fee and data location added. Recommendation is now conditional on LL selling to other clients.

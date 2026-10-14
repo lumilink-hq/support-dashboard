@@ -273,7 +273,7 @@ kv_table(d, [
     ("Effort", "38-54 hours for the LumiLink add-on, then 8-14 to launch it for PACKS; about 2 weeks."),
     ("Running cost", "About $0.18-0.31 per conversation minute, plus about $99/month for the avatar vendor."),
     ("Blocker", "Avatar vendor not chosen; custom-avatar fee and streaming rates need quotes."),
-    ("Recommendation", "Build it under LumiLink and launch PACKS as the first client, not as a separate in-house build."),
+    ("Recommendation", "Build under LumiLink if it will be sold to other clients. For PACKS alone, both paths cost about the same."),
 ])
 
 h1(d, "Effort")
@@ -314,18 +314,18 @@ bullet(d, lb("Health data: ", "shoppers will describe conditions; transcripts ne
 bullet(d, lb("Cost runaway: ", "video costs double voice per minute; per-client minute caps ship day one."))
 
 h1(d, "PACKS: On LumiLink or In-House")
-deck(d, "The same budtender for PACKS, built two ways. Upkeep figures are our estimates.")
+deck(d, "The same budtender, built two ways, assuming one developer builds either. Detail: the PACKS In-House Build scope.")
 table(d, ["", "On the LumiLink stack", "Built in-house at PACKS"],
-      [["Build hours for PACKS", "8-14, after the add-on ships", "53-79; rebuilds knowledge base, product sync, logging"],
-       ["Monthly upkeep", "1-2 hrs PACKS-specific; platform upkeep shared", "4-8 hrs, carried alone"],
-       ["Vendor or model change", "LumiLink fixes it once for every client", "PACKS fixes its own copy"],
-       ["Running cost", "Per-minute usage plus a LumiLink add-on fee", "Same usage plus its own vendor plans"],
-       ["Owner", "LumiLink; PACKS sets persona, look and menu", "PACKS's one developer or contractors"],
-       ["Cost of the choice", "Depends on LumiLink's roadmap and pricing", "One person or paid contractors carry all upkeep"]],
+      [["Total build hours", "46-68: add-on 38-54, PACKS launch 8-14", "48-69"],
+       ["Monthly upkeep", "4-8 hrs; shared only once other clients join", "4-8 hrs"],
+       ["Running cost", "Same usage plus a LumiLink add-on fee, not set", "Same usage plus about $120-205/month in plans"],
+       ["Customer data", "PACKS transcripts sit in LumiLink's systems", "Stays with PACKS"],
+       ["Owner", "LumiLink; PACKS sets persona, look and menu", "PACKS's one developer"],
+       ["Comes out ahead when", "LumiLink sells it to other clients", "PACKS is the only user"]],
       [0.20, 0.38, 0.42], keep_together=True)
 
 h1(d, "Next Steps")
-bullet(d, lb("Leadership: ", "approve the LumiLink route and set the add-on price."))
+bullet(d, lb("Leadership: ", "decide whether LumiLink will sell this to other clients; that decides the path."))
 bullet(d, lb("LumiLink dev: ", "run the vendor bake-off and get custom-avatar and streaming quotes."))
 bullet(d, lb("PACKS: ", "choose the avatar's look and name; confirm the AIQ Dispense API reads all four stores."))
 bullet(d, lb("Counsel: ", "review the cannabis guardrail script before PACKS goes live."))

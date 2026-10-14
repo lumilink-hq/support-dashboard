@@ -102,22 +102,32 @@ Upkeep figures are our estimates, not measured.
 
 | | On the LumiLink stack | Built in-house at PACKS |
 |---|---|---|
-| Build hours for PACKS | 8-14, after the add-on ships | 53-79 (see below) |
-| Monthly upkeep | 1-2 h PACKS-specific; platform upkeep shared | 4-8 h, carried alone |
-| Vendor or model change | LL fixes it once for every client | PACKS fixes its own copy |
-| Running cost | Per-minute usage plus an LL add-on fee (price TBD) | Same usage plus its own vendor plans |
-| Owner | LL; PACKS sets persona, look, menu | PACKS's one developer, or paid contractors |
-| Cost of the choice | Depends on LL's roadmap and pricing | One person or paid contractors carry all upkeep |
+| Total build hours | 46-68: add-on 38-54, PACKS launch 8-14 | 48-69 (see below) |
+| Monthly upkeep | 4-8 h; shared only once other clients join | 4-8 h |
+| Running cost | Same usage plus an LL add-on fee (not set) | Same usage plus about $120-205/month in plans |
+| Customer data | PACKS transcripts sit in LL's systems | Stays with PACKS |
+| Owner | LL; PACKS sets persona, look, menu | PACKS's one developer |
+| Comes out ahead when | LL sells it to other clients | PACKS is the only user |
 
-**How 53-79 h was derived:** LL subtotal 38-54, minus billing (1-2) and the
+**Fair comparison (2026-10-15):** the earlier "8-14 vs in-house" framing left out the
+38-54 h add-on build that the LL route also needs. If one developer builds either path,
+the build effort is about equal. LL comes out ahead only if it sells the budtender to
+other clients.
+
+**How 48-69 h was derived:** the detailed in-house scope
+(`PACKS-AI-Budtender-In-House-Scope.docx`) estimates bottom-up and gets 48-69. It uses
+ElevenLabs' built-in knowledge base and PACKS's existing Dispense proxy Worker. The
+earlier top-down figure follows for reference.
+
+**Earlier top-down 53-79:** LL subtotal 38-54, minus billing (1-2) and the
 multi-client dashboard (4-5), gives 33-47. Add 12-18 to rebuild what PACKS
 would not inherit from LL: knowledge-base ingest, product sync and lookup,
 conversation logging and the secure token service. That makes 45-65. Then add the
 8-14 h of PACKS setup (cannabis guardrails, 21+ gate, menu feed, store context),
 which in-house needs too: 53-79.
 
-**Who would build it in-house:** PACKS has one developer and outsources anything
-beyond that, so in-house upkeep falls on one person or on paid contractors.
+**Who would build it in-house:** PACKS has one developer, so in-house upkeep falls on
+one person.
 
 **In-house upkeep (4-8 h/month)** covers vendor SDK and model changes, prompt
 and guardrail tuning, menu-feed breakages, monitoring and transcript review.
