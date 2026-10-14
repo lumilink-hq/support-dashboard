@@ -30,10 +30,12 @@ const ALIASES: Record<Field, string[]> = {
   first_name: ["firstname", "first"],
   last_name: ["lastname", "last", "surname"],
   full_name: ["name", "fullname", "customername", "customer"],
-  points: ["points", "pointbalance", "pointsbalance", "balance", "availablepoints", "currentpoints", "pointsavailable", "totalpoints"],
-  tier_name: ["tier", "viptier", "tiername", "vip", "viplevel", "level"],
-  birthday: ["birthday", "dateofbirth", "dob", "birthdate"],
-  joined_at: ["joinedat", "joined", "joindate", "datejoined", "createdat", "signupdate", "membersince", "enrolledat"],
+  // Joy's own export: Email, Name, Membership Type, Points, Birthday, Created Date.
+  // A Klaviyo profile export: Email, First Name, Last Name, Joy Loyalty Points, Joy Vip tier, Birthday.
+  points: ["points", "pointbalance", "pointsbalance", "balance", "availablepoints", "currentpoints", "pointsavailable", "totalpoints", "joyloyaltypoints", "joypoints", "point"],
+  tier_name: ["tier", "viptier", "tiername", "vip", "viplevel", "level", "membershiptype", "joyviptier"],
+  birthday: ["birthday", "dateofbirth", "dob", "birthdate", "birthdaymmdd"],
+  joined_at: ["joinedat", "joined", "joindate", "datejoined", "createdat", "createddate", "createdate", "signupdate", "membersince", "enrolledat"],
   last_activity_at: ["lastactivity", "lastactivityat", "lastactive", "lastactivitydate", "pointsupdatedat", "lastearned", "lastearnedat"],
 };
 

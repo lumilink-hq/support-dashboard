@@ -46,6 +46,18 @@ function main() {
   });
   eq("headers: unknown columns listed", m.unmapped, ["Joy ID"]);
 
+  // Joy's own export file.
+  eq("headers: Joy export", mapHeaders(["Email", "Name", "Membership Type", "Points", "Birthday", "Created Date"]).columns, {
+    email: 0, full_name: 1, tier_name: 2, points: 3, birthday: 4, joined_at: 5,
+  });
+  // A Klaviyo profile export of Joy's synced properties.
+  const k = mapHeaders(["Email", "First Name", "Last Name", "Joy Loyalty Points", "Joy Vip tier", "Birthday", "dateOfBirth", "Joy member status"]);
+  eq("headers: Klaviyo export", k.columns, { email: 0, first_name: 1, last_name: 2, points: 3, tier_name: 4, birthday: 5 });
+  eq("headers: Klaviyo extras ignored (second birthday, member status)", k.unmapped, ["dateOfBirth", "Joy member status"]);
+  const kp = parseJoyExport("Email,First Name,Last Name,Joy Loyalty Points,Joy Vip tier,Birthday\nmaya@example.com,Maya,Lopez,1468,Silver,04/18/1992\n");
+  eq("klaviyo row: email-only, MM/DD/YYYY birthday", [kp.rows[0].shopify_customer_id, kp.rows[0].email, kp.rows[0].points, kp.rows[0].tier_name, kp.rows[0].birthday],
+    [null, "maya@example.com", 1468, "Silver", "1992-04-18"]);
+
   eq("points: commas", parsePoints("1,234"), 1234);
   eq("points: decimals refused", parsePoints("12.5"), null);
   eq("points: blank refused", parsePoints(""), null);
