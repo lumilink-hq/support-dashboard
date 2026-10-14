@@ -40,8 +40,8 @@ Checked in this repo on 2026-10-14:
 | Product lookup from a Shopify cache | `voice-product-lookup`, `shopify-product-sync`, `products_cache` | Base for a "recommend me something" tool |
 | Order lookup with verification | `voice-order-lookup` | Optional |
 | Conversation logging | `voice-call-logger`, `/conversations` page | Transcripts for review |
-| Restricted-vertical guardrail pattern | `docs/restricted-vertical-compliance.md` (untracked on the LL machine) | Template for the cannabis profile |
-| Signed-URL / private-agent pattern | `docs/shopify-gated-widget-plan.md` §0 (untracked on the LL machine) | Template for the secure avatar session |
+| Restricted-vertical guardrail pattern | `docs/restricted-vertical-compliance.md` | Template for the cannabis profile |
+| Signed-URL / private-agent pattern | `docs/shopify-gated-widget-plan.md` §0 | Template for the secure avatar session |
 
 Gotcha already learned (from `shopify-gated-widget-plan.md`): a public
 ElevenLabs agent ID in page source can be reused by anyone. The concierge
@@ -163,3 +163,4 @@ Out of scope for both options: the PACKS mobile app (Digital Awesome's build).
 - 2026-10-14 [LL] Draft 1: LL product scope, 82-118 h + 16-24 PACKS.
 - 2026-10-14 [LL] Hours cut to realistic pace: 38-54 + 8-14; original kept as ceiling.
 - 2026-10-15 [LL] Draft 2: one doc; PACKS on-LL vs in-house comparison added as the last section; this findings file and the build script committed.
+- 2026-10-15 [LL] Committed `docs/restricted-vertical-compliance.md` and `docs/shopify-gated-widget-plan.md` so both machines have the guardrail and secure-session templates.
