@@ -266,20 +266,20 @@ title(d, "LumiLink", "AI Concierge: A Talking Avatar on the Website",
 
 h1(d, "Summary")
 kv_table(d, [
-    ("The ask", "A website avatar like the reel's virtual budtender: trained on the store, "
-                "guardrailed, with a set personality and a custom look."),
+    ("The ask", "A talking AI budtender on the website: trained on the store, guardrailed, "
+                "a set personality and a realistic custom look."),
     ("What gets built", "A LumiLink add-on: our existing ElevenLabs agent (voice, 30+ languages, "
-                        "knowledge base, product lookup) with a licensed avatar face streamed on the site."),
+                        "knowledge base, product lookup) shown as a realistic AI human, streamed live by an avatar provider."),
     ("Effort", "38-54 hours for the LumiLink add-on, then 8-14 to launch it for PACKS; about 2 weeks."),
-    ("Running cost", "About $0.18-0.31 per conversation minute, plus about $99/month for the avatar vendor."),
-    ("Blocker", "Avatar vendor not chosen; custom-avatar fee and streaming rates need quotes."),
+    ("Running cost", "About $0.18-0.31 per conversation minute, plus about $99/month for the avatar provider."),
+    ("Blocker", "Avatar provider not chosen; custom-avatar fee and streaming rates need quotes."),
     ("Recommendation", "Build under LumiLink if it will be sold to other clients. For PACKS alone, both paths cost about the same."),
 ])
 
 h1(d, "Effort")
 deck(d, "One developer, Claude-assisted. Hours include build and testing.")
 rows = [
-    ["Avatar vendor bake-off (LiveAvatar vs D-ID) and custom avatar creation", 6, 8],
+    ["Avatar provider bake-off (LiveAvatar vs D-ID) and custom AI human", 6, 8],
     ["Website embed: secure session token, avatar player, mic, text fallback, mobile", 6, 9],
     ["Connect the ElevenLabs agent's audio to the avatar's lip sync", 3, 4],
     ["Persona and guardrail profile, plus a red-team test set", 7, 10],
@@ -293,7 +293,7 @@ lo = sum(r[1] for r in rows); hi = sum(r[2] for r in rows)
 assert (lo, hi) == (38, 54), (lo, hi)
 table(d, ["Module", "Hrs"],
       [[r[0], f"{r[1]}-{r[2]}"] for r in rows]
-      + [["TOTAL, LumiLink add-on", f"{lo}-{hi} (excludes vendor wait and legal review)"]],
+      + [["TOTAL, LumiLink add-on", f"{lo}-{hi} (excludes provider wait and legal review)"]],
       [0.74, 0.26], bold_last=True, keep_together=True)
 bullet(d, lb("Basis: ", "SEO was scoped at 173-210 hours and its code shipped in a week; Outbound phases 1, 2 and 4 took about 3 hours."))
 bullet(d, lb("Ceiling: ", "the original estimate was 82-118 hours; budget against it if the mobile embed slips."))
@@ -301,10 +301,11 @@ bullet(d, lb("Ceiling: ", "the original estimate was 82-118 hours; budget agains
 h1(d, "Cost")
 table(d, ["Line", "Type", "Amount"],
       [["ElevenLabs agent minutes plus LLM tokens", "Variable", "$0.085-0.125/min"],
-       ["Avatar streaming (face only)", "Variable", "$0.09-0.18/min"],
-       ["Avatar vendor plan", "Recurring", "About $99/month"],
-       ["Custom avatar creation", "One-time", "Vendor quote, not yet known"],
-       ["Total per conversation minute", "", "$0.18-0.31 (a 4-minute chat costs $0.70-1.22)"]],
+       ["Avatar streaming", "Variable", "$0.09-0.18/min"],
+       ["Avatar provider plan", "Recurring", "About $99/month"],
+       ["Custom AI human", "One-time", "Provider quote, not yet known"],
+       ["Total per conversation minute", "", "$0.18-0.31"],
+       ["Example: 1,000 four-minute chats a month", "", "$720-1,240 plus $99"]],
       [0.45, 0.17, 0.38], bold_last=True, keep_together=True)
 
 h1(d, "Rules and Risks")
@@ -326,7 +327,7 @@ table(d, ["", "On the LumiLink stack", "Built in-house at PACKS"],
 
 h1(d, "Next Steps")
 bullet(d, lb("Leadership: ", "decide whether LumiLink will sell this to other clients; that decides the path."))
-bullet(d, lb("LumiLink dev: ", "run the vendor bake-off and get custom-avatar and streaming quotes."))
+bullet(d, lb("LumiLink dev: ", "run the provider bake-off; get custom-avatar and streaming quotes."))
 bullet(d, lb("PACKS: ", "choose the avatar's look and name; confirm the AIQ Dispense API reads all four stores."))
 bullet(d, lb("Counsel: ", "review the cannabis guardrail script before PACKS goes live."))
 

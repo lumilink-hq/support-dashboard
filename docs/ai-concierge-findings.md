@@ -6,7 +6,7 @@ LumiLink machine and the PACKS machine both add to it.
 
 - **Brief:** `docs/LumiLink-AI-Concierge-Scope.docx` (Draft 2, 2026-10-15)
 - **PACKS in-house build (detail):** `docs/PACKS-AI-Budtender-In-House-Scope.docx`
-  (brief plus appendix). Rebuild it with `python scripts/build-packs-inhouse-scope.py`
+  (two pages, no appendix). Rebuild it with `python scripts/build-packs-inhouse-scope.py`
 - **Summary of the brief:** `docs/ai-concierge-scope-summary.md`
 - **Rebuild the brief:** edit the content section of
   `scripts/build-ai-concierge-scope.py`, then run
@@ -215,3 +215,4 @@ for peptides, but both points apply to PACKS because every store is in Californi
 - 2026-10-15 [PACKS] In-house build hours 45-65 → 53-79 (adds the PACKS setup work). Brief: Rules and Risks gains California recording consent and AI disclosure; the PACKS next step becomes testing the Dispense API; Basis bullet corrected to "Outbound phases 1, 2 and 4 took about 3 hours". The build script and the summary were changed to match.
 - 2026-10-15 [PACKS] Two docs again: the LL brief stays, and `docs/PACKS-AI-Budtender-In-House-Scope.docx` adds a detailed in-house build (2-page brief plus appendix: hours by row, stack, upkeep breakdown). In-house hours 53-79 → 48-69 in both docs.
 - 2026-10-15 [PACKS] Made the comparison like-for-like: LL 46-68 vs in-house 48-69 in total, upkeep shared only once other clients join, add-on fee and data location added. Recommendation is now conditional on LL selling to other clients.
+- 2026-10-15 [PACKS] Both docs: removed the reel references; the avatar is described as a realistic AI human from an avatar provider. LL brief gains an example cost row (1,000 four-minute chats: $720-1,240 plus $99). PACKS in-house scope: appendix cut, upkeep breakdown moved into the body; it's now about the same length as the LL brief.

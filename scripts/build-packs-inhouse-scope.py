@@ -263,12 +263,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTPUT_PATH = os.path.join(ROOT, "docs", "PACKS-AI-Budtender-In-House-Scope.docx")
 DATE = "October 15, 2026"
 
-# (module, lo, hi, why) — realistic pace, one developer, Claude-assisted
+# (module, lo, hi, why): realistic pace, one developer, Claude-assisted.
+# The "why" stays here as the justification; the brief shows only the hours.
 ROWS = [
     ("Accounts and setup", 2, 3,
-     "PACKS's own ElevenLabs workspace, private agent, avatar vendor account, secrets."),
-    ("Avatar bake-off and custom avatar", 6, 8,
-     "LiveAvatar vs D-ID on latency, lip sync, voice; vendor turnaround on the custom look."),
+     "PACKS's own ElevenLabs workspace, private agent, avatar provider account, secrets."),
+    ("Avatar provider bake-off and custom AI human", 6, 8,
+     "LiveAvatar vs D-ID on realism, latency, lip sync; provider turnaround on the custom AI human."),
     ("Session token server", 4, 6,
      "Cloudflare Worker mints short-lived tokens; origin allowlist, rate limit, daily minute cap."),
     ("Website embed (Shopify theme)", 7, 10,
@@ -301,22 +302,23 @@ title(d, "PACKS", "AI Budtender: Building a New Stack In-House",
 
 h1(d, "Summary")
 kv_table(d, [
-    ("The ask", "The reel's virtual budtender on packsclub.com, built and owned by PACKS instead of LumiLink."),
-    ("What gets built", "PACKS's own ElevenLabs agent with a licensed avatar face, a Cloudflare Worker backend, "
-                        "and live per-store stock from AIQ Dispense."),
+    ("The ask", "A talking AI budtender on packsclub.com, built and owned by PACKS instead of LumiLink."),
+    ("What gets built", "PACKS's own ElevenLabs agent shown as a realistic AI-generated human, streamed live "
+                        "by an avatar provider. A Cloudflare Worker backend and live per-store stock from AIQ Dispense."),
     ("Effort", f"{LO}-{HI} hours from one developer, about 3 weeks."),
     ("Running cost", "About $0.18-0.31 per conversation minute plus about $120-205/month in plans."),
     ("Upkeep", "4-8 hours a month, carried by PACKS's one developer."),
-    ("The call", "About the same effort as the LumiLink route (46-68 hours in all). LumiLink comes out ahead only if other clients share the upkeep."),
+    ("The call", "About the same effort as the LumiLink route (46-68 hours in all). LumiLink comes out "
+                 "ahead only if other clients share the upkeep."),
 ])
 
 h1(d, "Effort")
-deck(d, "One developer, Claude-assisted. Hours include build and testing. Reasons per row are in the appendix.")
+deck(d, "One developer, Claude-assisted. Hours include build and testing.")
 table(d, ["Module", "Hrs"],
       [[r[0], f"{r[1]}-{r[2]}"] for r in ROWS]
-      + [["TOTAL", f"{LO}-{HI} (excludes vendor wait and legal review)"]],
+      + [["TOTAL", f"{LO}-{HI} (excludes provider wait and legal review)"]],
       [0.72, 0.28], bold_last=True, keep_together=True)
-bullet(d, lb("Calendar: ", "about 3 weeks next to other work; a stock-avatar demo in week one. "
+bullet(d, lb("Calendar: ", "about 3 weeks next to other work; a demo on a stock AI human in week one. "
              "The custom avatar and counsel review set launch."))
 bullet(d, lb("Ceiling: ", f"about {C_LO}-{C_HI} hours if the mobile Safari embed slips."))
 bullet(d, lb("What in-house skips: ", "the multi-client dashboard, billing and the add-on fee."))
@@ -324,17 +326,32 @@ bullet(d, lb("What in-house skips: ", "the multi-client dashboard, billing and t
 h1(d, "Cost")
 table(d, ["Line", "Type", "Amount"],
       [["Voice agent minutes and LLM tokens", "Variable", "$0.085-0.125/min"],
-       ["Avatar streaming (face only)", "Variable", "$0.09-0.18/min"],
-       ["Avatar vendor plan", "Recurring", "About $99/month"],
+       ["Avatar streaming", "Variable", "$0.09-0.18/min"],
+       ["Avatar provider plan", "Recurring", "About $99/month"],
        ["ElevenLabs plan", "Recurring", "$22-99/month by tier"],
        ["Cloudflare Workers", "Recurring", "$0-5/month"],
-       ["Custom PACKS avatar", "One-time", "Vendor quote, not yet known"],
+       ["Custom PACKS avatar", "One-time", "Provider quote, not yet known"],
+       ["Total per conversation minute", "", "$0.18-0.31"],
        ["Example: 1,000 four-minute chats a month", "", "$720-1,240 plus about $120-205 in plans"]],
       [0.45, 0.17, 0.38], bold_last=True, keep_together=True)
 bullet(d, lb("Not counted here: ", "internal build hours, monthly upkeep hours, counsel's review."))
 
+h1(d, "Upkeep")
+deck(d, "Estimates, not measured. This is the work PACKS carries every month after launch.")
+table(d, ["Task", "Hrs/month"],
+      [["Provider SDK, API and model changes", "1-2"],
+       ["Prompt and guardrail tuning from transcripts", "1-2"],
+       ["Compliance spot-check of transcripts", "1-2"],
+       ["Menu feed breakages, store and deal updates", "0.5-1"],
+       ["Usage, caps and cost monitoring", "0.5-1"],
+       ["TOTAL", "4-8"]],
+      [0.80, 0.20], bold_last=True, keep_together=True)
+bullet(d, lb("On LumiLink: ", "the first, fourth and fifth rows are shared once other clients join; "
+             "until then the same hours land on LumiLink."))
+
 h1(d, "Rules and Risks")
-bullet(d, lb("One developer: ", "if that person is out, nobody fixes an outage or a guardrail slip; the same holds on LumiLink if one developer runs it."))
+bullet(d, lb("One developer: ", "if that person is out, nobody fixes an outage or a guardrail slip; "
+             "the same holds on LumiLink if one developer runs it."))
 bullet(d, lb("California: ", "no medical or effect claims, 21+ gate, recording and AI disclosure; counsel reviews."))
 bullet(d, lb("Open to the public: ", "no login, so minute caps and rate limits ship on day one."))
 bullet(d, lb("Menu platform: ", "built on AIQ Dispense; the Flowhub swap costs 4-6 more hours."))
@@ -342,52 +359,18 @@ bullet(d, lb("Menu platform: ", "built on AIQ Dispense; the Flowhub swap costs 4
 h1(d, "Next Steps")
 bullet(d, lb("Leadership: ", "compare this with the LumiLink scope and pick a path."))
 bullet(d, lb("PACKS brand: ", "the avatar's look, name, personality and languages."))
-bullet(d, lb("Developer: ", "confirm the Dispense proxy Worker is deployed; get avatar vendor quotes."))
+bullet(d, lb("Developer: ", "confirm the Dispense proxy Worker is deployed; get avatar provider quotes."))
 bullet(d, lb("Counsel: ", "review the guardrail script and disclosures before launch."))
 
 sources(d, f"Sources: PACKS theme and Dispense proxy Worker; AIQ Dispense Blueprint API; LumiLink codebase and build "
            f"history; Akapulu avatar price index, LiveAvatar, D-ID docs, ElevenLabs and Cloudflare pricing pages. "
            f"Accessed October 14, 2026. Prices are published ranges, not quotes; re-check before committing a budget.")
 
-# ---------------------------------------------------------------- appendix
-d.add_page_break()
-h1(d, "Appendix: The Detail")
-
-h2(d, "Hours, row by row")
-table(d, ["Module", "Hrs", "Why"],
-      [[r[0], f"{r[1]}-{r[2]}", r[3]] for r in ROWS],
-      [0.24, 0.09, 0.67])
-
-h2(d, "The stack")
-table(d, ["Layer", "Choice", "Why", "Alternative"],
-      [["Brain and voice", "ElevenLabs Agents", "30+ languages, tool calls, built-in knowledge base",
-        "Anam full stack: cheaper per minute, less guardrail control"],
-       ["Face", "LiveAvatar LITE or D-ID", "Face only, so the guardrails stay in our agent", "Tavus: priciest"],
-       ["Backend", "Cloudflare Worker", "PACKS already runs Workers for AIQ and Dispense", "A Node server: more upkeep"],
-       ["Menu", "AIQ Dispense API", "Live today; the proxy Worker already exists", "Flowhub Ecomm, once built"],
-       ["Site", "Shopify theme section", "Where packsclub.com lives now", "Next.js site, after migration"]],
-      [0.13, 0.20, 0.39, 0.28])
-
-h2(d, "Monthly upkeep, 4-8 hours")
-table(d, ["Task", "Hrs/month"],
-      [["Vendor SDK, API and model changes", "1-2"],
-       ["Prompt and guardrail tuning from transcripts", "1-2"],
-       ["Compliance spot-check of transcripts", "1-2"],
-       ["Menu feed breakages, store and deal updates", "0.5-1"],
-       ["Usage, caps and cost monitoring", "0.5-1"],
-       ["TOTAL", "4-8"]],
-      [0.80, 0.20], bold_last=True, keep_together=True)
-bullet(d, lb("On LumiLink: ", "the first, fourth and fifth rows are shared once other clients join; until then the same hours land on LumiLink."))
-
 d.save(OUTPUT_PATH)
 
 from docx import Document as D2
 doc = D2(OUTPUT_PATH)
-paras = [p.text for p in doc.paragraphs]
-cells = [c.text for t in doc.tables for r in t.rows for c in r.cells]
-cut = paras.index("Appendix: The Detail")
-brief_words = sum(len(x.split()) for x in paras[:cut]) + sum(
-    len(c.text.split()) for t in doc.tables[:3] for r in t.rows for c in r.cells)
+txt = [p.text for p in doc.paragraphs] + [c.text for t in doc.tables for r in t.rows for c in r.cells]
 print("hours", LO, HI, "ceiling", C_LO, C_HI)
-print("brief words", brief_words, "total words", sum(len(x.split()) for x in paras + cells))
-print("emdash", any("—" in x for x in paras + cells))
+print("words", sum(len(x.split()) for x in txt))
+print("emdash", any("—" in x for x in txt))

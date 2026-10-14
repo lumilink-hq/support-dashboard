@@ -1,7 +1,8 @@
 # AI Concierge (talking website avatar): scope summary
 
 Written 2026-10-14, revised 2026-10-15. The full brief is
-`docs/LumiLink-AI-Concierge-Scope.docx` (Draft 2). This file carries the
+`docs/LumiLink-AI-Concierge-Scope.docx` (Draft 2). Its companion is
+`docs/PACKS-AI-Budtender-In-House-Scope.docx`, the detailed in-house build. This file carries the
 detail behind it, so the brief can be revised on another machine without the
 conversation that produced it.
 
@@ -9,18 +10,28 @@ conversation that produced it.
 
 ## The ask
 
-Leadership saw an Instagram reel of a virtual budtender: a talking avatar on a
-website that answers any question in any language.
+Leadership wants a virtual budtender: a talking AI on the website that looks like a
+realistic human and answers any question in any language. The docs describe the
+project in general terms. They don't mention the example that prompted it.
 
 **Why LL vs PACKS matters.** Leadership asked for an LL version and a
 PACKS-only version so they could weigh one against the other. The case being made is that the
 budtender belongs under LumiLink, with PACKS as its first client, instead of
-PACKS building and maintaining its own stack. **Decision (2026-10-15): one doc,
-with the comparison as its last section,** instead of two separate scopes.
+PACKS building and maintaining its own stack. **Decision (2026-10-15): two docs.** The
+LL brief ends with the comparison. The PACKS in-house scope gives the detailed build
+and upkeep for a new PACKS stack, at a similar length. The numbers stay
+like-for-like, so if PACKS alone comes out better, the docs show it.
 
 What they asked for: a trained AI with guardrails and a set personality. It works like
 our customer-service agent, but it lives on the website as an avatar instead
-of a chat widget. They want a customizable avatar from a vendor.
+of a chat widget. They want a customizable avatar.
+
+**The avatar is a realistic AI-generated human.** The avatar providers (LiveAvatar,
+D-ID, Tavus, Anam) all render photoreal AI humans live, in real time. PACKS can pick a
+stock one or create a custom one from an AI-generated face or a short video of an actor.
+A provider is still needed: rendering a realistic human live and lip-synced takes
+GPU streaming we wouldn't host ourselves. The docs now say "avatar provider" and
+"realistic AI human", not "vendor" and "face".
 
 ## Architecture
 
