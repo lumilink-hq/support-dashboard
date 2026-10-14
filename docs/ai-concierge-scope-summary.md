@@ -6,6 +6,24 @@ Written 2026-10-14, revised 2026-10-15. The full brief is
 detail behind it, so the brief can be revised on another machine without the
 conversation that produced it.
 
+
+> **Current figures (2026-10-15, after the stack was chosen).** These supersede any
+> older numbers further down.
+> - **Stack:** ElevenLabs Agents (brain, voice), HeyGen LiveAvatar in face-only mode on
+>   the $99/mo plan, launching on a stock AI human. A custom PACKS avatar is optional
+>   later, at a quoted price. In-house adds a Cloudflare Worker backend and AIQ Dispense
+>   (Flowhub if needed).
+> - **Hours:** LL add-on 35-51, then a PACKS launch of 8-14 (43-65 total). In-house
+>   45-66, ceiling about 80-120.
+> - **Per minute:** $0.18-0.22. 1,000 four-minute chats a month: $700-860, plus $99
+>   (LL) or about $120-205 in plans (in-house).
+> - **Rule:** the docs state our stack pick (the cheapest option that works well and
+>   isn't shady). They don't leave options or a bake-off for leadership.
+> - **The .docx files were edited by hand in Word** (titles, Next Steps and Sources
+>   removed, upkeep "4 hours a month"). The build scripts now reproduce that text
+>   exactly. Prefer splicing changes into the .docx. A script rebuild keeps the text
+>   but drops any Word-only formatting.
+
 ---
 
 ## The ask
@@ -56,7 +74,7 @@ GPU streaming we wouldn't host ourselves. The docs now say "avatar provider" and
 | Anam | Full managed stack | $0.11-0.16/min | Would replace our brain; less control |
 | Tavus | Full managed stack | $0.26-0.37/min | Most expensive |
 
-Recommendation: compare LiveAvatar and D-ID side by side. Custom-avatar creation fees are unknown and need a quote.
+~~Recommendation: compare LiveAvatar and D-ID side by side.~~ **Decided 2026-10-15: HeyGen LiveAvatar, face only.** It has published pricing (~$0.09/min on $99/mo) from an established company, and it keeps our own agent and guardrails. Passed over: D-ID (pricing not published, reports of trouble with cloned voices), Simli (pricing hidden until signup), Anam (it replaces our brain, so we'd lose guardrail control) and Tavus (the priciest).
 
 ## Hours (realistic pace, from SEO and Outbound history)
 
@@ -113,7 +131,7 @@ Upkeep figures are our estimates, not measured.
 
 | | On the LumiLink stack | Built in-house at PACKS |
 |---|---|---|
-| Total build hours | 46-68: add-on 38-54, PACKS launch 8-14 | 48-69 (see below) |
+| Total build hours | 43-65: add-on 35-51, PACKS launch 8-14 | 45-66 (see below) |
 | Monthly upkeep | 4-8 h; shared only once other clients join | 4-8 h |
 | Running cost | Same usage plus an LL add-on fee (not set) | Same usage plus about $120-205/month in plans |
 | Customer data | PACKS transcripts sit in LL's systems | Stays with PACKS |

@@ -27,7 +27,7 @@ delete someone else's finding; strike it through and say why.
 | Format | One doc. LumiLink add-on scope, with a PACKS "on LL vs in-house" comparison as the last section (decided 2026-10-15) |
 | Why the comparison exists | To make the case to leadership that the budtender belongs under LumiLink, with PACKS as client #1, instead of PACKS building and maintaining its own stack. [PACKS 2026-10-15] Kept honest: if PACKS alone comes out better, the docs should show it |
 | Recommendation | ~~Build under LL; launch PACKS first~~ [PACKS 2026-10-15] Build under LL if it will be sold to other clients; for PACKS alone both paths cost about the same (see §7) |
-| Vendor | Not chosen. Bake-off: HeyGen LiveAvatar vs D-ID |
+| Vendor | ~~Not chosen. Bake-off: HeyGen LiveAvatar vs D-ID~~ [PACKS 2026-10-15] **HeyGen LiveAvatar, face only, $99/mo plan; launch on a stock AI human.** Leadership wants our pick, not options. See §3 for the reasons |
 | Price of the LL add-on | Not set. This is the first question leadership will ask |
 | Biggest PACKS unknown | ~~Menu data source after AIQ Dispense is dropped~~ [PACKS 2026-10-15] Resolved: the budtender reads AIQ Dispense's API for now (see §8 Q1). Still open: whether one Dispense key reads all four stores |
 
@@ -63,6 +63,8 @@ disagree. Accessed 2026-10-14.
 | Anam | Full managed | $0.11-0.16/min, per-second billing | Cheapest managed option; ~5 concurrent on a ~$299 plan |
 | Tavus | Full managed | $0.26-0.37/min | Most expensive; 30-sec minimum per conversation; 15 concurrent on $395 plan |
 | Simli | Face only | $0.009-0.05/min (sources conflict) | Rendering only; plans visible after signup |
+
+**[PACKS 2026-10-15] Decision: HeyGen LiveAvatar (face only).** It's the cheapest option that works well and isn't shady: published pricing, an established company, and it keeps our ElevenLabs agent and guardrails. Passed over: D-ID (pricing not published; cloned-voice reports), Simli (pricing hidden until signup, and sources conflict), Anam (cheaper per minute but replaces our brain, so we'd lose cannabis guardrail control) and Tavus (the priciest). The avatar row is now 3-5 h of setup and testing (was 6-8 for a bake-off). All-in is $0.18-0.22/min.
 
 **Why face-only:** a full managed stack would replace our ElevenLabs agent,
 which means rebuilding the guardrails, tools, knowledge base and logging inside
@@ -129,7 +131,7 @@ Safari. That's where an overrun would come from.
 
 | | On LumiLink | In-house at PACKS |
 |---|---|---|
-| Build hours | 8-14 after the add-on ships | ~~45-65~~ ~~53-79~~ 48-69 [PACKS 2026-10-15, see below] |
+| Build hours | 8-14 after the add-on ships | ~~45-65~~ ~~53-79~~ ~~48-69~~ 45-66 [PACKS 2026-10-15, see below] |
 | Monthly upkeep | 1-2 h PACKS-specific; platform upkeep shared | 4-8 h, carried alone |
 | Vendor/model change | Fixed once for every client | PACKS fixes its own copy |
 | Running cost | Usage + LL add-on fee (TBD) | Usage + its own vendor plans (~$99/mo avatar + ElevenLabs plan) |
@@ -216,3 +218,4 @@ for peptides, but both points apply to PACKS because every store is in Californi
 - 2026-10-15 [PACKS] Two docs again: the LL brief stays, and `docs/PACKS-AI-Budtender-In-House-Scope.docx` adds a detailed in-house build (2-page brief plus appendix: hours by row, stack, upkeep breakdown). In-house hours 53-79 → 48-69 in both docs.
 - 2026-10-15 [PACKS] Made the comparison like-for-like: LL 46-68 vs in-house 48-69 in total, upkeep shared only once other clients join, add-on fee and data location added. Recommendation is now conditional on LL selling to other clients.
 - 2026-10-15 [PACKS] Both docs: removed the reel references; the avatar is described as a realistic AI human from an avatar provider. LL brief gains an example cost row (1,000 four-minute chats: $720-1,240 plus $99). PACKS in-house scope: appendix cut, upkeep breakdown moved into the body; it's now about the same length as the LL brief.
+- 2026-10-15 [PACKS] The user hand-edited both .docx files in Word: simpler titles; Next Steps, Sources and the LL Recommendation row removed; PACKS upkeep is "4 hours a month" (the upkeep table still totals 4-8); menu reads "AIQ Dispense/Flowhub if needed". The stack is now chosen in both docs: LiveAvatar face-only on a stock AI human. Hours: LL 35-51 (+8-14 PACKS = 43-65); in-house 45-66; ceiling 80-120. Per minute $0.18-0.22; the example is $700-860. Changes were spliced into the hand-edited .docx; the build scripts were updated to reproduce the same text.
