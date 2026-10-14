@@ -59,8 +59,17 @@ Do B1-B4 in one sitting so the Joy export is as close to install time as possibl
 2. **Backfill**: `select start_loyalty_backfill(id) from loyalty_programs where shop_domain = '…';`
    Watch `select * from loyalty_backfills;` until `done`. It records order counts and tier spend
    with 0 points and emails nobody.
-3. **Export from Joy** (members with balances, tiers, birthdays, join dates). Save it **outside the
-   repo**. Note the exact time you downloaded it.
+3. **Export Joy's balances from Klaviyo** (Joy's API needs the Ultimate plan and its in-app export
+   wasn't available; Joy syncs `Joy Loyalty Points` / `Joy Vip tier` / `Birthday` onto every
+   member's Klaviyo profile):
+   ```
+   npx tsx --env-file=.env.local scripts/klaviyo-joy-export.ts <path outside the repo>.csv
+   ```
+   It reads the three "Wave Rewards: Bronze / Silver / Gold VIP Members" segments and refuses to
+   write inside the repo. Use the time it finishes as `--taken-at`. (Checked 2026-10-14: 4,456
+   members, Bronze 4,432 / Silver 21 / Gold 3, 554,343 points, 0 problems.) The file has no join
+   or activity dates: join dates come from Shopify (backfill), and the import starts the expiry
+   and demotion clocks at the export (0208), so nobody loses points or a tier on day one.
 4. **Import**, dry run first:
    ```
    npx tsx scripts/joy-import.ts <export.csv> --program <id> --kind import --taken-at <download time>
@@ -78,7 +87,9 @@ on the live page yet, Klaviyo is off.
 
 **Daily** (or every few days):
 
-1. Export from Joy, then `--kind compare --apply`. Read the summary and the top differences.
+1. Run `scripts/klaviyo-joy-export.ts` again, then `joy-import.ts --kind compare --apply`. Read the
+   summary and the top differences. (Klaviyo lags Joy by minutes, so a few very recent changes show
+   as timing differences.)
 2. Sort each difference into one of these:
    - **Expected:** the member redeemed, claimed Instagram, set a birthday or got a staff
      adjustment *in Joy*. Our ledger never sees those, so they're fine, and the cutover true-up
@@ -117,7 +128,8 @@ Use a test customer account on tsunami.store and a hidden duplicate page (e.g.
 ## D. Cutover day
 
 1. **Turn off earning in Joy** (keep Joy installed so its data stays readable).
-2. Final Joy export → **import** (not compare), `--taken-at` = download time. This is the true-up:
+2. Wait a few minutes after turning off Joy's earning (Klaviyo catches up), then the final
+   Klaviyo export → **import** (not compare), `--taken-at` = when the export finished. This is the true-up:
    every member is set to Joy's final balance and tier, and each gap lands in the ledger as an
    `import` entry with Joy's and our numbers in the note.
 3. Compare against the same export: should be all `match`.
@@ -130,7 +142,8 @@ Use a test customer account on tsunami.store and a hidden duplicate page (e.g.
 6. Check a Klaviyo flow end to end (Reward Ready on a test profile).
 7. Watch for a week: webhook errors, code failures, Klaviyo failures
    (`select status, count(*) from loyalty_events group by 1;`).
-8. **Cancel Joy** ($129/mo) after the week. Purge all Joy snapshots. Delete export files.
+8. **Cancel Joy** ($129/mo) after the week. Purge all Joy snapshots. Delete export files. Remove
+   `KLAVIYO_API_KEY` / `JOY_READ_ONLY_KEY` from `.env.local` if nothing else needs them.
 
 ## Rollback
 
