@@ -2,8 +2,9 @@
 -- test_loyalty_joy_migration.sql — non-destructive test of 0207 (LL Loyalty
 -- module 8): the Joy import SETS balances (no double count of orders both
 -- systems saw), matches by customer id then email, enrolls Joy-only members,
--- carries dates and birthdays, runs quiet; a later import trues up and an
--- older one is refused; the compare reports differences without changing
+-- carries dates and birthdays, runs quiet; with no activity date (Klaviyo
+-- export) the expiry/demotion clocks start at the export (0208); a later
+-- import trues up and an older one is refused; the compare reports differences without changing
 -- anything; purge drops PII.
 --
 -- Run:  docker exec -i supabase_db_support-dashboard psql -U postgres -v ON_ERROR_STOP=1 < scripts/test_loyalty_joy_migration.sql
@@ -73,6 +74,17 @@ begin
   assert (select points_balance = 900 and tier_key = 'silver' and enrolled_at = '2025-01-05T00:00:00Z' and first_name = 'Carol'
             from loyalty_members where id = v_new), 'import: Joy-only member enrolled with their balance, tier and join date';
   assert not exists (select 1 from loyalty_members where program_id = v_prog and shopify_customer_id = 13), 'import: unknown tier row skipped';
+
+  -- 0208: no activity date in the file (a Klaviyo export) -> clocks start at the export.
+  assert (select last_activity_at = '2026-10-22T09:00:00Z' and last_demoted_at = '2026-10-22T09:00:00Z'
+            from loyalty_members where id = v_bob), 'clocks: no activity date starts expiry and demotion at the export';
+  assert (select last_demoted_at is null from loyalty_members where id = v_alice),
+    'clocks: a row WITH an activity date keeps it (no demotion grace)';
+  -- Carol: joined 2025-01-05, no orders, 900 Joy points. Without the floor the
+  -- next hourly job would expire her balance; with it she keeps it.
+  perform run_loyalty_jobs('2026-10-23T09:00:00Z');
+  assert (select points_balance from loyalty_members where id = v_new) = 900,
+    'clocks: a Joy-active member with no recent order keeps her points after the next job run';
   assert (select message from loyalty_joy_rows where snapshot_id = v_snap and row_no = 5) = 'no tier named Platinum', 'import: reason recorded';
 
   select count(*) into v_n from loyalty_events where program_id = v_prog;
