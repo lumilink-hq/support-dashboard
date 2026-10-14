@@ -1,18 +1,22 @@
 # AI Concierge (talking website avatar): scope summary
 
-Written 2026-10-14. The full brief is `docs/LumiLink-AI-Concierge-Scope.docx`.
-This file carries everything needed to write the **PACKS-only** version on
-another machine without the conversation that produced it.
+Written 2026-10-14, revised 2026-10-15. The full brief is
+`docs/LumiLink-AI-Concierge-Scope.docx` (Draft 2). This file carries the
+detail behind it, so the brief can be revised on another machine without the
+conversation that produced it.
 
 ---
 
 ## The ask
 
 Leadership saw an Instagram reel of a virtual budtender: a talking avatar on a
-website that answers any question in any language. They asked for two scopes:
+website that answers any question in any language.
 
-1. **LumiLink product** (done: the .docx above). Built on the LL stack and sold as an add-on.
-2. **PACKS-only build** (to do). A scope just for PACKS's budtender.
+**Why LL vs PACKS matters.** Leadership asked for an LL version and a
+PACKS-only version so they could weigh one against the other. The case being made is that the
+budtender belongs under LumiLink, with PACKS as its first client, instead of
+PACKS building and maintaining its own stack. **Decision (2026-10-15): one doc,
+with the comparison as its last section,** instead of two separate scopes.
 
 What they asked for: a trained AI with guardrails and a set personality. It works like
 our customer-service agent, but it lives on the website as an avatar instead
@@ -61,7 +65,7 @@ runs 3-5x faster than the estimates. Vendor waits, live tests and human review d
 | Add-on billing, entitlement, pricing page | 1-2 | 6-8 |
 | Load, concurrency, launch QA | 6-8 | 8-10 |
 | **LumiLink subtotal** | **38-54** | **82-118** |
-| PACKS deployment (persona, cannabis guardrails, menu feed, branded avatar) | 8-14 | 16-24 |
+| PACKS launch on LL (persona, cannabis guardrails, menu feed, branded avatar) | 8-14 | 16-24 |
 | **Total** | **46-68** | **98-142** |
 
 Calendar: about 2 weeks. A demo on a stock avatar is possible in 2-3 days. The
@@ -90,25 +94,40 @@ That is about double our voice-only cost per minute, so per-client minute caps s
   retention limits and a privacy notice.
 - **Cost:** video costs about double voice per minute. Cap minutes per client.
 
-## For the PACKS version: what to cover
+## PACKS: on LumiLink or in-house (the comparison in the brief)
 
-The PACKS scope should be a **separate** document, not a section of the LL one.
-Things it has to decide or confirm:
+Upkeep figures are our estimates, not measured.
+
+| | On the LumiLink stack | Built in-house at PACKS |
+|---|---|---|
+| Build hours for PACKS | 8-14, after the add-on ships | 45-65 (see below) |
+| Monthly upkeep | 1-2 h PACKS-specific; platform upkeep shared | 4-8 h, carried alone |
+| Vendor or model change | LL fixes it once for every client | PACKS fixes its own copy |
+| Running cost | Per-minute usage plus an LL add-on fee (price TBD) | Same usage plus its own vendor plans |
+| Owner | LL; PACKS sets persona, look, menu | PACKS's developers |
+| Cost of the choice | Depends on LL's roadmap and pricing | No shared fixes; one client carries all upkeep |
+
+**How 45-65 h was derived:** LL subtotal 38-54, minus billing (1-2) and the
+multi-client dashboard (4-5), gives 33-47. Add 12-18 to rebuild what PACKS
+would not inherit from LL: knowledge-base ingest, product sync and lookup,
+conversation logging and the secure token service.
+
+**In-house upkeep (4-8 h/month)** covers vendor SDK and model changes, prompt
+and guardrail tuning, menu-feed breakages, monitoring and transcript review.
+On LL, everything except PACKS's persona and menu checks is spread across every client.
+
+## Open items for PACKS
 
 - **Menu data source.** PACKS is leaving AIQ Dispense, which currently runs
-  orders at `/menu/<store>`. The budtender's product recommendations need
-  the new menu's live inventory per store. Confirm what replaces AIQ and whether
-  it has an API. This is the biggest unknown in the PACKS hours.
-- **Build on LL, or standalone?** If the LL add-on gets built first, PACKS
-  costs 8-14 h. If PACKS gets built standalone, the LL rows above apply to it,
-  minus billing and the multi-client dashboard.
+  orders at `/menu/<store>`. Recommendations need the new menu's live
+  per-store inventory. Confirm what replaces AIQ and whether it has an API.
+  This is the biggest unknown in the PACKS hours either way.
 - **Avatar look, name and personality:** PACKS brand decision.
-- **Per-store context:** hours, location and stock differ by store, so the
-  avatar needs to know which store the shopper is browsing.
-- **App:** the PACKS mobile app belongs to Digital Awesome, not us. A
-  budtender inside the app would be their build. Our scope covers the website only.
-- **Compliance:** state cannabis advertising rules for PACKS's state, plus the
-  21+ gate and the no-medical-claims rule. Counsel review is a cost line we can't estimate yet.
+- **Per-store context:** the avatar needs to know which store the shopper is browsing.
+- **App:** the PACKS mobile app belongs to Digital Awesome. A budtender inside
+  it would be their build. Both options cover the website only.
+- **Compliance:** state cannabis advertising rules, the 21+ gate, no medical
+  claims. Counsel review is a cost line we can't estimate yet.
 
 ## Sources
 
