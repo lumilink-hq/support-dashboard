@@ -1,26 +1,55 @@
 # AI Concierge (talking website avatar): scope summary
 
 Written 2026-10-14, revised 2026-10-15. The full brief is
-`docs/LumiLink-AI-Concierge-Scope.docx` (Draft 2). This file carries the
+`docs/LumiLink-AI-Concierge-Scope.docx` (Draft 2). Its companion is
+`docs/PACKS-AI-Budtender-In-House-Scope.docx`, the detailed in-house build. This file carries the
 detail behind it, so the brief can be revised on another machine without the
 conversation that produced it.
+
+
+> **Current figures (2026-10-15, after the stack was chosen).** These supersede any
+> older numbers further down.
+> - **Stack:** ElevenLabs Agents (brain, voice), HeyGen LiveAvatar in face-only mode on
+>   the $99/mo plan, launching on a stock AI human. A custom PACKS avatar is optional
+>   later, at a quoted price. In-house adds a Cloudflare Worker backend and AIQ Dispense
+>   (Flowhub if needed).
+> - **Hours:** LL add-on 35-51, then a PACKS launch of 8-14 (43-65 total). In-house
+>   45-66, ceiling about 80-120.
+> - **Per minute:** $0.18-0.22. 1,000 four-minute chats a month: $700-860, plus $99
+>   (LL) or about $120-205 in plans (in-house).
+> - **Rule:** the docs state our stack pick (the cheapest option that works well and
+>   isn't shady). They don't leave options or a bake-off for leadership.
+> - **The .docx files were edited by hand in Word** (titles, Next Steps and Sources
+>   removed, upkeep "4 hours a month"). The build scripts now reproduce that text
+>   exactly. Prefer splicing changes into the .docx. A script rebuild keeps the text
+>   but drops any Word-only formatting.
 
 ---
 
 ## The ask
 
-Leadership saw an Instagram reel of a virtual budtender: a talking avatar on a
-website that answers any question in any language.
+Leadership wants a virtual budtender: a talking AI on the website that looks like a
+realistic human and answers any question in any language. The docs describe the
+project in general terms. They don't mention the example that prompted it.
 
 **Why LL vs PACKS matters.** Leadership asked for an LL version and a
 PACKS-only version so they could weigh one against the other. The case being made is that the
 budtender belongs under LumiLink, with PACKS as its first client, instead of
-PACKS building and maintaining its own stack. **Decision (2026-10-15): one doc,
-with the comparison as its last section,** instead of two separate scopes.
+PACKS building and maintaining its own stack. **Decision (2026-10-15): two docs.** The
+LL brief ends with the comparison. The PACKS in-house scope gives the detailed build
+and upkeep for a new PACKS stack, at a similar length. The numbers stay
+like-for-like, so if PACKS alone comes out better, the docs show it.
 
 What they asked for: a trained AI with guardrails and a set personality. It works like
 our customer-service agent, but it lives on the website as an avatar instead
-of a chat widget. They want a customizable avatar from a vendor.
+of a chat widget. They want a customizable avatar.
+
+**The avatar is a realistic AI-generated human.** The avatar providers (LiveAvatar,
+D-ID, Tavus, Anam) all render photoreal AI humans live, in real time. PACKS can pick a
+stock one or create a custom one from an AI-generated face or a short video of an actor.
+A provider is still needed: rendering a realistic human live and lip-synced takes
+GPU streaming we wouldn't host ourselves. The docs now say "avatar provider" and
+"realistic AI human", not "vendor" and "face".
 
 ## Architecture
 
@@ -45,7 +74,7 @@ of a chat widget. They want a customizable avatar from a vendor.
 | Anam | Full managed stack | $0.11-0.16/min | Would replace our brain; less control |
 | Tavus | Full managed stack | $0.26-0.37/min | Most expensive |
 
-Recommendation: compare LiveAvatar and D-ID side by side. Custom-avatar creation fees are unknown and need a quote.
+~~Recommendation: compare LiveAvatar and D-ID side by side.~~ **Decided 2026-10-15: HeyGen LiveAvatar, face only.** It has published pricing (~$0.09/min on $99/mo) from an established company, and it keeps our own agent and guardrails. Passed over: D-ID (pricing not published, reports of trouble with cloned voices), Simli (pricing hidden until signup), Anam (it replaces our brain, so we'd lose guardrail control) and Tavus (the priciest).
 
 ## Hours (realistic pace, from SEO and Outbound history)
 
@@ -90,6 +119,8 @@ That is about double our voice-only cost per minute, so per-client minute caps s
 - **Cannabis:** no medical or effect claims, a 21+ gate before the avatar talks,
   and no sales across state lines. Counsel reviews the guardrail script before
   PACKS goes live.
+- **California voice rules:** before the conversation starts, disclose that it's being
+  recorded (two-party consent) and that the shopper is talking to an AI (SB 1001).
 - **Health data:** customers will describe medical conditions. Transcripts need
   retention limits and a privacy notice.
 - **Cost:** video costs about double voice per minute. Cap minutes per client.
@@ -100,17 +131,32 @@ Upkeep figures are our estimates, not measured.
 
 | | On the LumiLink stack | Built in-house at PACKS |
 |---|---|---|
-| Build hours for PACKS | 8-14, after the add-on ships | 45-65 (see below) |
-| Monthly upkeep | 1-2 h PACKS-specific; platform upkeep shared | 4-8 h, carried alone |
-| Vendor or model change | LL fixes it once for every client | PACKS fixes its own copy |
-| Running cost | Per-minute usage plus an LL add-on fee (price TBD) | Same usage plus its own vendor plans |
-| Owner | LL; PACKS sets persona, look, menu | PACKS's developers |
-| Cost of the choice | Depends on LL's roadmap and pricing | No shared fixes; one client carries all upkeep |
+| Total build hours | 43-65: add-on 35-51, PACKS launch 8-14 | 45-66 (see below) |
+| Monthly upkeep | 4-8 h; shared only once other clients join | 4-8 h |
+| Running cost | Same usage plus an LL add-on fee (not set) | Same usage plus about $120-205/month in plans |
+| Customer data | PACKS transcripts sit in LL's systems | Stays with PACKS |
+| Owner | LL; PACKS sets persona, look, menu | PACKS's one developer |
+| Comes out ahead when | LL sells it to other clients | PACKS is the only user |
 
-**How 45-65 h was derived:** LL subtotal 38-54, minus billing (1-2) and the
+**Fair comparison (2026-10-15):** the earlier "8-14 vs in-house" framing left out the
+38-54 h add-on build that the LL route also needs. If one developer builds either path,
+the build effort is about equal. LL comes out ahead only if it sells the budtender to
+other clients.
+
+**How 48-69 h was derived:** the detailed in-house scope
+(`PACKS-AI-Budtender-In-House-Scope.docx`) estimates bottom-up and gets 48-69. It uses
+ElevenLabs' built-in knowledge base and PACKS's existing Dispense proxy Worker. The
+earlier top-down figure follows for reference.
+
+**Earlier top-down 53-79:** LL subtotal 38-54, minus billing (1-2) and the
 multi-client dashboard (4-5), gives 33-47. Add 12-18 to rebuild what PACKS
 would not inherit from LL: knowledge-base ingest, product sync and lookup,
-conversation logging and the secure token service.
+conversation logging and the secure token service. That makes 45-65. Then add the
+8-14 h of PACKS setup (cannabis guardrails, 21+ gate, menu feed, store context),
+which in-house needs too: 53-79.
+
+**Who would build it in-house:** PACKS has one developer, so in-house upkeep falls on
+one person.
 
 **In-house upkeep (4-8 h/month)** covers vendor SDK and model changes, prompt
 and guardrail tuning, menu-feed breakages, monitoring and transcript review.
@@ -118,16 +164,17 @@ On LL, everything except PACKS's persona and menu checks is spread across every 
 
 ## Open items for PACKS
 
-- **Menu data source.** PACKS is leaving AIQ Dispense, which currently runs
-  orders at `/menu/<store>`. Recommendations need the new menu's live
-  per-store inventory. Confirm what replaces AIQ and whether it has an API.
-  This is the biggest unknown in the PACKS hours either way.
+- **Menu data source.** The Flowhub Ecomm build hasn't started, so the budtender
+  reads AIQ Dispense's Blueprint API, which returns stock for each store. Still to
+  confirm: one key reads all four stores. The Flowhub swap later costs 4-6 h. Details
+  are in `ai-concierge-findings.md` §8 Q1.
 - **Avatar look, name and personality:** PACKS brand decision.
-- **Per-store context:** the avatar needs to know which store the shopper is browsing.
+- **Per-store context:** the theme's `packs-location-handler.js` already maps each store to its Dispense venue (findings §8 Q4).
 - **App:** the PACKS mobile app belongs to Digital Awesome. A budtender inside
   it would be their build. Both options cover the website only.
-- **Compliance:** state cannabis advertising rules, the 21+ gate, no medical
-  claims. Counsel review is a cost line we can't estimate yet.
+- **Compliance:** California only. That means the state's cannabis advertising rules,
+  the 21+ gate and no medical claims, plus recording disclosure (two-party consent)
+  and AI disclosure (SB 1001). Counsel review is a cost line we can't estimate yet.
 
 ## Sources
 

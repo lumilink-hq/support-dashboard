@@ -257,29 +257,27 @@ def callout(doc, heading, paragraphs):
 # ---------------------------------------------------------------- content
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUTPUT_PATH = os.path.join(ROOT, "docs", "LumiLink-AI-Concierge-Scope.docx")
+# Set OUT to build somewhere else (e.g. to diff against the hand-edited docx).
+OUTPUT_PATH = os.environ.get("OUT") or os.path.join(ROOT, "docs", "LumiLink-AI-Concierge-Scope.docx")
 DATE = "October 15, 2026"
 d = new_doc(running_head="LUMILINK  ·  AI CONCIERGE SCOPE", footer_date=DATE)
-title(d, "LumiLink", "AI Concierge: A Talking Avatar on the Website",
-      "A virtual budtender that speaks, answers and recommends in any language",
-      f"Scope Brief, Draft 2  ·  {DATE}")
+title(d, "LumiLink", "AI Budtender")
 
 h1(d, "Summary")
 kv_table(d, [
-    ("The ask", "A website avatar like the reel's virtual budtender: trained on the store, "
-                "guardrailed, with a set personality and a custom look."),
+    ("The ask", "A talking AI budtender on the website: trained on the store, guardrailed, "
+                "a set personality and a realistic custom look."),
     ("What gets built", "A LumiLink add-on: our existing ElevenLabs agent (voice, 30+ languages, "
-                        "knowledge base, product lookup) with a licensed avatar face streamed on the site."),
-    ("Effort", "38-54 hours for the LumiLink add-on, then 8-14 to launch it for PACKS; about 2 weeks."),
-    ("Running cost", "About $0.18-0.31 per conversation minute, plus about $99/month for the avatar vendor."),
-    ("Blocker", "Avatar vendor not chosen; custom-avatar fee and streaming rates need quotes."),
-    ("Recommendation", "Build it under LumiLink and launch PACKS as the first client, not as a separate in-house build."),
+                        "knowledge base, product lookup) shown as a realistic AI human, streamed live by HeyGen LiveAvatar."),
+    ("Effort", "35-51 hours for the LumiLink add-on, then 8-14 to launch it for PACKS; about 2 weeks."),
+    ("Running cost", "About $0.18-0.22 per conversation minute, plus about $99/month for LiveAvatar."),
+    ("Stack", "ElevenLabs Agents for brain and voice; HeyGen LiveAvatar (face only) for the avatar, launching on a stock AI human."),
 ])
 
 h1(d, "Effort")
-deck(d, "One developer, Claude-assisted, at the pace of our SEO and Outbound builds. Hours include build and testing.")
+deck(d, "One developer, Claude-assisted. Hours include build and testing.")
 rows = [
-    ["Avatar vendor bake-off (LiveAvatar vs D-ID) and custom avatar creation", 6, 8],
+    ["LiveAvatar setup: stock AI human, latency and lip-sync tests", 3, 5],
     ["Website embed: secure session token, avatar player, mic, text fallback, mobile", 6, 9],
     ["Connect the ElevenLabs agent's audio to the avatar's lip sync", 3, 4],
     ["Persona and guardrail profile, plus a red-team test set", 7, 10],
@@ -290,48 +288,40 @@ rows = [
     ["Load, concurrency and launch QA", 6, 8],
 ]
 lo = sum(r[1] for r in rows); hi = sum(r[2] for r in rows)
-assert (lo, hi) == (38, 54), (lo, hi)
+assert (lo, hi) == (35, 51), (lo, hi)
 table(d, ["Module", "Hrs"],
       [[r[0], f"{r[1]}-{r[2]}"] for r in rows]
-      + [["TOTAL, LumiLink add-on", f"{lo}-{hi} (excludes vendor wait and legal review)"]],
+      + [["TOTAL, LumiLink add-on", f"{lo}-{hi}"]],
       [0.74, 0.26], bold_last=True, keep_together=True)
-bullet(d, lb("Basis: ", "SEO was scoped at 173-210 hours and its code shipped in a week; Outbound's first three phases took one day."))
+bullet(d, lb("Basis: ", "SEO was scoped at 173-210 hours and its code shipped in a week; Outbound phases 1, 2 and 4 took about 3 hours."))
 bullet(d, lb("Ceiling: ", "the original estimate was 82-118 hours; budget against it if the mobile embed slips."))
 
 h1(d, "Cost")
 table(d, ["Line", "Type", "Amount"],
       [["ElevenLabs agent minutes plus LLM tokens", "Variable", "$0.085-0.125/min"],
-       ["Avatar streaming (face only)", "Variable", "$0.09-0.18/min"],
-       ["Avatar vendor plan", "Recurring", "About $99/month"],
-       ["Custom avatar creation", "One-time", "Vendor quote, not yet known"],
-       ["Total per conversation minute", "", "$0.18-0.31 (a 4-minute chat costs $0.70-1.22)"]],
+       ["Avatar streaming (LiveAvatar, face only)", "Variable", "About $0.09/min"],
+       ["LiveAvatar plan", "Recurring", "About $99/month"],
+       ["Custom PACKS avatar (optional; launch on stock)", "One-time", "LiveAvatar quote, if wanted"],
+       ["Total per conversation minute", "", "$0.18-0.22"],
+       ["Example: 1,000 four-minute chats a month", "", "$700-860 plus $99"]],
       [0.45, 0.17, 0.38], bold_last=True, keep_together=True)
 
 h1(d, "Rules and Risks")
 bullet(d, lb("Cannabis: ", "no medical or effect claims, a 21+ gate before the avatar talks, counsel review before launch."))
+bullet(d, lb("California: ", "disclose recording (two-party consent) and that the shopper is talking to an AI."))
 bullet(d, lb("Health data: ", "shoppers will describe conditions; transcripts need retention limits and a privacy notice."))
-bullet(d, lb("Cost runaway: ", "video costs about double voice per minute; per-client minute caps ship on day one."))
+bullet(d, lb("Cost runaway: ", "video costs double voice per minute; per-client minute caps ship day one."))
 
 h1(d, "PACKS: On LumiLink or In-House")
-deck(d, "The same budtender for PACKS, built two ways. Upkeep figures are our estimates.")
+deck(d, "The same budtender, built two ways, assuming one developer builds either. Detail: the PACKS In-House Build scope.")
 table(d, ["", "On the LumiLink stack", "Built in-house at PACKS"],
-      [["Build hours for PACKS", "8-14, after the add-on ships", "45-65; rebuilds knowledge base, product sync, logging"],
-       ["Monthly upkeep", "1-2 hrs PACKS-specific; platform upkeep shared", "4-8 hrs, carried alone"],
-       ["Vendor or model change", "LumiLink fixes it once for every client", "PACKS fixes its own copy"],
-       ["Running cost", "Per-minute usage plus a LumiLink add-on fee", "Same usage plus its own vendor plans"],
-       ["Owner", "LumiLink; PACKS sets persona, look and menu", "PACKS's developers"],
-       ["Cost of the choice", "Depends on LumiLink's roadmap and pricing", "No shared fixes; one client carries all upkeep"]],
+      [["Total build hours", "43-65: add-on 35-51, PACKS launch 8-14", "45-66"],
+       ["Monthly upkeep", "4-8 hrs; shared only once other clients join", "4-8 hrs"],
+       ["Running cost", "Same usage plus a LumiLink add-on fee, not set", "Same usage plus about $120-205/month in plans"],
+       ["Customer data", "PACKS transcripts sit in LumiLink's systems", "Stays with PACKS"],
+       ["Owner", "LumiLink; PACKS sets persona, look and menu", "PACKS's one developer"],
+       ["Comes out ahead when", "LumiLink sells it to other clients", "PACKS is the only user"]],
       [0.20, 0.38, 0.42], keep_together=True)
-
-h1(d, "Next Steps")
-bullet(d, lb("Leadership: ", "approve the LumiLink route and set the add-on price."))
-bullet(d, lb("LumiLink dev: ", "run the vendor bake-off and get custom-avatar and streaming quotes."))
-bullet(d, lb("PACKS: ", "choose the avatar's look and name; confirm the menu data source now that AIQ is going."))
-bullet(d, lb("Counsel: ", "review the cannabis guardrail script before PACKS goes live."))
-
-sources(d, "Sources: LumiLink codebase and git history; Akapulu avatar price index, LiveAvatar, D-ID docs, "
-           "Macha ElevenLabs pricing. Accessed October 14, 2026. Avatar prices are published ranges, not quotes; "
-           "re-check before committing a budget.")
 
 d.save(OUTPUT_PATH)
 

@@ -1,0 +1,28 @@
+{
+  "name": "ll-loyalty",
+  "version": "1.0.0",
+  "license": "UNLICENSED",
+  "workspaces": [
+    "extensions/*"
+  ],
+  "scripts": {
+    "shopify": "shopify",
+    "build": "shopify app build",
+    "dev": "shopify app dev",
+    "info": "shopify app info",
+    "generate": "shopify app generate",
+    "deploy": "shopify app deploy",
+    "build:blocks": "node scripts/build-blocks.mjs"
+  },
+  "trustedDependencies": [
+    "@shopify/plugin-cloudflare"
+  ],
+  "author": "Manal",
+  "private": true,
+  "allowScripts": {
+    "esbuild": true
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10"
+  }
+}

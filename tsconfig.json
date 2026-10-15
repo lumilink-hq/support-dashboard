@@ -31,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "supabase/functions", "scripts", "render-service"]
+  "exclude": ["node_modules", "supabase/functions", "scripts", "render-service", "ll-loyalty"]
 }
