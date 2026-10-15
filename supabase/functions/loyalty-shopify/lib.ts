@@ -81,19 +81,32 @@ export const METAFIELD_DEFINITION_CREATE = `mutation LoyaltyMetafieldDefinitionC
   }
 }`;
 
-/** The customer metafields the theme reads (storefront read access). */
+/**
+ * The metafields the theme reads (storefront read access). Customer: tier and
+ * points (0203), tier spend and holdout group (0212, the cart line). Shop: the
+ * program rules as JSON (0212), so the theme never hard-codes them.
+ */
 export const METAFIELD_DEFINITIONS = [
-  { key: "tier", name: "Loyalty tier", type: "single_line_text_field", description: "LL Loyalty tier name (Bronze, Silver, Gold)." },
-  { key: "points", name: "Loyalty points", type: "number_integer", description: "LL Loyalty points balance." },
+  { key: "tier", name: "Loyalty tier", type: "single_line_text_field", ownerType: "CUSTOMER", description: "LL Loyalty tier name (Bronze, Silver, Gold)." },
+  { key: "points", name: "Loyalty points", type: "number_integer", ownerType: "CUSTOMER", description: "LL Loyalty points balance." },
+  { key: "tier_spend_cents", name: "Loyalty tier spend", type: "number_integer", ownerType: "CUSTOMER", description: "LL Loyalty spend counted toward the tier, in cents." },
+  { key: "group", name: "Loyalty group", type: "single_line_text_field", ownerType: "CUSTOMER", description: "LL Loyalty measurement group: treatment or holdout." },
+  { key: "program", name: "Loyalty program", type: "json", ownerType: "SHOP", description: "LL Loyalty rules for the theme: tiers, rewards, points per dollar." },
 ].map((d) => ({
   namespace: METAFIELD_NAMESPACE,
   key: d.key,
   name: d.name,
   description: d.description,
   type: d.type,
-  ownerType: "CUSTOMER",
+  ownerType: d.ownerType,
   access: { storefront: "PUBLIC_READ" },
 }));
+
+export const SHOP_ID = `query LoyaltyShopId { shop { id } }`;
+
+/** metafieldsSet input for the shop's program rules. */
+export const programMetafield = (shopGid: string, value: unknown) =>
+  ({ ownerId: shopGid, namespace: METAFIELD_NAMESPACE, key: "program", type: "json", value: JSON.stringify(value) });
 
 /**
  * One request that moves several members' tier tags: tagsAdd for the current
@@ -133,12 +146,17 @@ export function orderTagsMutation(orders: { orderId: number; tags: string[] }[])
   return { query: `mutation LoyaltyOrderTags(${defs.join(", ")}) {\n  ${body.join("\n  ")}\n}`, variables };
 }
 
-/** metafieldsSet inputs for members' tier + points (max 25 per call: 12 members). */
-export function memberMetafields(members: { customerId: number; tierName: string; points: number }[]) {
-  return members.flatMap((m) => [
-    { ownerId: customerGid(m.customerId), namespace: METAFIELD_NAMESPACE, key: "tier", type: "single_line_text_field", value: m.tierName },
-    { ownerId: customerGid(m.customerId), namespace: METAFIELD_NAMESPACE, key: "points", type: "number_integer", value: String(Math.trunc(m.points)) },
-  ]);
+/** metafieldsSet inputs for members' tier, points, tier spend and group (4 each; max 25 per call: 6 members). */
+export function memberMetafields(members: { customerId: number; tierName: string; points: number; tierSpendCents: number; group: string }[]) {
+  return members.flatMap((m) => {
+    const ownerId = customerGid(m.customerId);
+    return [
+      { ownerId, namespace: METAFIELD_NAMESPACE, key: "tier", type: "single_line_text_field", value: m.tierName },
+      { ownerId, namespace: METAFIELD_NAMESPACE, key: "points", type: "number_integer", value: String(Math.trunc(m.points)) },
+      { ownerId, namespace: METAFIELD_NAMESPACE, key: "tier_spend_cents", type: "number_integer", value: String(Math.trunc(m.tierSpendCents)) },
+      { ownerId, namespace: METAFIELD_NAMESPACE, key: "group", type: "single_line_text_field", value: m.group },
+    ];
+  });
 }
 
 const money = (cents: number) => (cents / 100).toFixed(2);

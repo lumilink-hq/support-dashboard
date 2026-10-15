@@ -1,0 +1,192 @@
+{%- comment -%}
+  LL Loyalty: the cart drawer line (Phase 1b module 11, 0212). Goes in Tsunami's
+  theme, rendered from J's snippets/cart-rewards-bar.liquid:
+    {% render 'll-cart-loyalty', cart: cart %}
+  Not part of the app: the drawer is rendered from header-actions.liquid, which
+  has no app-block slot. See README.md next to this file.
+
+  Everything is computed here from metafields the app keeps current, so it
+  follows the cart total on every drawer render:
+    shop.metafields.ll_loyalty.program   rules (tiers, rewards, rate, code prefix, nudges_live)
+    customer.metafields.ll_loyalty.*     tier, points, tier_spend_cents, group
+
+  Everyone (Joy parity): points this order earns, and redeem in cart.
+  Treatment only, once nudges_live: "$X more to reach Silver", next reward progress.
+  Redeem uses the app proxy (/apps/loyalty/redeem): the same single-use WAVE- code
+  the rewards page makes, then applies it to the cart.
+{%- endcomment -%}
+{%- assign llp = shop.metafields.ll_loyalty.program.value -%}
+{%- if llp and llp.tiers.size > 0 -%}
+  {%- assign ll_total = cart.total_price -%}
+  {%- assign ll_entry = llp.tiers | first -%}
+
+  {%- if customer -%}
+    {%- assign ll_points = customer.metafields.ll_loyalty.points.value | default: 0 -%}
+    {%- assign ll_tier_name = customer.metafields.ll_loyalty.tier.value | default: ll_entry.name -%}
+    {%- assign ll_spend = customer.metafields.ll_loyalty.tier_spend_cents.value | default: 0 -%}
+    {%- assign ll_group = customer.metafields.ll_loyalty.group.value -%}
+
+    {%- assign ll_tier = ll_entry -%}
+    {%- assign ll_next = nil -%}
+    {%- assign ll_seen = false -%}
+    {%- for t in llp.tiers -%}
+      {%- if ll_seen and ll_next == nil -%}{%- assign ll_next = t -%}{%- endif -%}
+      {%- if t.name == ll_tier_name -%}{%- assign ll_tier = t -%}{%- assign ll_seen = true -%}{%- endif -%}
+    {%- endfor -%}
+
+    {%- assign ll_earn = ll_total | times: llp.points_per_dollar | times: ll_tier.multiplier | divided_by: 100 | floor -%}
+    {%- assign ll_nudges = false -%}
+    {%- if llp.nudges_live and ll_group == 'treatment' -%}{%- assign ll_nudges = true -%}{%- endif -%}
+
+    {%- comment -%} A WAVE- code already on the cart: no second redeem. {%- endcomment -%}
+    {%- assign ll_has_code = false -%}
+    {%- for app in cart.cart_level_discount_applications -%}
+      {%- if app.type == 'discount_code' and app.title contains llp.code_prefix -%}{%- assign ll_has_code = true -%}{%- endif -%}
+    {%- endfor -%}
+
+    {%- comment -%} Best reward the member can use on this cart; cheapest one still out of reach. {%- endcomment -%}
+    {%- assign ll_use = nil -%}
+    {%- assign ll_goal = nil -%}
+    {%- for r in llp.rewards -%}
+      {%- if r.points_cost <= ll_points and ll_total >= r.min_order_cents and ll_total > r.value_cents -%}
+        {%- assign ll_use = r -%}
+      {%- elsif r.points_cost > ll_points and ll_goal == nil -%}
+        {%- assign ll_goal = r -%}
+      {%- endif -%}
+    {%- endfor -%}
+
+    <div class="ll-cart-loyalty" data-ll-cart>
+      {%- if ll_earn > 0 -%}
+        <p class="ll-cart-loyalty__line">This order earns <strong>{{ ll_earn }} {{ llp.name }} points</strong>.</p>
+      {%- endif -%}
+
+      {%- if ll_nudges -%}
+        {%- if ll_next -%}
+          {%- assign ll_gap = ll_next.min_spend_cents | minus: ll_spend | minus: ll_total -%}
+          {%- if ll_gap > 0 -%}
+            <p class="ll-cart-loyalty__line">{{ ll_gap | money }} more to reach {{ ll_next.name }}.</p>
+          {%- elsif ll_spend < ll_next.min_spend_cents -%}
+            <p class="ll-cart-loyalty__line">This order reaches <strong>{{ ll_next.name }}</strong>.</p>
+          {%- endif -%}
+        {%- endif -%}
+        {%- if ll_use == nil and ll_goal -%}
+          {%- assign ll_after = ll_points | plus: ll_earn -%}
+          {%- if ll_after >= ll_goal.points_cost -%}
+            <p class="ll-cart-loyalty__line">After this order you'll have enough for {{ ll_goal.name }}.</p>
+          {%- else -%}
+            <p class="ll-cart-loyalty__line">{{ ll_goal.points_cost | minus: ll_after }} more points for {{ ll_goal.name }} after this order.</p>
+          {%- endif -%}
+        {%- endif -%}
+      {%- endif -%}
+
+      {%- if ll_use and ll_has_code == false -%}
+        <button type="button" class="ll-cart-loyalty__redeem button button--secondary"
+          data-ll-redeem="{{ ll_use.key }}" data-ll-cost="{{ ll_use.points_cost }}" data-ll-value="{{ ll_use.value_cents }}"
+          data-ll-label="Use {{ ll_use.points_cost }} points for {{ ll_use.name }}"
+          data-ll-confirm="Spend {{ ll_use.points_cost }} points? Tap again">
+          Use {{ ll_use.points_cost }} points for {{ ll_use.name }}
+        </button>
+      {%- endif -%}
+      <p class="ll-cart-loyalty__status" data-ll-status role="status" aria-live="polite"></p>
+    </div>
+  {%- else -%}
+    {%- assign ll_earn = ll_total | times: llp.points_per_dollar | times: ll_entry.multiplier | divided_by: 100 | floor -%}
+    {%- if ll_earn > 0 -%}
+      <div class="ll-cart-loyalty">
+        <p class="ll-cart-loyalty__line">
+          <a href="{{ routes.account_login_url }}">Sign in</a> to earn <strong>{{ ll_earn }} {{ llp.name }} points</strong> on this order.
+        </p>
+      </div>
+    {%- endif -%}
+  {%- endif -%}
+{%- endif -%}
+
+<script>
+  // Registered once per page; the drawer re-renders its markup, the listener stays.
+  (function () {
+    if (window.llCartLoyalty) return;
+    window.llCartLoyalty = true;
+    var PROXY = "/apps/loyalty";
+
+    function api(path, body) {
+      var o = { credentials: "same-origin", headers: { Accept: "application/json" } };
+      if (body) { o.method = "POST"; o.headers["Content-Type"] = "application/json"; o.body = JSON.stringify(body); }
+      return fetch(PROXY + path, o).then(function (r) { return r.json().catch(function () { return {}; }); });
+    }
+    function rkey() { return window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 12); }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    // An unused code of the same value from an earlier redeem (rewards page or a
+    // drawer that closed mid-way) is applied instead of spending points again.
+    function unusedCode(value) {
+      return api("/state").then(function (s) {
+        var c = ((s.member && s.member.codes) || []).filter(function (c) { return c.status === "issued" && c.value_cents === value; })[0];
+        return c ? c.code : null;
+      });
+    }
+
+    // Adds the code to whatever codes the cart already has. True = applied.
+    function apply(code) {
+      return fetch("/cart.js", { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (cart) {
+        var codes = (cart.discount_codes || []).map(function (d) { return d.code; }).filter(function (c) { return c !== code; });
+        return fetch("/cart/update.js", {
+          method: "POST", credentials: "same-origin",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ discount: codes.concat(code).join(",") })
+        });
+      }).then(function (r) { return r.json(); }).then(function (cart) {
+        var d = (cart.discount_codes || []).filter(function (d) { return d.code.toUpperCase() === code.toUpperCase(); })[0];
+        return { ok: !!(d && d.applicable), cart: cart };
+      });
+    }
+
+    // Tinker redraws the drawer on its own cart events; J points this at that.
+    // Until then a reload shows the applied code.
+    function refresh(cart) {
+      if (typeof window.llCartRefresh === "function") return window.llCartRefresh(cart);
+      window.location.reload();
+    }
+
+    document.addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("[data-ll-redeem]");
+      if (!b || b.disabled) return;
+      e.preventDefault();
+      var box = b.closest("[data-ll-cart]");
+      var say = function (t) { var s = box && box.querySelector("[data-ll-status]"); if (s) s.textContent = t || ""; };
+      if (!b.dataset.armed) {
+        b.dataset.armed = "1";
+        b.textContent = b.dataset.llConfirm;
+        return;
+      }
+      b.disabled = true;
+      b.textContent = "Applying…";
+      var value = Number(b.dataset.llValue);
+      unusedCode(value).then(function (code) {
+        if (code) return { code: code, fresh: false };
+        return api("/redeem", { reward_key: b.dataset.llRedeem, request_key: rkey() }).then(function (x) {
+          if (x.status !== "redeemed" || !x.code) throw new Error(x.status === "insufficient_points" ? "Not enough points yet." : "fail");
+          return { code: x.code, fresh: x.code_status !== "issued" };
+        });
+      }).then(function (r) {
+        // A code that is still being created in Shopify: try for a few seconds.
+        var tries = r.fresh ? 4 : 1;
+        function attempt() {
+          return apply(r.code).then(function (res) {
+            if (res.ok) return refresh(res.cart);
+            if (--tries > 0) return wait(2500).then(attempt);
+            b.disabled = false;
+            delete b.dataset.armed;
+            b.textContent = b.dataset.llLabel;
+            say("Your code " + r.code + " is saved on your rewards page. It can't be combined with another discount on this cart.");
+          });
+        }
+        return attempt();
+      }).catch(function (err) {
+        b.disabled = false;
+        delete b.dataset.armed;
+        b.textContent = b.dataset.llLabel;
+        say(err && err.message && err.message !== "fail" ? err.message : "Something went wrong. Please try again.");
+      });
+    });
+  })();
+</script>

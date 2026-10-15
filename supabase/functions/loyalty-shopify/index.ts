@@ -4,13 +4,15 @@
 //   POST /loyalty-shopify   header x-voice-tool-secret, body {"program_id"}
 //
 // One call does whatever is due, in this order, within ~45s:
-//   1. customer metafield definitions ll_loyalty.tier / .points (once)
+//   1. metafield definitions (versioned, 0212): customer ll_loyalty.tier /
+//      .points / .tier_spend_cents / .group, shop ll_loyalty.program
+//   1b. the shop's ll_loyalty.program rules, when they changed (0212)
 //   2. a segment per tier ('LL Tier <Name>' tag) for tiers that have perks
 //   3. tier perks as automatic discounts limited to those segments
 //      (config changed: delete the old discount, create the new one)
 //   4. pending reward / referral codes -> discountCodeBasicCreate
 //   5. order tags on paid orders that used our codes (0204; needs write_orders)
-//   6. members whose tier or points changed -> tier tag + metafields
+//   6. members whose tier, points, tier spend or group changed -> tier tag + metafields
 // pg_cron (run_due_loyalty_shopify) calls it every minute, but only for
 // programs with work. Everything is safe to repeat: a code that already
 // exists in Shopify (an earlier attempt landed) is looked up, not duplicated.
@@ -33,7 +35,9 @@ import {
   orderTagsMutation,
   type PerkRow,
   perkDiscountInput,
+  programMetafield,
   SEGMENT_CREATE,
+  SHOP_ID,
   tierSegmentQuery,
   tierTagsMutation,
   userErrorText,
@@ -50,7 +54,7 @@ const SHOP_BASE = (Deno.env.get("SHOPIFY_SHOP_BASE") ?? "").replace(/\/+$/, "");
 
 const BUDGET_MS = 45_000;
 const TAG_BATCH = 10;       // members per aliased tagsAdd/tagsRemove request
-const METAFIELD_BATCH = 12; // members per metafieldsSet (2 metafields each, max 25)
+const METAFIELD_BATCH = 6;  // members per metafieldsSet (4 metafields each, max 25)
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_SECRET, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -72,6 +76,7 @@ type Work = {
   segment_min_rank: number | null;
   perks: { id: string; is_active: boolean; discount_id: string | null; hash: string; config: PerkRow & { segment_ids: (string | null)[] } }[];
   definitions_needed: boolean;
+  program_metafield: { hash: string; value: unknown } | null;
 };
 
 async function definitions(c: Ctx, w: Work) {
@@ -86,6 +91,17 @@ async function definitions(c: Ctx, w: Work) {
   }
   await rpc("loyalty_definitions_done", { p_program: c.programId });
   c.log.push("definitions");
+}
+
+async function programRules(c: Ctx, w: Work) {
+  if (!w.program_metafield) return;
+  const shopGid = String(((await gql(c, SHOP_ID, {})).shop as { id?: string } | undefined)?.id ?? "");
+  if (!shopGid) throw new Error("shop id not returned");
+  const data = await gql(c, METAFIELDS_SET, { metafields: [programMetafield(shopGid, w.program_metafield.value)] });
+  const err = userErrorText((data.metafieldsSet as { userErrors?: unknown })?.userErrors);
+  if (err) throw new Error(`program metafield: ${err}`);
+  await rpc("loyalty_program_metafield_synced", { p_program: c.programId, p_hash: w.program_metafield.hash });
+  c.log.push("program rules");
 }
 
 async function segments(c: Ctx, w: Work): Promise<boolean> {
@@ -172,7 +188,10 @@ async function orderTags(c: Ctx) {
   if (done) c.log.push(`${done} order tags`);
 }
 
-type SyncMember = { member_id: string; customer_id: number; tier_key: string; tier_name: string; points: number; tier_changed: boolean };
+type SyncMember = {
+  member_id: string; customer_id: number; tier_key: string; tier_name: string; points: number;
+  tier_spend_cents: number; group: string; tier_changed: boolean;
+};
 
 async function members(c: Ctx) {
   const { tier_names, members } = await rpc<{ tier_names: string[]; members: SyncMember[] }>(
@@ -201,7 +220,9 @@ async function members(c: Ctx) {
     pushed.push(...batch);
     try {
       const data = await gql(c, METAFIELDS_SET, {
-        metafields: memberMetafields(batch.map((m) => ({ customerId: m.customer_id, tierName: m.tier_name, points: m.points }))),
+        metafields: memberMetafields(batch.map((m) => ({
+          customerId: m.customer_id, tierName: m.tier_name, points: m.points, tierSpendCents: m.tier_spend_cents, group: m.group,
+        }))),
       });
       const err = userErrorText((data.metafieldsSet as { userErrors?: unknown })?.userErrors);
       if (err) batch.forEach((m) => errors.set(m.member_id, `metafields: ${err}`));
@@ -212,7 +233,10 @@ async function members(c: Ctx) {
 
   if (pushed.length) {
     await rpc("loyalty_mark_members_synced", {
-      p_items: pushed.map((m) => ({ member_id: m.member_id, tier_key: m.tier_key, points: m.points, error: errors.get(m.member_id) ?? null })),
+      p_items: pushed.map((m) => ({
+        member_id: m.member_id, tier_key: m.tier_key, points: m.points, tier_spend_cents: m.tier_spend_cents, group: m.group,
+        error: errors.get(m.member_id) ?? null,
+      })),
     });
     c.log.push(`${pushed.length - errors.size}/${pushed.length} members`);
   }
@@ -238,6 +262,7 @@ Deno.serve(async (req) => {
 
     let w = await rpc<Work>("loyalty_shopify_work", { p_program: programId });
     await definitions(c, w);
+    await programRules(c, w);
     if (await segments(c, w)) w = await rpc<Work>("loyalty_shopify_work", { p_program: programId }); // segment ids feed the perk hash
     await perks(c, w);
     if (timeLeft(c)) await codes(c);

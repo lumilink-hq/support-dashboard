@@ -142,7 +142,10 @@ begin
   assert v_r->'tier_names' = '["Bronze", "Silver", "Gold"]'::jsonb, 'sync: tier names in rank order';
   assert jsonb_array_length(v_r->'members') = 2, 'sync: never-synced members are due';
   perform loyalty_mark_members_synced(jsonb_build_array(
-    jsonb_build_object('member_id', v_alice, 'tier_key', 'bronze', 'points', 850, 'error', null),
+    -- tier_spend_cents + group: 0212 (the cart line)
+    jsonb_build_object('member_id', v_alice, 'tier_key', 'bronze', 'points', 850, 'error', null,
+                       'tier_spend_cents', (select tier_spend_cents from loyalty_members where id = v_alice),
+                       'group', loyalty_member_group(v_alice)),
     jsonb_build_object('member_id', v_bob, 'tier_key', 'bronze', 'points', 0, 'error', 'tags: boom')));
   v_r := loyalty_members_to_sync(v_prog);
   assert jsonb_array_length(v_r->'members') = 1 and (v_r->'members'->0->>'member_id')::uuid = v_bob, 'sync: a failed member stays due';

@@ -1,0 +1,31 @@
+# Wave Rewards UI: points and progress after checkout and in the customer
+# account (Phase 1b module 11). Data comes from the loyalty-ext edge function
+# with a Shopify session token (0212). Deploy loyalty-ext (--no-verify-jwt)
+# before `shopify app deploy`.
+#
+# network_access must also be requested for the app in the Dev Dashboard
+# (API access -> "Allow network access in checkout and account UI extensions").
+api_version = "2026-07"
+
+[[extensions]]
+type = "ui_extension"
+name = "Wave Rewards UI"
+handle = "wave-rewards-ui"
+
+  # Thank-you page: points this order earns; for treatment, next tier + next reward.
+  [[extensions.targeting]]
+  target = "purchase.thank-you.block.render"
+  module = "./src/ThankYou.jsx"
+
+  # Order status page (new customer accounts): same block, for that order.
+  [[extensions.targeting]]
+  target = "customer-account.order-status.block.render"
+  module = "./src/OrderStatus.jsx"
+
+  # Account profile: balance, tier, progress, unused reward codes.
+  [[extensions.targeting]]
+  target = "customer-account.profile.block.render"
+  module = "./src/Profile.jsx"
+
+  [extensions.capabilities]
+  network_access = true

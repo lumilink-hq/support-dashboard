@@ -143,6 +143,9 @@ Use a test customer account on tsunami.store and a hidden duplicate page (e.g.
    replacement (PLAN §6 module 11, or a stopgap) must be live first, or accept a gap.
    In `cart-rewards-bar` theme settings, check the loyalty link still points at `/pages/wave-rewards`.
    Cutover goes with Phase 1b module 11 (decided 2026-10-15): its redeem in cart replaces Joy's.
+   Before turning Joy's embeds off: J's `ll-cart-loyalty` snippet is live in `cart-rewards-bar`
+   (`ll-loyalty/theme/README.md`) and the Wave Rewards UI block is on the thank-you, order status
+   and profile pages.
    When module 11's nudges go live: `update loyalty_programs set treatment_since = now() where shop_domain = '…';`
    (before that the holdout comparison is an A/A check, PLAN §6).
 6. Check a Klaviyo flow end to end (Reward Ready on a test profile).
