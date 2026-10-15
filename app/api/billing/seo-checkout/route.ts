@@ -9,7 +9,8 @@ import { z } from "zod";
 import { ADMIN_ONLY_BILLING_MESSAGE, getMembership } from "@/lib/roles";
 import { BillingError, createSeoCheckoutSessionForClient } from "@/lib/services/billing";
 import { isStripeConfigured } from "@/lib/stripe";
-import { availableSeoPlans, isSeoCheckoutConfigured } from "@/lib/seo-pricing";
+import { availableSeoPlans, isSeoCheckoutConfigured, seoCheckoutLocationError } from "@/lib/seo-pricing";
+import { createClient } from "@/lib/supabase/server";
 
 const bodySchema = z.object({
   plan: z.enum(["website", "local", "bundle"]),
@@ -38,6 +39,23 @@ export async function POST(request: Request) {
   }
   if (!availableSeoPlans().some((p) => p.key === parsed.data.plan)) {
     return NextResponse.json({ error: "That plan isn't available yet." }, { status: 400 });
+  }
+
+  // Never sell fewer locations than are already active (0092 caps them at the
+  // paid count afterwards). The caller's own session, so RLS scopes the count.
+  const supabase = await createClient();
+  const { count: activeLocations, error: countErr } = await supabase
+    .from("seo_locations")
+    .select("id", { count: "exact", head: true })
+    .eq("client_id", clientId)
+    .eq("is_active", true);
+  if (countErr) {
+    console.error("seo checkout location count failed:", countErr.message);
+    return NextResponse.json({ error: "Something went wrong. Try again." }, { status: 500 });
+  }
+  const locationError = seoCheckoutLocationError(parsed.data.plan, parsed.data.locationCount, activeLocations ?? 0);
+  if (locationError) {
+    return NextResponse.json({ error: locationError }, { status: 400 });
   }
 
   // Same fallback chain as app/signup/actions.ts and the voice checkout route.

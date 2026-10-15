@@ -132,7 +132,7 @@ export default async function BillingPage({
     clientId ? activeAddonsForClient(clientId) : Promise.resolve([]),
     clientId ? hasStripeCustomerForClient(clientId) : Promise.resolve(false),
     supabase.from("clients").select("business_type, products").maybeSingle(),
-    supabase.from("seo_locations").select("id", { count: "exact", head: true }),
+    supabase.from("seo_locations").select("id", { count: "exact", head: true }).eq("is_active", true),
   ]);
   const activeAddonKeys = new Set(activeAddons.map((a) => a.key));
   const seoEntitlement = ent.seo;
@@ -367,8 +367,11 @@ export default async function BillingPage({
                 : "Active on your workspace."}
             </p>
             <p className="mt-2 text-xs text-gray-400">
-              Add or remove locations from the dashboard — billing adjusts
-              automatically, prorated.
+              Need more locations?{" "}
+              <Link href="/contact" className="underline">
+                Contact us
+              </Link>{" "}
+              and we&rsquo;ll add them to your plan.
             </p>
           </div>
         ) : seoState === "setup" ? (

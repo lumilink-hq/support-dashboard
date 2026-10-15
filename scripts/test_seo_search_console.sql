@@ -39,8 +39,11 @@ declare
   t          text;
 begin
   insert into clients (name, slug, is_active) values ('GSC Test A', 'gsc-test-a', true) returning id into v_client_a;
+  insert into entitlements (client_id, feature, status) values (v_client_a, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
   insert into clients (name, slug, is_active) values ('GSC Test B', 'gsc-test-b', true) returning id into v_client_b;
+  insert into entitlements (client_id, feature, status) values (v_client_b, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
   insert into clients (name, slug, is_active) values ('GSC Test C', 'gsc-test-c', true) returning id into v_client_c;
+  insert into entitlements (client_id, feature, status) values (v_client_c, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
 
   -- A: two locations on one property. B: one property. C: no property set.
   insert into seo_locations (client_id, name, search_console_site_url) values

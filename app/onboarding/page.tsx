@@ -825,6 +825,15 @@ export default async function OnboardingPage({
                   Use a two-letter country code, like US.
                 </p>
               ) : null}
+              {error === "limit" ? (
+                <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                  You&rsquo;ve added every location your SEO plan covers.{" "}
+                  <Link href="/contact" className="font-medium underline">
+                    Contact us
+                  </Link>{" "}
+                  to add more to your plan.
+                </p>
+              ) : null}
 
               {seoLocations && seoLocations.length > 0 ? (
                 <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
