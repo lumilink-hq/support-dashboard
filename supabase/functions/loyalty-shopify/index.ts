@@ -13,6 +13,7 @@
 //   4. pending reward / referral codes -> discountCodeBasicCreate
 //   5. order tags on paid orders that used our codes (0204; needs write_orders)
 //   6. members whose tier, points, tier spend or group changed -> tier tag + metafields
+//   7. bonus campaign scopes (0214): a collection's or tag's products -> loyalty_campaign_products
 // pg_cron (run_due_loyalty_shopify) calls it every minute, but only for
 // programs with work. Everything is safe to repeat: a code that already
 // exists in Shopify (an earlier attempt landed) is looked up, not duplicated.
@@ -34,10 +35,14 @@ import {
   METAFIELDS_SET,
   orderTagsMutation,
   type PerkRow,
+  COLLECTION_PRODUCTS,
   perkDiscountInput,
+  productIdFromGid,
   programMetafield,
   SEGMENT_CREATE,
   SHOP_ID,
+  TAG_PRODUCTS,
+  tagSearch,
   tierSegmentQuery,
   tierTagsMutation,
   userErrorText,
@@ -188,6 +193,43 @@ async function orderTags(c: Ctx) {
   if (done) c.log.push(`${done} order tags`);
 }
 
+const MAX_CAMPAIGN_PAGES = 20; // 5,000 products per campaign scope
+
+async function campaignProducts(c: Ctx) {
+  const due = await rpc<{ id: string; collection_gid: string | null; product_tag: string | null }[]>(
+    "loyalty_campaigns_to_resolve", { p_program: c.programId });
+  for (const camp of due) {
+    if (!timeLeft(c)) return;
+    try {
+      const ids: number[] = [];
+      let after: string | null = null;
+      for (let page = 0; page < MAX_CAMPAIGN_PAGES; page++) {
+        const data: Record<string, unknown> = camp.collection_gid
+          ? await gql(c, COLLECTION_PRODUCTS, { id: camp.collection_gid, after })
+          : await gql(c, TAG_PRODUCTS, { query: tagSearch(camp.product_tag ?? ""), after });
+        const conn = (camp.collection_gid
+          ? (data.collection as { products?: unknown } | null)?.products
+          : data.products) as { nodes?: { id?: string }[]; pageInfo?: { hasNextPage?: boolean; endCursor?: string } } | undefined;
+        if (!conn) throw new Error(camp.collection_gid ? `collection ${camp.collection_gid} not found` : "products query returned nothing");
+        for (const n of conn.nodes ?? []) {
+          const id = productIdFromGid(n.id);
+          if (id) ids.push(id);
+        }
+        if (!conn.pageInfo?.hasNextPage) {
+          after = null;
+          break;
+        }
+        after = conn.pageInfo.endCursor ?? null;
+      }
+      if (after) throw new Error(`more than ${MAX_CAMPAIGN_PAGES * 250} products in scope`);
+      await rpc("loyalty_campaign_resolved", { p_campaign: camp.id, p_product_ids: ids, p_error: null });
+      c.log.push(`campaign ${camp.id}: ${ids.length} products`);
+    } catch (e) {
+      await rpc("loyalty_campaign_resolved", { p_campaign: camp.id, p_product_ids: null, p_error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+}
+
 type SyncMember = {
   member_id: string; customer_id: number; tier_key: string; tier_name: string; points: number;
   tier_spend_cents: number; group: string; tier_changed: boolean;
@@ -268,6 +310,7 @@ Deno.serve(async (req) => {
     if (timeLeft(c)) await codes(c);
     if (timeLeft(c)) await orderTags(c);
     if (timeLeft(c)) await members(c);
+    if (timeLeft(c)) await campaignProducts(c);
 
     console.log(`loyalty-shopify ${c.shop}: ${c.log.join(", ") || "nothing to do"} (${Date.now() - c.started}ms)`);
     return Response.json({ ok: true, did: c.log });

@@ -104,6 +104,33 @@ export const METAFIELD_DEFINITIONS = [
 
 export const SHOP_ID = `query LoyaltyShopId { shop { id } }`;
 
+// Bonus campaign scope (0214): the products of a tag or a collection, 250 a page.
+export const TAG_PRODUCTS = `query LoyaltyTagProducts($query: String!, $after: String) {
+  products(first: 250, after: $after, query: $query) {
+    nodes { id }
+    pageInfo { hasNextPage endCursor }
+  }
+}`;
+
+export const COLLECTION_PRODUCTS = `query LoyaltyCollectionProducts($id: ID!, $after: String) {
+  collection(id: $id) {
+    products(first: 250, after: $after) {
+      nodes { id }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}`;
+
+/** Search syntax for an exact tag; quotes and backslashes escaped. */
+export const tagSearch = (tag: string) => `tag:"${tag.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+
+/** gid://shopify/Product/123 -> 123 (null if it isn't one). */
+export function productIdFromGid(gid: unknown): number | null {
+  const m = /^gid:\/\/shopify\/Product\/(\d{1,19})$/.exec(String(gid ?? ""));
+  const n = m ? Number(m[1]) : NaN;
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
 /** metafieldsSet input for the shop's program rules. */
 export const programMetafield = (shopGid: string, value: unknown) =>
   ({ ownerId: shopGid, namespace: METAFIELD_NAMESPACE, key: "program", type: "json", value: JSON.stringify(value) });

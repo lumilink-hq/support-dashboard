@@ -52,10 +52,14 @@ async function handle(topic: Topic, shop: string, programId: string, payload: un
       const order = parseOrder(payload);
       if (!order) return "ignored: no order id";
       const r = await rpc<{ status: string }>("loyalty_record_order", { p_program: programId, p_order: order, p_source: "webhook" });
+      // Bonus campaigns (0214). Also on "duplicate": a retry finishes what a failed delivery started.
+      const bonus = r.status === "recorded" || r.status === "duplicate"
+        ? await rpc<number>("loyalty_apply_campaigns", { p_program: programId, p_order: order })
+        : 0;
       const used = order.discount_codes.length
         ? await rpc<number>("loyalty_mark_codes_used", { p_program: programId, p_order: order })
         : 0;
-      return used ? `${r.status}, ${used} code(s) used` : r.status;
+      return [r.status, bonus ? `${bonus} bonus points` : "", used ? `${used} code(s) used` : ""].filter(Boolean).join(", ");
     }
     case "refunds/create": {
       const refund = parseRefund(payload);

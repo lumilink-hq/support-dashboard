@@ -15,7 +15,9 @@ import {
   memberMetafields,
   METAFIELD_DEFINITIONS,
   perkDiscountInput,
+  productIdFromGid,
   programMetafield,
+  tagSearch,
   tierSegmentQuery,
   tierTag,
   tierTagsMutation,
@@ -75,6 +77,10 @@ function main() {
     METAFIELD_DEFINITIONS.map((d) => `${d.ownerType}:${d.key}:${d.type}`),
     ["CUSTOMER:tier:single_line_text_field", "CUSTOMER:points:number_integer", "CUSTOMER:tier_spend_cents:number_integer",
      "CUSTOMER:group:single_line_text_field", "SHOP:program:json"]);
+  eq("campaign scope: exact tag search", tagSearch("New Arrivals"), 'tag:"New Arrivals"');
+  eq("campaign scope: quotes and backslashes escaped", tagSearch('Say "hi" \\o/'), 'tag:"Say \\"hi\\" \\\\o/"');
+  eq("campaign scope: product gid -> id", productIdFromGid("gid://shopify/Product/8123456789"), 8123456789);
+  eq("campaign scope: not a product gid", [productIdFromGid("gid://shopify/Collection/5"), productIdFromGid(null), productIdFromGid("gid://shopify/Product/0")], [null, null, null]);
   eq("program metafield: json on the shop, value serialized",
     programMetafield("gid://shopify/Shop/1", { points_per_dollar: 3 }),
     { ownerId: "gid://shopify/Shop/1", namespace: "ll_loyalty", key: "program", type: "json", value: "{\"points_per_dollar\":3}" });

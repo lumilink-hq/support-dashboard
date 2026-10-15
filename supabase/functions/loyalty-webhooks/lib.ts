@@ -103,7 +103,28 @@ export type OrderIn = {
   email: string | null;
   discount_codes: string[];
   customer: CustomerIn | null;
+  /** Per line, after line and order discounts: what a scoped bonus campaign covers (0214). */
+  line_items: { product_id: number; cents: number }[];
 };
+
+/** price x quantity minus every discount allocated to the line, in shop money. */
+function lineItems(v: unknown): { product_id: number; cents: number }[] {
+  const out: { product_id: number; cents: number }[] = [];
+  for (const li of Array.isArray(v) ? v : []) {
+    const l = li as Record<string, unknown>;
+    const productId = Number(l.product_id);
+    const qty = Number(l.quantity);
+    const price = shopMoney(l.price_set, l.price);
+    if (!Number.isSafeInteger(productId) || productId <= 0 || !Number.isFinite(qty) || qty <= 0 || price === null) continue;
+    let discount = 0;
+    for (const d of Array.isArray(l.discount_allocations) ? l.discount_allocations : []) {
+      const a = d as Record<string, unknown>;
+      discount += Math.max(shopMoney(a.amount_set, a.amount) ?? 0, 0);
+    }
+    out.push({ product_id: productId, cents: Math.max(price * qty - discount, 0) });
+  }
+  return out;
+}
 
 /**
  * orders/paid. Eligible = subtotal after discounts, before shipping and tax,
@@ -126,6 +147,7 @@ export function parseOrder(p: unknown): OrderIn | null {
       .filter((c): c is string => typeof c === "string" && c.trim() !== "")
       .map((c) => c.trim()),
     customer: parseCustomer(o.customer),
+    line_items: lineItems(o.line_items),
   };
 }
 

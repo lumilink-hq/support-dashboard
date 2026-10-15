@@ -86,8 +86,25 @@ async function main() {
       email: "alice@example.com",
       discount_codes: ["WAVE-REF-1"],
       customer: { id: 77, email: "a@example.com", first_name: "Alice", last_name: null, state: "enabled", created_at: "2026-01-01T00:00:00Z", email_marketing_consent: null },
+      line_items: [],
     },
   );
+  eq(
+    "order: line items after line + order discounts, shop money (0214)",
+    parseOrder({
+      id: 1,
+      line_items: [
+        { product_id: 111, quantity: 2, price: "9.99", price_set: { shop_money: { amount: "10.00" }, presentment_money: { amount: "14.00" } },
+          discount_allocations: [{ amount: "1.00", amount_set: { shop_money: { amount: "1.50" } } }, { amount_set: { shop_money: { amount: "0.50" } } }] },
+        { product_id: 222, quantity: 1, price: "5.00", discount_allocations: [] },
+        { product_id: 333, quantity: 1, price: "3.00", discount_allocations: [{ amount: "9.00" }] },   // over-discounted -> 0
+        { product_id: null, quantity: 1, price: "4.00" },   // custom item: no product, skipped
+        { product_id: 444, quantity: 0, price: "4.00" },    // removed line, skipped
+      ],
+    })?.line_items,
+    [{ product_id: 111, cents: 1800 }, { product_id: 222, cents: 500 }, { product_id: 333, cents: 0 }],
+  );
+  eq("order: no line items -> empty", parseOrder({ id: 1 })?.line_items, []);
   eq("order: no phone or address passed through", Object.keys(parseOrder({ id: 1, customer: { id: 2, phone: "x" } })!.customer!).includes("phone"), false);
   eq("order: plain subtotal fallback", parseOrder({ id: 1, subtotal_price: "10.00" })?.eligible_cents, 1000);
   eq("order: guest has no customer", parseOrder({ id: 1, subtotal_price: "10.00", customer: null })?.customer, null);
