@@ -33,18 +33,24 @@ const LOCKED_ROW: Record<Exclude<FeatureState, "active" | "past_due">, (name: st
   canceled: () => "Reactivate",
 };
 
+// LL Loyalty results (0213): only for a workspace with a loyalty program.
+// Aggregates only; the member admin (/loyalty) is staff-only and never listed.
+const LOYALTY_PAGES: DashboardPage[] = [{ href: "/rewards", label: "Results" }];
+
 export function Sidebar({
   clientName,
   access,
+  loyalty = false,
 }: {
   clientName: string;
   access: ProductAccess;
+  loyalty?: boolean;
 }) {
   const pathname = usePathname();
 
   // Longest matching href wins, so /seo/reports lights up Reports and not
   // Overview (/seo) as well.
-  const allHrefs = [...PRODUCTS.flatMap((p) => p.pages), ...WORKSPACE_PAGES]
+  const allHrefs = [...PRODUCTS.flatMap((p) => p.pages), ...(loyalty ? LOYALTY_PAGES : []), ...WORKSPACE_PAGES]
     .filter((p) => !p.soon)
     .map((p) => p.href);
   const activeHref = allHrefs
@@ -97,6 +103,17 @@ export function Sidebar({
             </div>
           );
         })}
+
+        {loyalty ? (
+          <div>
+            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Loyalty</p>
+            <div className="space-y-1">
+              {LOYALTY_PAGES.map((page) => (
+                <NavRow key={page.href} page={page} active={page.href === activeHref} />
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="space-y-1 border-t border-gray-200 pt-4">
           {WORKSPACE_PAGES.map((page) => (

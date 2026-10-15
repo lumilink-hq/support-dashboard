@@ -98,7 +98,12 @@ export default async function LoyaltyAdminPage({
 
       {program ? (
         <section className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-gray-900">Find a member in {program.name}</h2>
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-sm font-semibold text-gray-900">Find a member in {program.name}</h2>
+            <Link href={`/loyalty/insights?program=${program.id}`} className="text-sm text-gray-700 underline">
+              Insights
+            </Link>
+          </div>
           <form method="get" action="/loyalty" className="mt-3 flex gap-2">
             <input type="hidden" name="program" value={program.id} />
             <input

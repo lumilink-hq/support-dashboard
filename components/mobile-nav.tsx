@@ -14,9 +14,11 @@ import { Sidebar, type ProductAccess } from "@/components/sidebar";
 export function MobileNav({
   clientName,
   access,
+  loyalty = false,
 }: {
   clientName: string;
   access: ProductAccess;
+  loyalty?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -85,7 +87,7 @@ export function MobileNav({
         className="m-0 h-dvh max-h-none w-full max-w-none bg-transparent p-0 backdrop:bg-gray-900/40 md:hidden"
       >
         <div className="flex h-full">
-          <Sidebar clientName={clientName} access={access} />
+          <Sidebar clientName={clientName} access={access} loyalty={loyalty} />
           {/* The dimmed area beside the panel closes it too. */}
           <div className="flex-1" onClick={() => setOpen(false)}>
             <button

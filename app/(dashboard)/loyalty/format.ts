@@ -1,7 +1,9 @@
 // Small display helpers for the LL Loyalty staff admin.
 
 export function money(cents: number | null | undefined): string {
-  return `$${((cents ?? 0) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const c = cents ?? 0;
+  const s = (Math.abs(c) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return c < 0 ? `-$${s}` : `$${s}`;
 }
 
 export function num(n: number | null | undefined): string {
@@ -25,6 +27,28 @@ export function when(iso: string | null | undefined, timeZone = "America/Los_Ang
 export function day(date: string | null | undefined): string {
   if (!date) return "—";
   return new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+/** "+12.5%" style, for rates stored as fractions (0.125). */
+export function pct(rate: number | null | undefined, digits = 1): string {
+  return rate === null || rate === undefined ? "—" : `${(rate * 100).toFixed(digits)}%`;
+}
+
+export const PERIODS = { "30": 30, "90": 90, "365": 365 } as const;
+export type PeriodKey = keyof typeof PERIODS;
+
+/**
+ * The last N days as a [from, to) pair of store-local dates, ending today
+ * (inclusive), which is what loyalty_insights takes.
+ */
+export function period(key: string | undefined, timeZone = "America/Los_Angeles"): { key: PeriodKey; from: string; to: string } {
+  const k = (key && key in PERIODS ? key : "90") as PeriodKey;
+  const today = new Date().toLocaleDateString("en-CA", { timeZone }); // YYYY-MM-DD
+  const end = new Date(`${today}T12:00:00Z`);
+  end.setUTCDate(end.getUTCDate() + 1);
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - PERIODS[k]);
+  return { key: k, from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10) };
 }
 
 export const REASON_LABEL: Record<string, string> = {
