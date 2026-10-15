@@ -1,6 +1,7 @@
 -- =============================================================================
--- add-platform-staff.sql — give a LumiLink staff member the LL Loyalty admin
--- (/loyalty, needs 0206). Staff is NOT a workspace role: a client's own admin
+-- add-platform-staff.sql — give a LumiLink staff member the staff areas:
+-- LL Loyalty (/loyalty, needs 0206) and Outbound (/outbound, needs 0307).
+-- Staff is NOT a workspace role: a client's own admin
 -- never gets it. Only this script (SQL, service role) can add someone.
 --
 -- Supabase Dashboard -> SQL Editor. The person must already have a login

@@ -14,7 +14,7 @@ Cold-email lead generation inside the LumiLink portal. Approved 2026-10-13, base
 
 ## Decisions
 
-- **The staff access model is ON HOLD (2026-10-13).** The loyalty branch is building a staff concept that isn't committed yet. Once it lands, review it and adopt it here. Until then, every outbound table is **service-role only**: RLS on, no `authenticated` policies, so nothing is readable from the browser. The UI phase (Phase 3) waits on this decision; everything before it runs server-side and doesn't depend on it.
+- **Staff access model: adopted from loyalty (2026-10-15).** Main now has loyalty's `platform_staff` (0206) and staff MFA (0210), merged into this branch. Outbound uses the same model: LumiLink staff only (not a workspace role), on an MFA-verified (aal2) session. Tables stay **service-role only** (RLS on, no `authenticated` policies). The Phase 3 portal goes through SECURITY DEFINER RPCs that start with `outbound_require_staff()` (**0307**, delegates to `loyalty_require_staff()`), and pages use `requireStaffPage()` from `lib/staff-access.ts` (shared with `/loyalty`; the MFA step stays at `/loyalty/security`). 🟡 **0307 built (2026-10-15); not on production.**
 - **Global dedupe and suppression.** A business or email address is contacted by only one profile, ever. Unsubscribes, bounces and existing LumiLink clients go on the suppression list and are never pushed to Instantly.
 - **Instantly Growth has no webhooks.** Replies are **polled** through the API. Finished leads are **deleted from Instantly** after their history is saved here, because uploaded contacts are a running total (1,000 on Growth).
 - **Lead data comes from DataForSEO business listings**, not Google Maps scraping or the Places API (whose terms forbid storing the data).
@@ -170,8 +170,8 @@ Stages: `sourced` → `email_found` / `no_email` → `verified` / `invalid` → 
   - `npm run check` passes (56 of 56).
 - **Not verified:** a real Instantly account, including creating the API key on Growth (Instantly's help center says it's included), real response shapes, real rate limits on `/leads/list` and `DELETE`, whether deleting really frees uploaded-contacts space (Instantly's help center says so), and reply text from real mail clients.
 
-### Phase 3: portal UI (about 9–14 hrs; waits on the staff access model)
-1. Access policies plus the route group and sidebar entry, following whatever the loyalty staff concept becomes.
+### Phase 3: portal UI (about 9–14 hrs; staff access model decided, 0307)
+1. Staff RPCs (each starts with `outbound_require_staff()`) plus the `/outbound` route group, each page calling `requireStaffPage()`. Like `/loyalty`, no sidebar entry for tenants; at most a staff-only link. Add `created_by` to `outbound_profiles` with the first write RPC.
 2. **Profiles**: list, create and edit (audience builder, product, offer, campaign link), pause and resume.
 3. **Reply inbox**: replies, mark positive or negative, a "call now" task with phone and website, and outcome tracking (`called` / `booked` / `won` / `lost`).
 4. **Funnel**: counts per stage per profile, plus signups attributed through `/onboarding/add`.
@@ -237,6 +237,7 @@ Hand-test at the end. Add items as each phase is built.
   - Reply from one inbox and unsubscribe from the other.
   - Run sync and confirm `replied` with a snippet, plus a suppression.
   - Run cleanup and confirm Instantly's uploaded-contacts count goes down.
+- [ ] Push 0307 to prod after loyalty's 0206/0210. Then a staff login with MFA gets past `outbound_require_staff()` and a client admin gets `not_staff`.
 - [ ] Push 0300 to prod. It needs `supabase db push --include-all` if any lower-numbered migration landed first. Afterwards confirm the four tables and `outbound_funnel` exist, and that the anon key returns a permission error on `outbound_leads`.
 
 - [ ] A real DataForSEO listings call returns the expected fields for one dispensary profile. Check coverage for one state.
@@ -249,7 +250,6 @@ Hand-test at the end. Add items as each phase is built.
 
 ## Open questions
 
-- Staff access model: waiting on the loyalty branch.
 - First two profiles: leadership's call (in the Action Plan).
 - Who calls positive replies: leadership names them before the first send.
 - Scheduling key for per-profile jobs (see Data model).

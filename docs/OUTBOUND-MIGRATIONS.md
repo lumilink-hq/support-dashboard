@@ -28,7 +28,7 @@ What the `outbound` branch adds to the database, so other branches (loyalty, mai
 | Triggers | `trg_outbound_profiles_updated_at`, `trg_outbound_leads_set_domain`, `trg_outbound_leads_updated_at`, `trg_outbound_leads_log_stage`, `trg_outbound_suppressions_normalize`, all on outbound tables only |
 | Indexes | `uq_outbound_leads_email`, `uq_outbound_leads_domain`, `uq_outbound_leads_instantly`, `idx_outbound_leads_profile_stage`, `idx_outbound_leads_stage_claim`, `idx_outbound_events_lead`, `idx_outbound_events_profile`, `uq_outbound_suppressions_email`, `uq_outbound_suppressions_domain` |
 | Columns added later | 0301: `outbound_profiles.source_cursor_key`, `source_offset_token`, `source_total_count`, `source_exhausted_at`, `last_sourced_at`. 0302: `outbound_leads.claimed_until` |
-| Access | RLS on, **no policies**, and every grant to `anon` and `authenticated` revoked on all of the above. Service role only, until the staff access model is decided. |
+| Access | RLS on, **no policies**, and every grant to `anon` and `authenticated` revoked on all of the above. Service role only. 0307 adopts loyalty's staff model: staff reach the tables only through SECURITY DEFINER RPCs guarded by `outbound_require_staff()`, never through policies. |
 
 **Existing objects these depend on**, read only and never changed:
 - `set_updated_at()`, from 0001, used by two triggers.
