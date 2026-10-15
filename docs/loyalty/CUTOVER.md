@@ -137,8 +137,14 @@ Use a test customer account on tsunami.store and a hidden duplicate page (e.g.
    `update loyalty_programs set klaviyo_enabled_at = now() where shop_domain = '…';`
    Fill in the tier-achieved and milestone event names if known (PLAN §9).
 5. **Theme:** on `/pages/wave-rewards`, add the Wave Rewards block and remove Joy's blocks
-   (hero, account, my reward, how it works, ways to earn, VIP tier, login). Remove Joy's
-   "Redeem in cart" block if Tsunami agreed (PLAN §9).
+   (hero, account, my reward, how it works, ways to earn, VIP tier, login). Then **Theme settings →
+   App embeds: turn off all three Joy embeds** (`Joy app embed`, `Joy points calculator`, `Joy redeem
+   inline` = redeem in cart; all on as of the 9-21 export). Redeem in cart is in use, so its
+   replacement (PLAN §6 module 11, or a stopgap) must be live first, or accept a gap.
+   In `cart-rewards-bar` theme settings, check the loyalty link still points at `/pages/wave-rewards`.
+   Cutover goes with Phase 1b module 11 (decided 2026-10-15): its redeem in cart replaces Joy's.
+   When module 11's nudges go live: `update loyalty_programs set treatment_since = now() where shop_domain = '…';`
+   (before that the holdout comparison is an A/A check, PLAN §6).
 6. Check a Klaviyo flow end to end (Reward Ready on a test profile).
 7. Watch for a week: webhook errors, code failures, Klaviyo failures
    (`select status, count(*) from loyalty_events group by 1;`).

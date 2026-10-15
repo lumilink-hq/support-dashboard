@@ -4,7 +4,8 @@
 Update the module checklist and the session log as work lands. Committed on the `loyalty` branch.
 
 - **Goal:** replace Joy Loyalty ($129/mo, Advanced plan) on tsunami.store with LL Loyalty, built on
-  LumiLink's existing infrastructure. Add games next. Publish on the Shopify App Store later.
+  LumiLink's existing infrastructure. Then make it a measurable revenue driver (Phase 1b, section 6:
+  holdout + ROI, cart nudges, automations, achievements, games). Publish on the Shopify App Store later.
 - **Approved:** 2026-10-12, Phase 1. Scope brief: `LumiLink-Loyalty-Scope-Brief.docx` (Draft 4,
   2026-10-09), one level above this repo.
 - **Cost rule:** no more than $30/mo added running cost. Target is $0 new bills; the cost is build hours.
@@ -33,6 +34,9 @@ Update the module checklist and the session log as work lands. Committed on the 
 | Who is a member | **Every Shopify customer with a customer record** (`enroll_guests = true`): sign-ups and guest checkouts alike. Signup bonus to every customer created after go-live. Decided 2026-10-13 | Tsunami uses new customer accounts (code sign-in): `customer.state` never becomes `enabled`, so "created an account" can't be detected. Found in the dev-store rehearsal (sign-up webhook came back `not_member`). With code sign-in any customer can log in with their email anyway |
 | Joy data source | **Klaviyo**: `scripts/klaviyo-joy-export.ts` reads Joy's synced properties from the three tier segments. Without activity dates in the file, the import starts expiry/demotion clocks at the export (0208) | Joy's REST API needs the Ultimate plan ($499/mo); the read-only key only works through Joy's OAuth MCP connection; the in-app export wasn't available. Klaviyo already holds every member's points, tier and birthday (2026-10-14: 4,456 members, 0 problems) |
 | Joy import | Each import **sets** members to Joy's balance and tier (one ledger entry for the gap, both numbers in the note). Day 0 = opening balances; cutover = final true-up. A snapshot applies once; an older one than the last applied is refused. Compare is read-only | Joy redemptions/claims during the parallel run never reach our ledger, so balances drift by design; only a set-to-Joy at cutover lands exact. Adding Joy's balance would double count orders both systems saw |
+| Holdout (Phase 1b) | 10% of members (`holdout_percent`), fixed by a hash of (program, customer id), so no assignment step. Holdout keeps Joy parity, misses only Phase 1b features (`loyalty_member_treated`, `holdout_suppressed_kinds`). Don't change the percentage mid-measurement. Decided 2026-10-14 | The only honest way to show extra revenue: "members spend more" mostly measures who joins. Has to start at cutover so there's a baseline by the time Phase 1b ships |
+| Client ROI card (Phase 1b) | Tsunami's LumiLink portal shows loyalty **aggregates only** (extra revenue, ROI, members, redemptions). Member data stays staff-only | Showing ROI is the point; aggregates aren't protected customer data, so the staff-only rule for member data still holds |
+| Customization (Phase 1b) | None for merchants. Config tables only where staff change values | Tsunami is the only tenant for now |
 | Migration numbers | Blocks per workstream: main/SEO 00xx, **loyalty 0200-0207**, outbound 03xx. Push with `supabase db push --include-all` (pending lower numbers are applied). No renumbering. `db pull` / `migration list` mismatches are expected while branches are apart; never `migration repair` | Production already has outbound 0300/0301 (2026-10-13). Checked: production's 0090/0091/0300/0301 touch only `seo_*` / `outbound_*` and apply cleanly on top of loyalty (tested in a rollback). Outbound's own header documents the same rule |
 
 ## 2. Architecture
@@ -117,13 +121,46 @@ Before cutover: list every `Joy:` metric in Klaviyo and confirm each one has an 
 every member (or every difference is explained: Joy-side redemptions and claims are expected). Then
 true-up import, switch Klaviyo flows, swap the page block, cancel Joy. Step by step: [CUTOVER.md](CUTOVER.md).
 
-## 6. Phase 1b: games (32-47 hrs) — after Phase 1
+## 6. Phase 1b: revenue engine (84-124 hrs) — after Phase 1
 
-Prize engine with odds, points spend and audit log (8-12); spin wheel and mystery box (8-12);
-challenges and streaks (10-14); badges and progress bars (4-6); Klaviyo game events (2-3).
-Design reference: Bud Club's rewards app (`dashboard.budclubshop.com/rewards-app/`, WordPress, logic only).
-**Legal review of spin wheel / mystery box before launch** (chance + points spent can count as a lottery).
-Double or nothing is out.
+Added 2026-10-14. Goal: make loyalty **a measurable revenue driver**, which Joy never was. Joy's
+weaknesses: nobody could say what it earned, and it didn't change when or how much people bought.
+Every Phase 1b feature must answer **what buying behaviour it changes** and **how we'll see that in
+the numbers**. This replaces the earlier games-only Phase 1b; games are module 15.
+
+**Scope rules**
+- **Tsunami only.** No merchant customization UI. Values staff actually change (bonus windows,
+  challenge dates, amounts) live in config tables like Phase 1; everything else is hard-coded.
+  Phase 2 adds customization if the App Store version needs it.
+- **Measure before optimizing.** Module 9 ships first so data builds up while the other modules are
+  built. Group membership is a fixed hash of the customer, so every member (imported, live or
+  re-created) is in the same group from day one; nothing to run at cutover.
+- **A/A period.** Until the first Phase 1b feature is live (`treatment_since` null), both groups get
+  the same program and the lift should be about zero: a check that the split is fair before it's
+  used to prove anything.
+- **Joy parity stays.** Every member, holdout included, keeps everything Joy gave them (earning,
+  tiers, rewards page, the existing Klaviyo flows). The holdout only misses the *new* Phase 1b
+  features, so treatment vs holdout measures exactly "how much better than Joy".
+
+**Build order:** 9 → 11 → 10 → 12 → 13 → 14 → 15.
+
+| # | Module | Hrs | Status |
+|---|---|---|---|
+| 9 | **Measurement + holdout.** Stable random holdout (10% of members, by hash of customer id, stored on the member, assigned at the cutover import and at enrollment). Holdout members get no Phase 1b nudges, events or campaigns. Per-order attribution: reward code used, referral coupon, order within 7 days of a loyalty event we sent, order that crossed a tier, bonus campaign active. Daily rollup per program × group (treatment/holdout): members, buyers, orders, revenue, AOV, repeat rate, days between orders, points issued/redeemed, reward cost, liability. Gross margin % in program config (turns revenue into profit) | 10-14 | ◐ data side done 2026-10-15 (`0211_loyalty_measurement.sql`, `test_loyalty_measurement.sql`): fixed hash bucket per customer (no assignment step), `loyalty_member_treated`, `holdout_suppressed_kinds`, `loyalty_insights` (computed live, no rollup to go stale) and staff RPC `loyalty_staff_insights` (summary + weekly/monthly series). 5,000 members / 30,000 orders: year summary 0.16 s, weekly series 0.6 s. Not pushed. Waits on: gross margin %, `treatment_since` when module 11 goes live. Views are module 10 |
+| 10 | **ROI + analytics views.** Staff `/loyalty/insights`: headline extra revenue and net ROI (treatment − holdout per member × members, minus reward cost), trend over time, tier breakdown, liability, redemption rate, top campaigns. **Client ROI card** in Tsunami's LumiLink portal: aggregates only, no member data (see decision below) | 8-12 | ☐ |
+| 11 | **Cart + checkout nudges.** In Tinker's cart drawer via the existing `cart-rewards-bar` snippet (§9). Shows: points this order will earn, "$X more to reach Silver", next reward progress, one-click redeem (applies the `WAVE-` code to the cart). Proxy endpoint for cart state. Thank-you / order status page extension: points earned, new tier, next reward. Customer account extension (Tsunami uses new customer accounts): balance, tier, rewards. No checkout-step extensions: Tsunami is on Grow, not Plus (§9) | 12-18 | ☐ |
+| 12 | **Automations + bonus campaigns.** New Klaviyo events: `near_tier` (within 15% of the next tier), `balance_reminder` (balance covers a reward and unspent for N days), `campaign_started`. Bonus campaigns in the earn engine: multiplier or flat bonus, a date window, optionally limited to a collection or product tag (push new arrivals or overstock). Tier-at-risk offer hooked to segment TenXzZ. Win-back wording per tier (Klaviyo flows; we supply the properties). All suppressed for the holdout | 10-14 | ☐ |
+| 13 | **Achievements, streaks, challenges.** Badges for the behaviour Tsunami wants (first order, 3 categories tried, 3 months in a row, review, referral), each with a one-time points bonus. Monthly order streak with a visible counter. Time-limited challenges ("2 new categories in October: +300"). Progress and next-badge hints on the Wave Rewards page (lazy chunk, §1 JS size rule). Klaviyo events for badge earned / streak at risk | 12-18 | ☐ |
+| 14 | **Staff campaign console.** In `/loyalty`: create, schedule, pause bonus campaigns and challenges; see what's running and its results (from module 9 attribution); liability and expiry forecast. Every change in the access log | 8-12 | ☐ |
+| 15 | **Games.** Free daily play (no purchase needed) and skill games that pay points; optional purchase-reveal (every buyer gets the same fixed reward, the game only animates it). Prize engine with odds, caps and audit log; Klaviyo game events. **Legal review before launch**: prize + chance + payment or points spent can be an illegal lottery, so no paid-entry chance games, and check Tsunami's product category rules. Double or nothing is out. Design reference: Bud Club's rewards app (`dashboard.budclubshop.com/rewards-app/`, logic only) | 24-36 | ☐ |
+
+**How we'll know it works**
+- Monthly report from module 10: revenue per member, repeat rate and AOV, treatment vs holdout, with
+  a confidence range. Net ROI = extra gross profit − reward cost − LumiLink running cost.
+- Phase 1b is working when treatment beats holdout on gross profit per member by more than the
+  rewards it costs, and the range excludes zero.
+- **Sample size caveat:** about 4,500 members gives a holdout of about 450. Small effects take months
+  to show. Report the range, not just the point estimate, and revisit the holdout size after 90 days.
 
 ## 7. Phase 2: Shopify App Store (50-74 hrs) — later, not scheduled
 
@@ -174,7 +211,7 @@ Dashboard on 2026-10-12. Flip each "No" there to "Yes" when its item lands.
 | L2-2 | Separate test and production | Yes | Dev store + local Supabase vs Tsunami + production project | ☑ |
 | L2-3 | Data loss prevention strategy | Yes (thin) | `docs/loyalty/DATA-PROTECTION.md` (draft 2026-10-13): backups, restore steps, append-only ledger, access | ☑ reviewed 2026-10-13 |
 | L2-4 | Limit staff access | Yes | Staff-only admin route, RLS, only J has DB access | ☑ |
-| L2-5 | Strong staff passwords | **No** → Yes once TOTP is on in production | **MFA for staff** instead of a longer password for everyone (decided 2026-10-14): 0210 makes every staff RPC require an MFA-verified (aal2) session; `/loyalty/security` sets up an authenticator app and asks for its code. Client logins unchanged. J: enable TOTP in Supabase Dashboard → Authentication → Multi-Factor | ◐ built; enable TOTP in prod |
+| L2-5 | Strong staff passwords | **No** → Yes once TOTP is on in production | **MFA for staff** instead of a longer password for everyone (decided 2026-10-14): 0210 makes every staff RPC require an MFA-verified (aal2) session; `/loyalty/security` sets up an authenticator app and asks for its code. Client logins unchanged. J: enable TOTP in Supabase Dashboard → Authentication → Multi-Factor | ☑ 2026-10-15 (TOTP enroll + verify on in production; J enrolled and verified) |
 | L2-6 | Access log for protected data | **No** → can flip to Yes once 0206 is in production | `loyalty_access_log` (append-only): every search, member view and change, written inside the staff RPCs so no caller can skip it. No export feature exists | ☑ built 2026-10-13 |
 | L2-7 | Security incident response policy | **No** | `DATA-PROTECTION.md` (draft): detect, contain, notify Tsunami within 72h (and Shopify for Phase 2), fix, review | ☑ reviewed 2026-10-13 |
 
@@ -196,6 +233,12 @@ Then update the Dev Dashboard answers.
 - Order tag names: our orders are tagged `Loyalty assisted` (a points code was used) and `Loyalty referral` (a referral coupon). Joy used `Joy assisted` / `Joy Referral`. Different names keep the two apart during the parallel run; switch to Joy's (`loyalty_programs.assisted_order_tag` / `referral_order_tag`) at cutover if reports depend on them.
 - Referral form abuse: anyone with a member's link can request $10 codes for new emails (one per email, ≤ 10 per referrer per day, `referrals_per_day`). Joy had the same exposure; tighten if it shows up.
 - Order points are on the subtotal after discounts, before shipping and tax. Confirm that matches Joy (spot-check a few orders in the parallel run).
+- ~~Phase 1b: is Tsunami on Shopify Plus?~~ Answered 2026-10-14: **Grow**, not Plus (confirmed via Admin API). Module 11 uses the cart block, thank-you / order status and customer account extensions; no checkout-step extensions. J runs Tsunami's store development, so store-side questions go to J.
+- Phase 1b: Tsunami's gross margin % (module 9 turns revenue into profit). One blended number is enough to start: `update loyalty_programs set gross_margin_pct = <n> where shop_domain = '…';` Until set, lift is measured on revenue minus reward cost.
+- ~~Phase 1b: which theme and cart?~~ Answered 2026-10-14 from J's theme export (`D:\dev\work\tsunami\theme export 9-21`): **Tinker 3.4.0** (Horizon family), `cart_type: drawer` with auto-open. The drawer is rendered from `snippets/header-actions.liquid` (not a section, so no app-block slot) and already shows J's custom `snippets/cart-rewards-bar.liquid` (free shipping / free preroll tiers; its loyalty prompt is hidden in the drawer for space). `tsunami-cart-progress-bar.liquid` is an older, unused snippet. **Module 11 plan:** extend `cart-rewards-bar` in the theme (J owns it) with a compact loyalty line computed in Liquid from customer metafields (add `ll_loyalty.tier_spend` / next-tier gap next to `tier` and `points`), plus a small JS redeem call to the app proxy; no app block needed.
+- **Joy's cart embeds are live** (same export): `joy-redeem-inline-embed` (the "Redeem in cart" block), `joy-points-calculator-embed` and Joy's `app-embed`. Cutover must turn all three off, and module 11 (or a Phase 1 stopgap) has to replace redeem-in-cart. Answers the "Redeem in cart" question: yes, it's in use.
+- Phase 1b: which badges and challenges does Tsunami want to push (categories, new arrivals, reviews)? Needed before module 13.
+- Phase 1b: product category rules for games and prizes (module 15 legal review).
 
 ## 10. Risks
 
@@ -235,3 +278,6 @@ Then update the Dev Dashboard answers.
 | 2026-10-14 | LumiLink | Dev-store QA: Q4-Q9 passed (birthday once, Instagram claim, staff adjust, redeem + single-use code at checkout, referral link + coupon, Gold free shipping). Remaining: Q10 (customer tag + metafields), Q11 (Klaviyo, optional on dev), rehearsal steps 7-8 (Joy import rehearsal, clean-up) |
 | 2026-10-14 | LumiLink | Joy export: REST API refused the read-only key (Ultimate-plan pair needed), MCP needs OAuth. Switched to Klaviyo: `scripts/klaviyo-joy-export.ts` (segments VSKL8f/QWq9sQ/VmMXUE, refuses to write in the repo, counts-only output). Real run: 4,456 members, 554,343 points, 87 birthdays, 0 importer problems; file deleted. Migration 0208: import starts the clocks at the export when the file has no activity dates (test proves a Joy-active member keeps her points through the next job run). Tier At Risk segment answered (order-based, not a Joy event). Q10 passed |
 | 2026-10-14 | LumiLink | A1: 0209 retention purge (monthly cron; access log stays append-only except rows > 2 years via the job). 0210 staff MFA + `/loyalty/security` (enroll with QR, code on each new session, wrong code rejected, returns to the requested page); tested end to end in the browser against local Supabase with a throwaway staff account (removed). Remaining A1: L1-7 agreement with Tsunami; enable TOTP in production |
+| 2026-10-14 | LumiLink | 0209/0210 confirmed in production; temporary 0300/0301 copies deleted. Production TOTP enroll is off (verify-only); J to enable it. Phase 1b re-planned as a revenue engine (section 6, modules 9-15): holdout + ROI first, then cart nudges, automations, achievements, staff campaign console, games last. Holdout must be assigned at the cutover import |
+| 2026-10-15 | LumiLink | Module 9 (data): 0211 holdout + insights. Decided: do module 9 now, cutover together with module 11 (redeem in cart replaces Joy's). Test checked by mutation (holdout boundary, refunds); weekly series rewritten as one query after timing (3.9 s -> 0.6 s) |
+| 2026-10-15 | LumiLink | TOTP enroll turned on in production Supabase; staff MFA works (L2-5 done). Tsunami: Shopify Grow, Tinker 3.4.0 with cart drawer; Joy's three app embeds (incl. redeem in cart) added to CUTOVER D5 |
