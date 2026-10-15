@@ -164,3 +164,5 @@ Out of scope for both options: the PACKS mobile app (Digital Awesome's build).
 - 2026-10-14 [LL] Hours cut to realistic pace: 38-54 + 8-14; original kept as ceiling.
 - 2026-10-15 [LL] Draft 2: one doc; PACKS on-LL vs in-house comparison added as the last section; this findings file and the build script committed.
 - 2026-10-15 [LL] Committed `docs/restricted-vertical-compliance.md` and `docs/shopify-gated-widget-plan.md` so both machines have the guardrail and secure-session templates.
+- 2026-10-15 [LL] Build plan written: `docs/AI-CONCIERGE-PLAN.md` (not approved; migrations 0400+, branch `concierge` on approval).
+- 2026-10-15 [LL] Finding: browser sessions are not metered today (`BUILD-PLAN-2026-08.md` §H; why Website Chat is unavailable in `lib/addons.ts`). The concierge must build that metering: +3-5 h not in the brief (plan Phase 1). Revise the brief if leadership wants the hours exact.
