@@ -19,10 +19,10 @@
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
 import {
+  Accent,
   CallLengthPolicy,
   CapabilityGrid,
   Check,
-  ClosingCta,
   Eyebrow,
   FaqList,
   OVERAGE_ANSWER,
@@ -31,6 +31,7 @@ import {
   Section,
   SeoPairing,
   SIGNUP_CTA,
+  SplitCta,
   WebsiteChatBand,
 } from "@/components/marketing/blocks";
 import { StorefrontSupportMockup } from "@/components/marketing/storefront-mockups";
@@ -174,7 +175,7 @@ function LocationScale() {
     <Section className="py-20">
       <div className="max-w-2xl">
         <Eyebrow>Built for one shop or many</Eyebrow>
-        <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+        <h2 className="reveal mt-4 display-section text-gray-900">
           Optimized for a single location or a whole chain
         </h2>
         <p className="mt-3 text-gray-600">
@@ -231,8 +232,8 @@ export function RetailSolution() {
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
             <Eyebrow>AI customer service for retail stores</Eyebrow>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
-              Every storefront answered. Every location found.
+            <h1 className="mt-4 display-hero text-gray-900">
+              Every storefront answered. <Accent>Every location found.</Accent>
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-gray-600">
               Whether you run one shop or twenty, Lumi answers each store&rsquo;s
@@ -296,7 +297,7 @@ export function RetailSolution() {
       <Section className="py-20">
         <div className="max-w-2xl">
           <Eyebrow>Storefront customer service</Eyebrow>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+          <h2 className="reveal mt-4 display-section text-gray-900">
             The questions your floor staff answer all day
           </h2>
           <p className="mt-3 text-gray-600">
@@ -336,9 +337,10 @@ export function RetailSolution() {
 
       <FaqList items={FAQS} heading="What retailers ask" />
 
-      <ClosingCta
+      <SplitCta
         heading="Give every store a front desk that never closes"
         body="Tell us about your stores, your hours and your busiest questions. We build it, and Lumi starts answering for every location."
+        contactSource="/solutions/retail"
       />
     </MarketingShell>
   );

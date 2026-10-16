@@ -136,7 +136,7 @@ export function CreatorSupportSolution() {
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
             <Eyebrow>AI Phone Support For Creators And Course Sellers</Eyebrow>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
+            <h1 className="mt-4 display-hero text-gray-900">
               Every Question Answered. Every Student Still Yours.
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-gray-600">
@@ -186,7 +186,7 @@ export function CreatorSupportSolution() {
       <Section className="py-20">
         <div className="max-w-2xl">
           <Eyebrow>What Lumi Does</Eyebrow>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+          <h2 className="reveal mt-4 display-section text-gray-900">
             One Agent That Finishes The Call
           </h2>
           <p className="mt-3 text-gray-600">

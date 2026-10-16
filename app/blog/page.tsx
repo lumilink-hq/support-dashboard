@@ -30,7 +30,7 @@ export default function BlogIndexPage() {
       <Section className="pb-10 pt-16 md:pt-24">
         <div className="max-w-2xl">
           <Eyebrow>Blog</Eyebrow>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
+          <h1 className="mt-4 display-hero text-gray-900">
             Guides For Getting Found And Never Missing A Customer
           </h1>
         </div>

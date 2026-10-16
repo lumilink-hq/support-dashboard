@@ -23,8 +23,9 @@ export const PUBLIC_PREFIXES = [
   // file and nothing else. There is no /solutions index page — a bare
   // /solutions 404s, which is correct until one is written.
   "/solutions",
-  // Product pages: /products/seo (lib/catalog.ts). Prefix for the same reason
-  // as /solutions. There is no /products index page.
+  // Product pages: /products (the overview), /products/seo,
+  // /products/phone-agent (lib/catalog.ts). Prefix for the same reason as
+  // /solutions.
   "/products",
   // Partner/channel landing pages: /partners/merchant-support,
   // /partners/3pl-customer-support, /partners/agency-white-label,

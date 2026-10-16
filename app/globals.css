@@ -64,6 +64,74 @@
 }
 
 /*
+  MARKETING DISPLAY TYPE (2026-10-16). Headlines were 48px / 600 and section
+  headings 30px / 600, which read as polite next to competitors running
+  80–96px / 900 (docs/rogiq-site-plan.md §2a). These two utilities are the
+  bigger, heavier scale; the marketing pages use them on the hero h1 and the
+  main section h2s. The dashboard doesn't, so it keeps its compact headings.
+
+  Bricolage Grotesque is a variable font that tops out at 800, so this needs
+  no new font file. clamp() scales smoothly from phone to desktop instead of
+  jumping at a breakpoint.
+*/
+@utility display-hero {
+  font-size: clamp(2.5rem, 1.5rem + 3.4vw, 4.25rem);
+  line-height: 1.02;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+@utility display-section {
+  font-size: clamp(2rem, 1.35rem + 2.2vw, 3.25rem);
+  line-height: 1.06;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+/*
+  LIGHT MOTION (2026-10-16). Leadership asked for "more eye catching, not too
+  crazy", so it is two effects and no library:
+
+  - .reveal: fades and lifts a block as it scrolls into view. CSS scroll-driven
+    animation, so no JavaScript, no hydration and nothing to break. A browser
+    without animation-timeline support (Firefox today) simply shows the block,
+    which is why the visible state is the default and the animation only runs
+    inside @supports.
+  - .rise-in: a one-off entrance on page load, staggered with --rise-delay.
+    Used on the hero mockup's rows, never on the hero headline: the headline
+    is the page's largest paint, and animating it would slow LCP.
+
+  Both are switched off for prefers-reduced-motion.
+*/
+@keyframes lumi-rise {
+  from {
+    opacity: 0;
+    transform: translateY(1.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: lumi-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 60%;
+    }
+  }
+
+  .rise-in {
+    animation: lumi-rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: var(--rise-delay, 0ms);
+  }
+}
+
+/*
   REMOVED 2026-08-13: the create-next-app dark-mode block.
 
     @media (prefers-color-scheme: dark) {

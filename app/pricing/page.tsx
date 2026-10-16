@@ -75,7 +75,7 @@ export default async function PricingPage() {
       <Section className="pb-8 pt-20">
         <div className="max-w-2xl">
           <Eyebrow>Pricing</Eyebrow>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-900">
+          <h1 className="mt-4 display-hero text-gray-900">
             Build What Your Business Needs
           </h1>
           <p className="mt-3 text-lg text-gray-600">
@@ -120,7 +120,7 @@ export default async function PricingPage() {
               <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-lumi-400" />
               Plan Finder · About A Minute
             </p>
-            <h2 className="mt-5 text-3xl font-semibold tracking-tight text-gray-900 md:text-4xl">
+            <h2 className="reveal mt-5 display-section text-gray-900">
               Not Sure Where To Start? Let Us Figure Out What Your Business Needs.
             </h2>
             <p className="mt-3 text-lg text-gray-600">
@@ -151,7 +151,7 @@ export default async function PricingPage() {
       <Section id="addons" className="border-t border-gray-200 bg-gray-50 py-20">
         <div className="max-w-2xl">
           <Eyebrow>Add-Ons</Eyebrow>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+          <h2 className="reveal mt-4 display-section text-gray-900">
             Then Add What You Need
           </h2>
           <p className="mt-3 text-gray-600">
