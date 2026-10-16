@@ -1,15 +1,15 @@
 -- =============================================================================
--- 0221 — LL Loyalty: program editor for staff (/loyalty/program)
+-- 0221 - LL Loyalty: program editor for staff (/loyalty/program)
 --
 -- What used to need SQL (setup-loyalty-program.sql), editable by LumiLink
 -- staff in the app. Every function: SECURITY DEFINER, loyalty_require_staff()
--- (staff + MFA), validates, writes one 'program_save' access-log row with the
--- before and after values. Nothing here touches members' points.
+-- (staff + MFA), validates, writes one program_save access-log row with the
+-- before and after values. Nothing here touches member point balances.
 --
 --   loyalty_staff_program_config(program)        everything the page shows
 --   loyalty_staff_program_save(program, settings) earn rate, expiry, demotion,
 --                                                reminder, near-tier %, gross margin
---   loyalty_staff_tiers_save(program, tiers)     thresholds, multipliers, perks text;
+--   loyalty_staff_tiers_save(program, tiers)     thresholds, multipliers, perks text,
 --                                                all tiers in one call so the order
 --                                                can be checked. Members who now
 --                                                qualify for a higher tier are moved
@@ -22,7 +22,7 @@
 --   loyalty_staff_earn_rule_save(program, key, points, active)
 --                                                points and on/off of an existing rule
 --
--- Tier names and keys stay as they are: they're the customer tags and the
+-- Tier names and keys stay as they are, as they are the customer tags and the
 -- Klaviyo tier values. Changes reach the storefront through the shop metafield
 -- (its hash changes, loyalty_shopify_has_work picks it up).
 -- =============================================================================
@@ -32,7 +32,7 @@ alter table loyalty_access_log add constraint loyalty_access_log_action_check
   check (action in ('search', 'view', 'adjust', 'set_tier', 'set_birthday', 'data_requests', 'campaign_save', 'campaign_active',
                     'challenge_save', 'challenge_active', 'list', 'program_save'));
 
--- Whole months in an interval ('1 year' -> 12); null stays null.
+-- Whole months in an interval (1 year -> 12), null stays null.
 create or replace function loyalty_interval_months(p interval)
 returns int
 language sql
