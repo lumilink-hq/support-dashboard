@@ -189,6 +189,16 @@ export type PlanTier = {
    * wired for this tier yet; callers must treat that the same as `!selfServe`.
    */
   stripePriceId: string | null;
+  /**
+   * The per-tier facts the /pricing comparison table reads (2026-10-16), so
+   * the table and the card bullets can't disagree. Display only, like the
+   * rest of this type: enforcement lives in plan_tiers (0031, 0036).
+   */
+  numbers: number;
+  careHoursPerMonth: number;
+  /** More than one transfer destination (0036: growth and scale get 4). */
+  advancedTransfers: boolean;
+  advancedRouting: boolean;
 };
 
 export const PLAN_TIERS: PlanTier[] = [
@@ -213,6 +223,10 @@ export const PLAN_TIERS: PlanTier[] = [
     ],
     selfServe: true,
     mostPopular: false,
+    numbers: STARTER_PLAN.numbers,
+    careHoursPerMonth: STARTER_PLAN.careHoursPerMonth,
+    advancedTransfers: false,
+    advancedRouting: false,
   },
   {
     key: "growth",
@@ -229,6 +243,10 @@ export const PLAN_TIERS: PlanTier[] = [
     ],
     selfServe: true,
     mostPopular: true,
+    numbers: 1,
+    careHoursPerMonth: 4,
+    advancedTransfers: true,
+    advancedRouting: false,
   },
   {
     key: "scale",
@@ -245,6 +263,10 @@ export const PLAN_TIERS: PlanTier[] = [
     ],
     selfServe: true,
     mostPopular: false,
+    numbers: 2,
+    careHoursPerMonth: 8,
+    advancedTransfers: true,
+    advancedRouting: true,
   },
 ];
 

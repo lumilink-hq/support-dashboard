@@ -23,6 +23,7 @@ import {
   CallLengthPolicy,
   CapabilityGrid,
   Check,
+  DoneForYouBand,
   Eyebrow,
   FaqList,
   OVERAGE_ANSWER,
@@ -293,6 +294,8 @@ export function RetailSolution() {
         <Eyebrow>Why retailers use it</Eyebrow>
         <Pillars items={PILLARS} />
       </Section>
+
+      <DoneForYouBand />
 
       <Section className="py-20">
         <div className="max-w-2xl">

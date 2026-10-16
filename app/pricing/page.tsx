@@ -34,10 +34,13 @@ import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
 import {
   contactHref,
+  DoneForYouBand,
   EnterpriseBand,
   Eyebrow,
+  PhonePlanCompare,
   PricingGrid,
   Section,
+  SeoPlanCompare,
   SIGNUP_CTA,
 } from "@/components/marketing/blocks";
 import { SeoPricingSection, seoCtaHref } from "@/components/marketing/seo";
@@ -80,8 +83,9 @@ export default async function PricingPage() {
           </h1>
           <p className="mt-3 text-lg text-gray-600">
             Phone calls, website chat, workflows, and getting found on Google
-            and in AI search. Answer four questions and we&rsquo;ll tell you
-            what fits, or scroll down: everything we sell is on this page.
+            and in AI search, and every plan comes with the team that builds
+            and runs it. Answer four questions and we&rsquo;ll tell you what
+            fits, or scroll down: everything we sell is on this page.
           </p>
         </div>
 
@@ -112,6 +116,8 @@ export default async function PricingPage() {
           ))}
         </nav>
       </Section>
+
+      <DoneForYouBand className="pb-8! pt-4!" />
 
       <Section id="finder" className="pb-16 pt-4">
         <div className="rounded-3xl border border-lumi-100 bg-gradient-to-br from-lumi-50 via-white to-lumi-50 p-6 shadow-sm md:p-10">
@@ -146,6 +152,7 @@ export default async function PricingPage() {
           contactSource="/pricing"
           showEnterprise={false}
         />
+        <PhonePlanCompare />
       </div>
 
       <Section id="addons" className="border-t border-gray-200 bg-gray-50 py-20">
@@ -195,6 +202,7 @@ export default async function PricingPage() {
         ctaHref={seoHref}
         learnMoreHref={productByKey("seo").marketingHref}
       />
+      <SeoPlanCompare />
 
       <EnterpriseBand contactSource="/pricing" />
 

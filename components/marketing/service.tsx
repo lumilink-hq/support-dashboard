@@ -19,6 +19,7 @@ import {
   CallLengthPolicy,
   CapabilityGrid,
   Check,
+  DoneForYouBand,
   Eyebrow,
   FaqList,
   OVERAGE_ANSWER,
@@ -211,6 +212,8 @@ export function ServiceSolution() {
         <Eyebrow>Why Lumilink works</Eyebrow>
         <Pillars items={PILLARS} />
       </Section>
+
+      <DoneForYouBand />
 
       <Section className="py-20">
         <div className="max-w-2xl">
