@@ -146,6 +146,16 @@ export default async function BillingPage({
   // quotes against the locations that setup collects.
   const isSeoClient =
     readProfile(clientRow.data).products.includes("seo") || seoState !== "locked";
+  // Phone plans, phone add-ons and the call-minutes notes are hidden from an
+  // SEO-only workspace like PACKS (user, 2026-10-15), by the sidebar's rule
+  // (app/(dashboard)/layout.tsx): shown when the workspace set the phone
+  // agent up or holds any voice entitlement, and also when it still owns an
+  // add-on, so nothing it pays for disappears. Adding the phone agent goes
+  // through /products/voice.
+  const showPhone =
+    readProfile(clientRow.data).products.includes("voice") ||
+    featureState(ent.voice) !== "locked" ||
+    activeAddons.length > 0;
   // Which plan they're on, read live from Stripe (like add-ons). null for a
   // hand-granted entitlement with no subscription, or a PACKS/enterprise one.
   const seoSub =
@@ -181,6 +191,7 @@ export default async function BillingPage({
         </div>
       ) : null}
 
+      {showPhone ? (
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         {FEATURES.map((f) => {
           const row = ent[f.key];
@@ -304,6 +315,7 @@ export default async function BillingPage({
           );
         })}
       </div>
+      ) : null}
 
       {/* ------------------------------------------------------------------ */}
       {/* Local SEO — deliberately NOT in the FEATURES loop above. Every card */}
@@ -315,7 +327,7 @@ export default async function BillingPage({
       {/* ------------------------------------------------------------------ */}
       {/* id="seo": the sidebar's "Add Local SEO" row links to /billing#seo */}
       {/* (addProductHref in lib/catalog.ts). */}
-      <div id="seo" className="mt-10 max-w-md scroll-mt-6">
+      <div id="seo" className={`${showPhone ? "mt-10" : "mt-6"} max-w-md scroll-mt-6`}>
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-gray-900">SEO + AI Search</h2>
           <span
@@ -457,7 +469,7 @@ export default async function BillingPage({
       {/* a local mirror — there is nothing here that can drift from what     */}
       {/* Stripe actually has.                                               */}
       {/* ------------------------------------------------------------------ */}
-      {availableAddons().length > 0 ? (
+      {showPhone && availableAddons().length > 0 ? (
         <div className="mt-10">
           <h2 className="text-base font-semibold text-gray-900">
             Build Out Your Plan
@@ -522,6 +534,7 @@ export default async function BillingPage({
         understand what they will be charged. A billing page that contradicts
         /legal/terms is worse than one that says nothing.
       */}
+      {showPhone ? (
       <div className="mt-10 rounded-lg border border-gray-200 bg-gray-50 p-4">
         <h2 className="text-sm font-medium text-gray-900">How Usage Works</h2>
         <ul className="mt-2 space-y-1 text-xs text-gray-600">
@@ -554,8 +567,9 @@ export default async function BillingPage({
           </li>
         </ul>
       </div>
+      ) : null}
 
-      {!entitlementsEnforced() ? (
+      {showPhone && !entitlementsEnforced() ? (
         <p className="mt-6 text-xs text-gray-400">
           Feature access is currently open for all workspaces during rollout.
         </p>
