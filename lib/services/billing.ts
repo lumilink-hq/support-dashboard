@@ -527,6 +527,24 @@ export async function syncClientFromStripeSubscription(
   });
   if (rpcError) {
     console.error(`apply_billing_event failed for ${clientId}:`, rpcError.message);
+    return;
+  }
+
+  // A paid subscription taking over a hand-granted trial (PACKS): the row
+  // stayed active, apply_billing_event attached this subscription to it, and
+  // from now on it is a paid entitlement. Matching on the subscription id
+  // means only the row this payment actually took over changes.
+  if (action === "activate") {
+    const { error: takeoverError } = await supabase
+      .from("entitlements")
+      .update({ source: "checkout" })
+      .eq("client_id", clientId)
+      .eq("feature", feature)
+      .eq("source", "trial")
+      .eq("external_subscription_ref", subscription.id);
+    if (takeoverError) {
+      console.error(`trial takeover failed for ${clientId}:`, takeoverError.message);
+    }
   }
 }
 

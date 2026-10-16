@@ -53,6 +53,19 @@ export function subscriptionAction(
 }
 
 /**
+ * A hand-granted trial (source 'trial', e.g. PACKS) that is still running.
+ * /billing offers such a workspace the normal checkout instead of the "you're
+ * subscribed" panel. Their service keeps running while an ACH payment clears,
+ * because the trial row stays active; once the first invoice is paid,
+ * apply_billing_event attaches the subscription to that same row and
+ * lib/services/billing.ts flips its source to 'checkout'. 'manual' grants (our
+ * own workspace) are not offered checkout.
+ */
+export function isRunningTrial(row: { status: string; source: string } | null | undefined): boolean {
+  return !!row && row.source === "trial" && (row.status === "active" || row.status === "past_due");
+}
+
+/**
  * The subscription id an invoice belongs to, across Stripe API versions
  * (2025-03-31 moved it to invoice.parent.subscription_details), or null for a
  * one-off invoice.

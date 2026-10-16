@@ -14,6 +14,7 @@ import {
   seoSubscriptionForClient,
 } from "@/lib/services/billing";
 import { addProductHref } from "@/lib/catalog";
+import { isRunningTrial } from "@/lib/billing-activation";
 import { availableSeoPlans, isSeoCheckoutConfigured, SEO_PLANS, seoPlanByKey } from "@/lib/seo-pricing";
 import {
   FEATURES,
@@ -152,10 +153,13 @@ export default async function BillingPage({
       ? await seoSubscriptionForClient(clientId).catch(() => null)
       : null;
   const seoPlanName = seoSub?.plan ? seoPlanByKey(seoSub.plan).name : null;
-  // ACH: paid for, not cleared yet, so no entitlement yet. Don't offer the
-  // plan again (lib/billing-activation.ts).
+  // A hand-granted trial (PACKS) is offered checkout too
+  // (lib/billing-activation.ts).
+  const seoTrial = isRunningTrial(seoEntitlement);
+  // ACH: paid for but not cleared yet, so no paid entitlement yet. Don't
+  // offer the plan again (lib/billing-activation.ts).
   const seoPaymentProcessing =
-    clientId && hasStripeCustomer && seoState === "locked"
+    clientId && hasStripeCustomer && (seoState === "locked" || seoTrial)
       ? await paymentProcessingForClient(clientId, "seo").catch(() => false)
       : false;
 
@@ -353,6 +357,33 @@ export default async function BillingPage({
           <p className="mt-4 text-sm text-gray-400">
             SEO checkout isn&rsquo;t configured on this environment yet.
           </p>
+        ) : seoTrial ? (
+          <div className="mt-4 space-y-4">
+            <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
+              <p className="font-medium text-gray-900">
+                Trial &middot; {seoEntitlement?.seat_count ?? "—"} location
+                {seoEntitlement?.seat_count === 1 ? "" : "s"}
+              </p>
+              <p className="mt-1 text-gray-500">
+                SEO is running on a trial we set up for you. Choose a plan to
+                move to paid billing. SEO keeps running while your payment clears.
+              </p>
+            </div>
+            {seoPaymentProcessing ? (
+              <div className="rounded-lg border border-gray-200 bg-white p-4">
+                <p className="text-sm font-medium text-gray-900">Your bank payment is processing</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Bank (ACH) payments take up to 4 business days to clear. Your
+                  trial carries on until then.
+                </p>
+              </div>
+            ) : canBill ? (
+              <SeoCheckoutForm
+                plans={availableSeoPlans().map((p) => p.key)}
+                initialLocationCount={seoLocationCount.count ?? 0}
+              />
+            ) : null}
+          </div>
         ) : seoState === "active" || seoState === "past_due" ? (
           <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4 text-sm">
             {seoState === "past_due" ? (

@@ -5,7 +5,17 @@
 import assert from "node:assert/strict";
 
 async function main() {
-  const { subscriptionAction, subscriptionIdFromInvoice } = await import("../lib/billing-activation");
+  const { isRunningTrial, subscriptionAction, subscriptionIdFromInvoice } = await import("../lib/billing-activation");
+
+  // Which entitlements /billing offers checkout over (PACKS's hand-granted trial).
+  assert.equal(isRunningTrial({ status: "active", source: "trial" }), true);
+  assert.equal(isRunningTrial({ status: "past_due", source: "trial" }), true);
+  assert.equal(isRunningTrial({ status: "canceled", source: "trial" }), false);
+  assert.equal(isRunningTrial({ status: "pending", source: "trial" }), false);
+  assert.equal(isRunningTrial({ status: "active", source: "checkout" }), false, "already paying");
+  assert.equal(isRunningTrial({ status: "active", source: "manual" }), false, "our own workspace");
+  assert.equal(isRunningTrial(undefined), false);
+  assert.equal(isRunningTrial(null), false);
 
   // Paid: grant.
   assert.equal(subscriptionAction("active", { status: "paid" }), "activate");

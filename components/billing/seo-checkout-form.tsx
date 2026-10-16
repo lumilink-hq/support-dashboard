@@ -113,7 +113,7 @@ export function SeoCheckoutForm({
           />
           {initialLocationCount > 0 ? (
             <p className="mt-1 text-xs text-gray-400">
-              Matches the {initialLocationCount} location{initialLocationCount === 1 ? "" : "s"} you&rsquo;ve
+              Matches the {initialLocationCount} location{initialLocationCount === 1 ? "" : "s"}{" "}you&rsquo;ve
               already added. You can pay for more, but not fewer: remove a
               location first if you don&rsquo;t need it.
             </p>
