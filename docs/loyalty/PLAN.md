@@ -170,6 +170,19 @@ Install + multi-store accounts + privacy webhooks; Shopify Billing; embedded mer
 theme block packaging; listing and review prep. $19 one-time App Store registration. Shopify review
 1-4 weeks. Revenue share 0% on first $1M lifetime, 15% after.
 
+**Merchant access (noted 2026-10-16, build when a second store is signing up).** `platform_staff`
+stays LumiLink-only: it sees every program, so a paying merchant can never be added to it.
+Merchants need access scoped to their own program:
+1. Replace `loyalty_require_staff()` (12 call sites, no program argument) with
+   `loyalty_require_manager(program_id)`: platform staff for any program, or a workspace `admin`
+   (`users.role`) whose `client_id` owns the program (`loyalty_programs.client_id`). The access log
+   records which kind of user acted. Keep MFA (aal2) for both.
+2. Staff-only even then: cross-program search, data requests, the program setup script, gross
+   margin and anything billing-related.
+3. The sidebar's "Loyalty admin" section (layout reads `loyalty_staff_access`) shows for merchant
+   admins too, limited to their own program, with no program picker.
+The embedded Shopify admin (above) and the portal pages would call the same RPCs and check.
+
 ## 8. Setup checklist
 
 | Item | Owner | Status |
