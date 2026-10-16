@@ -7,7 +7,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ADMIN_ONLY_BILLING_MESSAGE, getMembership } from "@/lib/roles";
-import { BillingError, createSeoCheckoutSessionForClient } from "@/lib/services/billing";
+import {
+  BillingError,
+  createSeoCheckoutSessionForClient,
+  paymentProcessingForClient,
+} from "@/lib/services/billing";
 import { isStripeConfigured } from "@/lib/stripe";
 import { availableSeoPlans, isSeoCheckoutConfigured, seoCheckoutLocationError } from "@/lib/seo-pricing";
 import { createClient } from "@/lib/supabase/server";
@@ -56,6 +60,20 @@ export async function POST(request: Request) {
   const locationError = seoCheckoutLocationError(parsed.data.plan, parsed.data.locationCount, activeLocations ?? 0);
   if (locationError) {
     return NextResponse.json({ error: locationError }, { status: 400 });
+  }
+
+  // An ACH payment for SEO still clearing has no entitlement yet, so nothing
+  // else stops a second subscription (lib/billing-activation.ts).
+  try {
+    if (await paymentProcessingForClient(clientId, "seo")) {
+      return NextResponse.json(
+        { error: "Your bank payment for SEO is still processing. It switches on as soon as it clears." },
+        { status: 409 },
+      );
+    }
+  } catch (e) {
+    console.error("seo checkout processing-payment check failed:", String(e));
+    return NextResponse.json({ error: "Something went wrong. Try again." }, { status: 500 });
   }
 
   // Same fallback chain as app/signup/actions.ts and the voice checkout route.

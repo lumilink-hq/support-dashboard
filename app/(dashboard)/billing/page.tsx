@@ -10,6 +10,7 @@ import { getMembership, isAdmin } from "@/lib/roles";
 import {
   activeAddonsForClient,
   hasStripeCustomerForClient,
+  paymentProcessingForClient,
   seoSubscriptionForClient,
 } from "@/lib/services/billing";
 import { addProductHref } from "@/lib/catalog";
@@ -151,6 +152,12 @@ export default async function BillingPage({
       ? await seoSubscriptionForClient(clientId).catch(() => null)
       : null;
   const seoPlanName = seoSub?.plan ? seoPlanByKey(seoSub.plan).name : null;
+  // ACH: paid for, not cleared yet, so no entitlement yet. Don't offer the
+  // plan again (lib/billing-activation.ts).
+  const seoPaymentProcessing =
+    clientId && hasStripeCustomer && seoState === "locked"
+      ? await paymentProcessingForClient(clientId, "seo").catch(() => false)
+      : false;
 
   return (
     <div className="max-w-4xl">
@@ -384,6 +391,14 @@ export default async function BillingPage({
             </button>
             <p className="mt-2 text-xs text-gray-400">
               Payment received. We&rsquo;re provisioning this now.
+            </p>
+          </div>
+        ) : seoPaymentProcessing ? (
+          <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-sm font-medium text-gray-900">Your bank payment is processing</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Bank (ACH) payments take up to 4 business days to clear. SEO
+              switches on automatically as soon as it does.
             </p>
           </div>
         ) : (
