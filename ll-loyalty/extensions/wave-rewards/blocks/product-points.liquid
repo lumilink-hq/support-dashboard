@@ -1,11 +1,21 @@
 {% comment %}
-  Wave Rewards points on product pages (LL Loyalty): "Earn 270 points with this
-  item". Pure Liquid from the shop's ll_loyalty.program metafield (points per $1,
-  tier multipliers) and the signed-in member's ll_loyalty.tier metafield, so it
-  costs no request. Same rounding as the earn engine (0218, loyalty_order_points):
-  round(price in cents x points per $1 x tier multiplier / 100). It shows the
-  variant price; the order earns on the subtotal after discounts.
-  assets/wave-rewards-points.js updates the number when the variant changes.
+  Wave Rewards on product pages (LL Loyalty). Pure Liquid from the shop's
+  ll_loyalty.program metafield and the signed-in member's ll_loyalty.* metafields
+  (synced by loyalty-shopify, so they can lag a minute); no request on load.
+
+  Everyone:      "Earn 148 points with this item". Same rounding as the earn engine
+                 (0218, loyalty_order_points): round(price in cents x points per $1
+                 x tier multiplier / 100), on the variant price (the order earns on
+                 the subtotal after discounts).
+  Guests:        "Join free: earn 135 points on this, plus 100 for signing up" + Join.
+  Members:       when the balance covers a reward, "You have $5 off waiting" + a
+                 button that redeems (or reuses an unused code) and adds it to the
+                 cart. Joy parity, so holdout members get it too.
+  Treatment, once nudges are live (0220): a running bonus campaign that covers
+                 this product (its collection or tag, or every product).
+
+  assets/wave-rewards-points.js updates the number on variant change and runs
+  the redeem button through the app proxy.
 {% endcomment %}
 
 {%- liquid
@@ -13,8 +23,12 @@
   assign ppd = prog.points_per_dollar | default: 0
   assign mult = 1
   assign tier = blank
+  assign points = 0
+  assign group = blank
   if customer
     assign tier = customer.metafields.ll_loyalty.tier.value
+    assign points = customer.metafields.ll_loyalty.points.value | default: 0
+    assign group = customer.metafields.ll_loyalty.group.value
     for t in prog.tiers
       if t.name == tier
         assign mult = t.multiplier
@@ -24,12 +38,58 @@
   assign v = product.selected_or_first_available_variant
   assign pts = v.price | times: ppd | times: mult | divided_by: 100.0 | round
 
-  if customer == blank
+  if customer == blank and prog.signup_points > 0 and block.settings.show_join
+    assign tpl = 'wave_rewards.pp_guest_signup' | t: points: '__N__', signup: prog.signup_points
+  elsif customer == blank
     assign tpl = 'wave_rewards.pp_guest' | t: points: '__N__', program: prog.name
   elsif mult > 1
     assign tpl = 'wave_rewards.pp_earn_tier' | t: points: '__N__', tier: tier
   else
     assign tpl = 'wave_rewards.pp_earn' | t: points: '__N__'
+  endif
+
+  # The best single reward the balance covers (rewards come cheapest first),
+  # and whether a WAVE- code is already on the cart.
+  assign use = nil
+  if customer and block.settings.show_redeem
+    for r in prog.rewards
+      if r.points_cost <= points
+        assign use = r
+      endif
+    endfor
+  endif
+  assign in_cart = false
+  if use
+    for app in cart.cart_level_discount_applications
+      if app.type == 'discount_code' and app.title contains prog.code_prefix
+        assign in_cart = true
+      endif
+    endfor
+  endif
+
+  # A bonus campaign running now that covers this product. Bonuses only pay
+  # treatment members once nudges are live; guests see it as a reason to join.
+  assign camp = nil
+  if block.settings.show_campaign and prog.nudges_live
+    if customer == blank or group == 'treatment'
+      assign now = 'now' | date: '%s' | plus: 0
+      for c in prog.campaigns
+        if camp == nil and c.starts_at <= now and c.ends_at > now
+          if c.collection_id == blank and c.product_tag == blank
+            assign camp = c
+          elsif c.product_tag != blank and product.tags contains c.product_tag
+            assign camp = c
+          elsif c.collection_id != blank
+            for col in product.collections
+              assign cid = col.id | append: ''
+              if cid == c.collection_id
+                assign camp = c
+              endif
+            endfor
+          endif
+        endif
+      endfor
+    endif
   endif
 -%}
 
@@ -39,15 +99,59 @@
     data-ppd="{{ ppd }}"
     data-mult="{{ mult }}"
     data-tpl="{{ tpl | escape }}"
+    data-proxy="{{ block.settings.proxy_path | default: '/apps/loyalty' | escape }}"
     style="--llrp-color: {{ block.settings.color }};"
     {{ block.shopify_attributes }}
   >
-    <svg class="llrp-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2 9.2 8.3 2 9.2l5.4 4.8L5.8 21 12 17.3 18.2 21l-1.6-7 5.4-4.8-7.2-.9L12 2Z"/></svg>
-    {%- if block.settings.link and block.settings.page_path != blank -%}
-      <a class="llrp-text" href="{{ block.settings.page_path | escape }}" data-llrp="text">{{ tpl | replace: '__N__', pts }}</a>
-    {%- else -%}
-      <span class="llrp-text" data-llrp="text">{{ tpl | replace: '__N__', pts }}</span>
+    {%- if camp -%}
+      {%- assign camp_end = camp.ends_at | date: '%b %-d' -%}
+      <p class="llrp-camp">{{ 'wave_rewards.pp_campaign' | t: name: camp.name, date: camp_end }}</p>
     {%- endif -%}
+
+    <div class="llrp-line">
+      <svg class="llrp-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2 9.2 8.3 2 9.2l5.4 4.8L5.8 21 12 17.3 18.2 21l-1.6-7 5.4-4.8-7.2-.9L12 2Z"/></svg>
+      {%- if block.settings.link and block.settings.page_path != blank -%}
+        <a class="llrp-text" href="{{ block.settings.page_path | escape }}" data-llrp="text">{{ tpl | replace: '__N__', pts }}</a>
+      {%- else -%}
+        <span class="llrp-text" data-llrp="text">{{ tpl | replace: '__N__', pts }}</span>
+      {%- endif -%}
+    </div>
+
+    {%- if customer == blank and block.settings.show_join -%}
+      <p class="llrp-actions">
+        <a class="llrp-btn" href="{{ routes.account_register_url }}">{{ 'wave_rewards.pp_join' | t }}</a>
+        <a class="llrp-link" href="{{ routes.account_login_url }}">{{ 'wave_rewards.pp_sign_in' | t }}</a>
+      </p>
+    {%- endif -%}
+
+    {%- if use -%}
+      {%- assign amount = use.value_cents | money_without_trailing_zeros -%}
+      <div class="llrp-redeem">
+        {%- if in_cart -%}
+          <p>{{ 'wave_rewards.pp_in_cart' | t: amount: amount }}</p>
+        {%- else -%}
+          <p>{{ 'wave_rewards.pp_reward_ready' | t: amount: amount }}</p>
+          <button
+            type="button"
+            class="llrp-btn"
+            data-llrp="redeem"
+            data-key="{{ use.key }}"
+            data-value="{{ use.value_cents }}"
+            data-amount="{{ amount | escape }}"
+            data-label="{{ 'wave_rewards.pp_use' | t | escape }}"
+            data-confirm="{{ 'wave_rewards.pp_confirm' | t: points: use.points_cost | escape }}"
+            data-working="{{ 'wave_rewards.pp_working' | t | escape }}"
+            data-applied="{{ 'wave_rewards.pp_applied' | t: amount: amount, code: '__CODE__' | escape }}"
+            data-saved="{{ 'wave_rewards.pp_saved' | t: amount: amount, code: '__CODE__' | escape }}"
+            data-failed="{{ 'wave_rewards.pp_failed' | t | escape }}"
+          >
+            {{ 'wave_rewards.pp_use' | t }}
+          </button>
+        {%- endif -%}
+        <p class="llrp-status" data-llrp="status" role="status" aria-live="polite"></p>
+      </div>
+    {%- endif -%}
+
     <script type="application/json" data-llrp="prices">{
       {%- for x in product.variants -%}"{{ x.id }}":{{ x.price }}{% unless forloop.last %},{% endunless %}{%- endfor -%}
     }</script>
@@ -62,9 +166,13 @@
   "javascript": "wave-rewards-points.js",
   "stylesheet": "wave-rewards-points.css",
   "settings": [
-    { "type": "color", "id": "color", "label": "Text color", "default": "#1A5AAD" },
-    { "type": "checkbox", "id": "link", "label": "Link to the rewards page", "default": true },
-    { "type": "text", "id": "page_path", "label": "Rewards page path", "default": "/pages/wave-rewards" }
+    { "type": "color", "id": "color", "label": "Accent color", "default": "#1A5AAD" },
+    { "type": "checkbox", "id": "link", "label": "Link the points line to the rewards page", "default": true },
+    { "type": "text", "id": "page_path", "label": "Rewards page path", "default": "/pages/wave-rewards" },
+    { "type": "checkbox", "id": "show_join", "label": "Guests: show Join and Sign in", "default": true },
+    { "type": "checkbox", "id": "show_redeem", "label": "Members: offer a reward they can afford", "default": true },
+    { "type": "checkbox", "id": "show_campaign", "label": "Show running bonus campaigns", "default": true },
+    { "type": "text", "id": "proxy_path", "label": "App proxy path", "default": "/apps/loyalty", "info": "Only change this if the app proxy URL was customized in Shopify admin." }
   ]
 }
 {% endschema %}

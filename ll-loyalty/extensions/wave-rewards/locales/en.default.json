@@ -132,6 +132,25 @@
     "pp_guest": "Join {program} and earn {points} points with this item",
     "units_label": "Amount",
     "units_option": "{amount} off · {points} points",
-    "units_hint": "Every {points} points = {amount} off. Combine them into one code."
+    "units_hint": "Every {points} points = {amount} off. Combine them into one code.",
+    "pp_guest_signup": "Join free: earn {points} points on this, plus {signup} for signing up",
+    "pp_join": "Join free",
+    "pp_sign_in": "Sign in",
+    "pp_reward_ready": "You have {amount} off waiting.",
+    "pp_use": "Use it on this order",
+    "pp_confirm": "Spend {points} points? Tap again",
+    "pp_working": "Adding…",
+    "pp_applied": "{amount} off is in your cart (code {code}).",
+    "pp_saved": "{amount} off saved as code {code}. Enter it at checkout.",
+    "pp_in_cart": "Your {amount} off is in your cart.",
+    "pp_failed": "That didn't work. Try again on the rewards page.",
+    "pp_campaign": "{name}, ends {date}",
+    "st_guest": "Join {program}: {signup} points when you sign up.",
+    "st_guest_plain": "Join {program} and earn points on every order.",
+    "st_ready": "You have {amount} off waiting.",
+    "st_progress": "{points} points to {reward}.",
+    "st_balance": "You have {points} points.",
+    "st_campaign": "{name}, until {date}.",
+    "st_rewards": "See rewards"
   }
 }

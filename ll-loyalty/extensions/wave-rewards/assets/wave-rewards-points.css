@@ -1,4 +1,20 @@
-/* Wave Rewards points on product pages (blocks/product-points.liquid). */
-.llrp { display: flex; align-items: center; gap: 8px; margin: 10px 0; color: var(--llrp-color); font-size: 15px; font-weight: 600; line-height: 1.35; }
+/* Wave Rewards on product pages (blocks/product-points.liquid). Pixel sizes and
+   explicit colors: themes set html { font-size: 62.5% } and color text. */
+.llrp { display: grid; gap: 8px; margin: 10px 0; color: var(--llrp-color); font-size: 15px; line-height: 1.35; }
+.llrp p { margin: 0; }
+.llrp [hidden] { display: none !important; }
+.llrp-line { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .llrp-ico { width: 18px; height: 18px; flex: none; }
 .llrp a.llrp-text { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.llrp-camp { justify-self: start; padding: 4px 10px; border-radius: 999px; background: var(--llrp-color); color: #fff; font-size: 13px; font-weight: 700; }
+.llrp-actions { display: flex; align-items: center; gap: 14px; }
+.llrp-btn {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 6px 16px; border: 0; border-radius: 999px;
+  background: var(--llrp-color); color: #fff; font: inherit; font-size: 14px; font-weight: 700; text-decoration: none; cursor: pointer;
+}
+.llrp-btn:disabled { opacity: 0.6; cursor: default; }
+.llrp-link { color: inherit; font-size: 14px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.llrp-redeem { display: grid; gap: 8px; justify-items: start; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--llrp-color) 30%, transparent);
+  border-radius: 12px; background: color-mix(in srgb, var(--llrp-color) 6%, #fff); color: #0f1b2d; font-weight: 600; }
+.llrp-status:empty { display: none; }
+.llrp-status { font-size: 14px; font-weight: 600; color: #0f1b2d; }

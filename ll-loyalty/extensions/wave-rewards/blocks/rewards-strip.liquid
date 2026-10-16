@@ -1,0 +1,131 @@
+{% comment %}
+  Wave Rewards strip (LL Loyalty): one line for the home page, collections or
+  anywhere a section takes app blocks. Pure Liquid from the shop's
+  ll_loyalty.program metafield and the member's ll_loyalty.* metafields (synced
+  by loyalty-shopify, can lag a minute); no script, no request.
+
+  What it says, first match wins:
+    member whose balance covers a reward   "You have $5 off waiting."   (everyone, Joy parity)
+    running bonus campaign                  "Double points on new arrivals, until Oct 20."
+                                            (once nudges are live; guests and treatment members)
+    treatment member, nudges live           "120 points to $5 off." with a progress bar
+    other members                           "You have 630 points."
+    guests                                  "Join Wave Rewards: 100 points when you sign up." + Join / Sign in
+{% endcomment %}
+
+{%- liquid
+  assign prog = shop.metafields.ll_loyalty.program.value
+  assign mode = blank
+  assign points = 0
+  assign group = blank
+  if customer
+    assign points = customer.metafields.ll_loyalty.points.value | default: 0
+    assign group = customer.metafields.ll_loyalty.group.value
+  endif
+  assign nudges = false
+  if prog.nudges_live
+    if customer == blank or group == 'treatment'
+      assign nudges = true
+    endif
+  endif
+
+  # Best reward the balance covers, and the cheapest one still out of reach.
+  assign use = nil
+  assign goal = nil
+  if customer
+    for r in prog.rewards
+      if r.points_cost <= points
+        assign use = r
+      elsif goal == nil
+        assign goal = r
+      endif
+    endfor
+  endif
+
+  assign camp = nil
+  if nudges and block.settings.show_campaign
+    assign now = 'now' | date: '%s' | plus: 0
+    for c in prog.campaigns
+      if camp == nil and c.starts_at <= now and c.ends_at > now
+        assign camp = c
+      endif
+    endfor
+  endif
+
+  if customer and use and block.settings.show_members
+    assign mode = 'ready'
+  elsif camp
+    assign mode = 'campaign'
+  elsif customer and nudges and goal and block.settings.show_members
+    assign mode = 'progress'
+  elsif customer and block.settings.show_members
+    assign mode = 'balance'
+  elsif customer == blank and block.settings.show_guests
+    assign mode = 'guest'
+  endif
+
+  # 1234 -> "1,234" through the shop's money format (no number filter in Liquid).
+  assign points_label = points | times: 100 | money_without_currency | remove: '.00'
+-%}
+
+{%- if prog and mode != blank -%}
+  <div
+    class="llrs"
+    style="--llrs-bg: {{ block.settings.bg }}; --llrs-text: {{ block.settings.text }}; --llrs-accent: {{ block.settings.accent }}; --llrs-accent-text: {{ block.settings.accent_text }};"
+    {{ block.shopify_attributes }}
+  >
+    <div class="llrs-inner">
+      <p class="llrs-msg">
+        {%- case mode -%}
+          {%- when 'ready' -%}
+            {%- assign amount = use.value_cents | money_without_trailing_zeros -%}
+            {{ 'wave_rewards.st_ready' | t: amount: amount }}
+          {%- when 'campaign' -%}
+            {%- assign camp_end = camp.ends_at | date: '%b %-d' -%}
+            {{ 'wave_rewards.st_campaign' | t: name: camp.name, date: camp_end }}
+          {%- when 'progress' -%}
+            {%- assign gap = goal.points_cost | minus: points | times: 100 | money_without_currency | remove: '.00' -%}
+            {{ 'wave_rewards.st_progress' | t: points: gap, reward: goal.name }}
+          {%- when 'balance' -%}
+            {{ 'wave_rewards.st_balance' | t: points: points_label }}
+          {%- when 'guest' -%}
+            {%- if prog.signup_points > 0 -%}
+              {{ 'wave_rewards.st_guest' | t: program: prog.name, signup: prog.signup_points }}
+            {%- else -%}
+              {{ 'wave_rewards.st_guest_plain' | t: program: prog.name }}
+            {%- endif -%}
+        {%- endcase -%}
+      </p>
+      {%- if mode == 'progress' -%}
+        {%- assign pct = points | times: 100 | divided_by: goal.points_cost -%}
+        <span class="llrs-bar" aria-hidden="true"><i style="width: {{ pct }}%"></i></span>
+      {%- endif -%}
+      <span class="llrs-actions">
+        {%- if customer == blank -%}
+          <a class="llrs-btn" href="{{ routes.account_register_url }}">{{ 'wave_rewards.pp_join' | t }}</a>
+          <a class="llrs-link" href="{{ routes.account_login_url }}">{{ 'wave_rewards.pp_sign_in' | t }}</a>
+        {%- else -%}
+          <a class="llrs-btn" href="{{ block.settings.page_path | default: '/pages/wave-rewards' | escape }}">{{ 'wave_rewards.st_rewards' | t }}</a>
+        {%- endif -%}
+      </span>
+    </div>
+  </div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Wave Rewards strip",
+  "target": "section",
+  "stylesheet": "wave-rewards-strip.css",
+  "settings": [
+    { "type": "checkbox", "id": "show_guests", "label": "Show to guests (join)", "default": true },
+    { "type": "checkbox", "id": "show_members", "label": "Show to members (balance, rewards)", "default": true },
+    { "type": "checkbox", "id": "show_campaign", "label": "Announce running bonus campaigns", "default": true },
+    { "type": "text", "id": "page_path", "label": "Rewards page path", "default": "/pages/wave-rewards" },
+    { "type": "color", "id": "bg", "label": "Background", "default": "#173E71" },
+    { "type": "color", "id": "text", "label": "Text", "default": "#FFFFFF" },
+    { "type": "color", "id": "accent", "label": "Button", "default": "#FFFFFF" },
+    { "type": "color", "id": "accent_text", "label": "Button text", "default": "#173E71" }
+  ]
+}
+{% endschema %}
