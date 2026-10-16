@@ -26,7 +26,16 @@ import { PRODUCTS, SOLUTIONS } from "@/lib/catalog";
 // "#how" AND "#faq" ONLY EXIST ON THE LANDING PAGE (landing.tsx renders both
 // ids), so they always carry the full home path, never a bare "#anchor" that
 // scrolls nowhere on every other page. They live in the footer now.
-type NavItem = { href: string; label: string; blurb?: string };
+type NavItem = {
+  href: string;
+  label: string;
+  blurb?: string;
+  /** Top-bar link that only fits from lg up; it stays in the phone menu. */
+  wideOnly?: boolean;
+};
+
+/** The call-to-action panel beside a dropdown's items (2026-10-16). */
+type NavAside = { title: string; body: string; href: string; cta: string };
 
 function navGroups(marketingHome: string) {
   const home = (href: string) => (href === "/" ? marketingHome : href);
@@ -47,13 +56,31 @@ function navGroups(marketingHome: string) {
       { href: "/pricing", label: "Pricing" },
       { href: "/pricing#enterprise", label: "Enterprise" },
       { href: "/story", label: "Our Story" },
+      // BLOG IN THE TOP BAR once there's a post (2026-10-16, rogiq-site-plan
+      // item 8). Desktop only: at md the bar has no room for a sixth link.
+      ...(getAllPosts().length > 0 ? [{ href: "/blog", label: "Blog", wideOnly: true }] : []),
     ] as NavItem[],
+    asides: {
+      products: {
+        title: "Not Sure Where To Start?",
+        body: "Answer four questions and we'll recommend what fits, with a monthly estimate.",
+        href: "/pricing#finder",
+        cta: "Find What You Need",
+      },
+      solutions: {
+        title: "Many Locations Or Clients?",
+        body: "One account across every location, brand or client, with a dedicated team.",
+        href: "/pricing#enterprise",
+        cta: "See Enterprise",
+      },
+    } satisfies Record<string, NavAside>,
     company: [
       { href: `${marketingHome}#how`, label: "How It Works" },
       { href: "/pricing", label: "Pricing" },
       { href: "/pricing#enterprise", label: "Enterprise" },
       { href: "/story", label: "Our Story" },
-      // Footer only, and only once there's something to read (lib/blog.ts).
+      // Only once there's something to read (lib/blog.ts). Also in the top bar
+      // from lg up, see `top`.
       ...(getAllPosts().length > 0 ? [{ href: "/blog", label: "Blog" }] : []),
       { href: `${marketingHome}#faq`, label: "FAQ" },
       { href: "/contact", label: "Contact" },
@@ -72,35 +99,71 @@ function navGroups(marketingHome: string) {
  * showed both panels on top of each other. A mouse click doesn't match
  * :focus-visible, so only keyboard focus holds a panel open now.
  */
-function NavMenu({ label, items }: { label: string; items: NavItem[] }) {
+function NavMenu({
+  label,
+  items,
+  aside,
+}: {
+  label: string;
+  items: NavItem[];
+  aside: NavAside;
+}) {
+  // NUMBERED CARDS + A SIDE PANEL (2026-10-16), after RogIQ's menus: each
+  // item gets a number and its one-line blurb, and the panel carries the one
+  // next step for someone who doesn't know which item they want.
   return (
-    <div className="group relative">
+    // Not `relative`: the panel is positioned against the header row (which
+    // is), so a 40rem panel stays on screen at tablet width instead of
+    // hanging off the edge of its button.
+    <div className="group">
       <button
         type="button"
         aria-haspopup="true"
         className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900 group-has-[:focus-visible]:text-gray-900"
       >
         {label}
-        <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4 fill-current">
+        <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4 fill-current transition group-hover:rotate-180">
           <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
         </svg>
       </button>
-      <div className="invisible absolute left-1/2 top-full z-50 -translate-x-1/2 pt-3 opacity-0 transition group-has-[:focus-visible]:visible group-has-[:focus-visible]:opacity-100 group-hover:visible group-hover:opacity-100">
-        <div className="w-72 rounded-xl border border-gray-200 bg-white p-2 shadow-lg shadow-gray-900/10">
-          {items.map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className="block rounded-lg px-3 py-2.5 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
-            >
-              <span className="block text-sm font-medium text-gray-900">{item.label}</span>
-              {item.blurb ? (
-                <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">
-                  {item.blurb}
-                </span>
-              ) : null}
-            </a>
-          ))}
+      {/* top-10 + pt-6 starts the hover area right under the button, so the
+          pointer never crosses a gap that would close the menu. */}
+      <div className="pointer-events-none invisible absolute inset-x-6 top-10 z-50 flex justify-center opacity-0 transition group-has-[:focus-visible]:visible group-has-[:focus-visible]:opacity-100 group-hover:visible group-hover:opacity-100">
+        {/* Only the card (and the pt-6 strip above it) takes the pointer; the
+            full-width frame around it would otherwise block clicks on the
+            page beside the menu. */}
+        <div className="pointer-events-auto w-full max-w-[40rem] pt-6">
+          <div className="flex overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl shadow-gray-900/10">
+            <div className="grid flex-1 grid-cols-2 gap-1 p-3">
+              {items.map((item, i) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className="rounded-xl p-3 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+                >
+                  <span className="text-xs font-semibold text-lumi-600">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span className="mt-1 block text-sm font-semibold text-gray-900">{item.label}</span>
+                  {item.blurb ? (
+                    <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">
+                      {item.blurb}
+                    </span>
+                  ) : null}
+                </a>
+              ))}
+            </div>
+            <div className="flex w-52 shrink-0 flex-col bg-gray-900 p-5 text-white">
+              <p className="text-sm font-semibold">{aside.title}</p>
+              <p className="mt-2 flex-1 text-xs leading-relaxed text-gray-300">{aside.body}</p>
+              <a
+                href={aside.href}
+                className="mt-4 rounded-md bg-white px-3 py-2 text-center text-xs font-semibold text-gray-900 hover:bg-gray-100"
+              >
+                {aside.cta}{" "}&rarr;
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -244,17 +307,17 @@ export async function MarketingShell({
   return (
     <div className="flex min-h-full flex-1 flex-col bg-white text-gray-900">
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+        <div className="relative mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Wordmark href={homeHref} />
 
           <nav className="hidden items-center gap-8 md:flex">
-            <NavMenu label="Products" items={groups.products} />
-            <NavMenu label="Solutions" items={groups.solutions} />
+            <NavMenu label="Products" items={groups.products} aside={groups.asides.products} />
+            <NavMenu label="Solutions" items={groups.solutions} aside={groups.asides.solutions} />
             {groups.top.map((l) => (
               <a
                 key={l.href}
                 href={l.href}
-                className="text-sm font-medium text-gray-600 hover:text-gray-900"
+                className={`text-sm font-medium text-gray-600 hover:text-gray-900 ${l.wideOnly ? "hidden lg:inline" : ""}`}
               >
                 {l.label}
               </a>

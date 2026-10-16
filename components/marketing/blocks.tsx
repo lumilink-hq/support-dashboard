@@ -888,3 +888,214 @@ export function SplitCta({
     </Section>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Plan comparison tables for /pricing (2026-10-16, docs/rogiq-site-plan.md
+// item 6). Every cell is read from PLAN_TIERS or SEO_PLANS, never typed, for
+// the same reason as every other money block in this file.
+// ---------------------------------------------------------------------------
+
+type CompareCell = boolean | string;
+
+function CompareTable({
+  caption,
+  columns,
+  rows,
+}: {
+  caption: string;
+  columns: { name: string; price: string; highlight?: boolean }[];
+  rows: { label: string; cells: CompareCell[] }[];
+}) {
+  return (
+    // The table scrolls inside its own box on a phone; the page never does.
+    // `relative` matters: the sr-only labels in the cells are absolutely
+    // positioned, and without a positioned ancestor here they escape the
+    // scroll box and widen the whole page on a phone.
+    <div className="reveal relative mt-10 overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <table className="w-full min-w-[40rem] border-collapse text-left text-sm">
+        <caption className="sr-only">{caption}</caption>
+        <thead>
+          <tr className="border-b border-gray-200">
+            <th scope="col" className="w-1/3 p-5 align-bottom text-xs font-semibold uppercase tracking-widest text-gray-400">
+              Compare
+            </th>
+            {columns.map((c) => (
+              <th
+                key={c.name}
+                scope="col"
+                className={`p-5 align-bottom ${c.highlight ? "bg-gray-50" : ""}`}
+              >
+                <span className="block text-base font-semibold text-gray-900">{c.name}</span>
+                <span className="mt-1 block font-normal text-gray-500">{c.price}</span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label} className="border-b border-gray-100 last:border-0">
+              <th scope="row" className="p-5 font-medium text-gray-700">
+                {r.label}
+              </th>
+              {r.cells.map((cell, i) => (
+                <td
+                  key={columns[i].name}
+                  className={`p-5 text-gray-900 ${columns[i].highlight ? "bg-gray-50" : ""}`}
+                >
+                  {cell === true ? (
+                    <span className="font-semibold text-green-600">
+                      ✓<span className="sr-only"> Included</span>
+                    </span>
+                  ) : cell === false ? (
+                    <span className="text-gray-300">
+                      &mdash;<span className="sr-only"> Not included</span>
+                    </span>
+                  ) : (
+                    cell
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** The three phone plans side by side. */
+export function PhonePlanCompare() {
+  const each = (f: (t: (typeof PLAN_TIERS)[number]) => CompareCell) => PLAN_TIERS.map(f);
+  return (
+    <Section id="compare-phone" className="pb-20">
+      <h3 className="text-xl font-semibold text-gray-900">Compare Phone Plans</h3>
+      <CompareTable
+        caption="Phone plan comparison"
+        columns={PLAN_TIERS.map((t) => ({
+          name: t.label,
+          price: `${usd(t.monthlyUsd)}/mo`,
+          highlight: t.mostPopular,
+        }))}
+        rows={[
+          {
+            label: "Calls a month",
+            cells: each((t) => `About ${advertisedCalls(t.includedMinutes)} (${t.includedMinutes} min)`),
+          },
+          { label: "Setup", cells: each((t) => (t.setupFeeUsd > 0 ? usd(t.setupFeeUsd) : "Free, we do it")) },
+          { label: "Local phone numbers", cells: each((t) => String(t.numbers)) },
+          { label: "24/7 answering and booking", cells: each(() => true) },
+          { label: "Website knowledge sync", cells: each(() => true) },
+          { label: "Callback ticket portal", cells: each(() => true) },
+          { label: "Advanced transfers", cells: each((t) => t.advancedTransfers) },
+          { label: "Advanced routing", cells: each((t) => t.advancedRouting) },
+          { label: "Platform care each month", cells: each((t) => `${t.careHoursPerMonth} hours`) },
+          { label: "Billed for going over", cells: each(() => "Never") },
+        ]}
+      />
+    </Section>
+  );
+}
+
+/** The three SEO + AI Search plans side by side. */
+export function SeoPlanCompare() {
+  const website = (p: SeoPlan) => p.includesWebsite;
+  const local = (p: SeoPlan) => p.perLocation || p.includedLocations > 0;
+  const each = (f: (p: SeoPlan) => CompareCell) => SEO_PLANS.map(f);
+  return (
+    <Section id="compare-seo" className="pb-20">
+      <h3 className="text-xl font-semibold text-gray-900">Compare SEO Plans</h3>
+      <CompareTable
+        caption="SEO + AI Search plan comparison"
+        columns={SEO_PLANS.map((p) => ({
+          name: p.name,
+          price: p.perLocation ? `${usd(p.monthlyUsd)}/location/mo` : `${usd(p.monthlyUsd)}/mo`,
+          highlight: p.key === "bundle",
+        }))}
+        rows={[
+          {
+            label: "Locations",
+            cells: each((p) =>
+              p.perLocation
+                ? "Priced per location"
+                : p.includedLocations > 0
+                  ? `${p.includedLocations} included, then ${usd(SEO_EXTRA_LOCATION.monthlyUsd)}/mo each`
+                  : "Website only",
+            ),
+          },
+          { label: "Weekly site and technical audits", cells: each(website) },
+          { label: "Keyword rank tracking and competitors", cells: each(website) },
+          { label: "Fixes and articles drafted for approval", cells: each(website) },
+          { label: "Backlink monitoring", cells: each(website) },
+          { label: "AI search visibility, no extra charge", cells: each(website) },
+          { label: "Map pack rank tracking with a geo grid", cells: each(local) },
+          { label: "Local competitor tracking", cells: each(local) },
+          { label: "Profile description improved, with your approval", cells: each(local) },
+          { label: "Monthly report", cells: each(() => true) },
+        ]}
+      />
+    </Section>
+  );
+}
+
+/**
+ * "Done for you, included" (2026-10-16, docs/rogiq-site-plan.md item 7).
+ * RogIQ sells someone to run its platform as a ~$1,700/mo add-on; with us the
+ * build, testing and upkeep come with the plan, so pricing and the industry
+ * pages lead with it. Every claim here is one the site already makes; the
+ * setup fee and care hours are read from PLAN_TIERS.
+ */
+export function DoneForYouBand({ className = "" }: { className?: string }) {
+  const setupFree = PLAN_TIERS.every((t) => t.setupFeeUsd === 0);
+  const care = PLAN_TIERS.map((t) => t.careHoursPerMonth);
+  const points = [
+    {
+      n: "01",
+      title: "We Set It Up",
+      body: `We load your services, prices and hours, connect your calendar and set up your number.${
+        setupFree ? " Setup is free on every phone plan." : ""
+      }`,
+    },
+    {
+      n: "02",
+      title: "We Test It First",
+      body: "Every agent is tested against real scenarios before a single customer hears it.",
+    },
+    {
+      n: "03",
+      title: "We Keep It Running",
+      body: `Each phone plan includes ${Math.min(...care)} to ${Math.max(...care)} hours of platform care from our team every month.`,
+    },
+    {
+      n: "04",
+      title: "You Approve, We Publish",
+      body: "SEO fixes and articles are drafted for you. Nothing goes live on your site until you say so.",
+    },
+  ];
+  return (
+    <Section className={`py-20 ${className}`}>
+      <div className="rounded-3xl bg-gray-900 px-8 py-12 text-white md:px-12 md:py-16">
+        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-lumi-400">
+          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-lumi-400" />
+          Done For You, Included
+        </p>
+        <h2 className="reveal mt-4 max-w-3xl display-section">
+          Most Platforms Hand You A Login.{" "}
+          <span className="text-lumi-400">We Hand You A Finished System.</span>
+        </h2>
+        <p className="mt-4 max-w-2xl leading-relaxed text-gray-300">
+          You don&rsquo;t configure anything. Our team builds it, tests it and
+          keeps it running, and it&rsquo;s part of the price, not an add-on.
+        </p>
+        <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          {points.map((p) => (
+            <div key={p.n} className="reveal border-t border-white/15 pt-5">
+              <p className="text-sm font-semibold text-lumi-400">{p.n}</p>
+              <h3 className="mt-2 text-lg font-semibold">{p.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-gray-300">{p.body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Section>
+  );
+}

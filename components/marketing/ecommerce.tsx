@@ -31,6 +31,7 @@ import {
   CallLengthPolicy,
   CapabilityGrid,
   Check,
+  DoneForYouBand,
   Eyebrow,
   FaqList,
   OVERAGE_ANSWER,
@@ -269,6 +270,8 @@ export function EcommerceSolution() {
         <Eyebrow>Why stores use it</Eyebrow>
         <Pillars items={PILLARS} />
       </Section>
+
+      <DoneForYouBand />
 
       {/* ------------------------------------------------------------------ */}
       {/* Capabilities                                                       */}
