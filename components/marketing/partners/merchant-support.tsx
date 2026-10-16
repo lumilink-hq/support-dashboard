@@ -219,7 +219,7 @@ export function MerchantSupportPartner() {
             },
           ].map((s) => (
             <div key={s.n}>
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-gray-900 text-sm font-semibold text-white">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-lumi-600 text-sm font-semibold text-white">
                 {s.n}
               </span>
               <h3 className="mt-4 text-lg font-semibold text-gray-900">

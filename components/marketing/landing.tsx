@@ -34,6 +34,7 @@
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
 import {
+  Accent,
   CapabilityGrid,
   Check,
   ClosingCta,
@@ -41,7 +42,6 @@ import {
   EnterpriseBand,
   Eyebrow,
   FaqList,
-  OVERAGE_ANSWER,
   Pillars,
   Section,
   SIGNUP_CTA,
@@ -51,6 +51,7 @@ import {
   ConversationsMockup,
 } from "@/components/marketing/dashboard-mockups";
 import { SeoPortalMockup, seoCtaHref } from "@/components/marketing/seo";
+import { PHONE_CAPABILITIES, PHONE_FAQS } from "@/components/marketing/phone-agent";
 import { PlanFinder } from "@/components/marketing/plan-finder";
 import { finderPrices } from "@/components/marketing/finder-prices";
 import { availableAddons } from "@/lib/addons";
@@ -80,14 +81,14 @@ const chatUsd = addonUsd("website_chat");
  * typed. Website Chat is an add-on on a phone plan (lib/addons.ts) and says so
  * in its price line.
  */
-const PRODUCT_CARDS = [
+export const PRODUCT_CARDS = [
   {
     tag: "Phone",
     title: "AI Phone Agent",
     body: "Answers every call 24/7, quotes from your price list, and books the job on your real calendar.",
     bullets: ["Books, reschedules and cancels", "Captures every lead", "Hands off to a person when it matters"],
     price: `From ${usd(cheapestTier)}/mo, free setup`,
-    href: "#phone-agent",
+    href: "/products/phone-agent",
     cta: "See The Phone Agent",
   },
   {
@@ -138,32 +139,8 @@ const PILLARS = [
   },
 ];
 
-const CAPABILITIES = [
-  {
-    title: "Answers Every Call, 24/7",
-    body: "After hours, overflow, and the calls that arrive while you're on a job. Every caller reaches a real conversation.",
-  },
-  {
-    title: "Books Real Appointments",
-    body: "Checks your live availability, holds the slot, and confirms it. You stop ringing people back to rearrange.",
-  },
-  {
-    title: "Quotes From Your Price List",
-    body: "Lumi reads the prices you set. When a job needs a site visit before anyone can price it, it says so.",
-  },
-  {
-    title: "Knows Your Business",
-    body: "Syncs the services, hours, and policies already on your website. Included in every plan, with no connector fee.",
-  },
-  {
-    title: "Nothing Disappears",
-    body: "When Lumi can't finish a call, it logs a callback ticket in your follow-up queue. You decide who rings back.",
-  },
-  {
-    title: "Reschedules And Cancels",
-    body: "Customers move their own appointments by phone, without waiting for you to call them back.",
-  },
-];
+// The phone capabilities and phone FAQs live in phone-agent.tsx (2026-10-16),
+// shared with /products/phone-agent so the two pages say the same thing.
 
 // RESTORED 2026-08-30; generalised 2026-09-28 from "your phone agent" to
 // whatever the client is automating.
@@ -211,28 +188,7 @@ const FAQS = [
     q: "We Have Many Locations Or Brands. Is There A Plan For Us?",
     a: "Yes: Enterprise. One account across every location and brand, white-label options, custom limits and a dedicated team, priced around what you need. Talk to us and we'll put a quote together.",
   },
-  {
-    q: "What Happens If Lumi Can't Handle A Call?",
-    a: "It offers a transfer, or takes the details and logs a callback ticket for you to pick up. When it doesn't know something, it says so.",
-  },
-  {
-    q: "Does It Sound Robotic?",
-    // Was "judge it yourself on the discovery call" — there is no discovery
-    // call. An in-app test call is a known gap (FEATURE-GAPS.md §5).
-    a: "It's a natural voice with real conversational turn-taking — it pauses, handles being interrupted, and doesn't read from a script. Every call is transcribed in your dashboard, so you can read exactly how it sounded.",
-  },
-  {
-    q: "What If I Run Out Of Calls?",
-    a: OVERAGE_ANSWER,
-  },
-  {
-    q: "What Does Setup Cost?",
-    a: "Nothing, on every phone plan. We provision your number, load your services and prices, connect your calendar, test the agent against real scenarios and launch it. We'd rather you spent that money finding out whether we're any good.",
-  },
-  {
-    q: "Can I Cancel?",
-    a: "Cancel anytime from your dashboard. We don't pro-rate the month you're already in, and we won't put you through a retention call — if it isn't working, we'd rather hear why.",
-  },
+  ...PHONE_FAQS,
 ];
 
 // ---------------------------------------------------------------------------
@@ -248,12 +204,12 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
       {/* Hero                                                             */}
       {/* ---------------------------------------------------------------- */}
       {/* The faint glow behind the mockup is the "Lumi" in LumiLink; keep it faint. */}
-      <Section className="bg-[radial-gradient(ellipse_55%_60%_at_78%_45%,var(--color-lumi-100),transparent)] pb-20 pt-16 md:pb-28 md:pt-24">
+      <Section className="bg-hero-glow pb-20 pt-16 md:pb-28 md:pt-24">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
             <Eyebrow>AI Automation For Your Whole Business</Eyebrow>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
-              Automate The Repetitive. Escalate What Matters.
+            <h1 className="mt-4 display-hero text-gray-900">
+              Automate The Repetitive. <Accent>Escalate What Matters.</Accent>
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-gray-600">
               LumiLink answers your phone and your website, books the jobs,
@@ -265,7 +221,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 href={SIGNUP_CTA}
-                className="rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-800"
+                className="rounded-md btn-raspberry px-5 py-3 text-sm font-medium"
               >
                 Create Your Account
               </Link>
@@ -308,7 +264,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
       <Section id="products" className="border-t border-gray-200 py-20">
         <div className="max-w-2xl">
           <Eyebrow>Products</Eyebrow>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+          <h2 className="reveal mt-4 display-section text-gray-900">
             One Platform For Every Repetitive Job
           </h2>
           <p className="mt-3 text-gray-600">
@@ -323,7 +279,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
             <Link
               key={p.title}
               href={p.href}
-              className="group flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:border-gray-900"
+              className="reveal group flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-lumi-400 hover:shadow-md"
             >
               <span className="w-max rounded-full bg-lumi-50 px-2.5 py-0.5 text-xs font-semibold text-lumi-700">
                 {p.tag}
@@ -356,7 +312,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
         <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <Link
             href="/solutions/service"
-            className="group rounded-xl border border-gray-200 bg-white p-6 shadow-sm hover:border-gray-900"
+            className="reveal group rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-lumi-400 hover:shadow-md"
           >
             <h3 className="text-lg font-semibold text-gray-900">Service Businesses</h3>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
@@ -370,7 +326,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
 
           <Link
             href="/solutions/ecommerce"
-            className="group rounded-xl border border-gray-200 bg-white p-6 shadow-sm hover:border-gray-900"
+            className="reveal group rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-lumi-400 hover:shadow-md"
           >
             <h3 className="text-lg font-semibold text-gray-900">Online Stores</h3>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
@@ -384,7 +340,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
 
           <Link
             href="/solutions/retail"
-            className="group rounded-xl border border-gray-200 bg-white p-6 shadow-sm hover:border-gray-900"
+            className="reveal group rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-lumi-400 hover:shadow-md"
           >
             <h3 className="text-lg font-semibold text-gray-900">Retail Locations</h3>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
@@ -398,7 +354,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
 
           <a
             href="#enterprise"
-            className="group rounded-xl border-2 border-gray-900 bg-gray-900 p-6 text-white shadow-sm hover:bg-gray-800"
+            className="reveal group rounded-xl bg-ink-gradient p-6 text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
           >
             <h3 className="text-lg font-semibold">Multi-Location &amp; Enterprise</h3>
             <p className="mt-2 text-sm leading-relaxed text-gray-300">
@@ -417,7 +373,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
       {/* ---------------------------------------------------------------- */}
       <Section className="border-t border-gray-200 bg-gray-50 py-20">
         <Eyebrow>Why LumiLink Works</Eyebrow>
-        <h2 className="mt-4 max-w-2xl text-3xl font-semibold tracking-tight text-gray-900">
+        <h2 className="reveal mt-4 max-w-2xl display-section text-gray-900">
           Answered, Found, And Handled, Without Adding Headcount
         </h2>
         <Pillars items={PILLARS} />
@@ -429,7 +385,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
       <Section id="phone-agent" className="py-20">
         <div className="max-w-2xl">
           <Eyebrow>AI Phone Agent</Eyebrow>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+          <h2 className="reveal mt-4 display-section text-gray-900">
             One Agent That Finishes The Job
           </h2>
           <p className="mt-3 text-gray-600">
@@ -437,11 +393,13 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
             phone or on your website.
           </p>
         </div>
-        <CapabilityGrid items={CAPABILITIES} />
-        <p className="mt-10 text-sm text-gray-500">
-          Building next: a dashboard view of what your customers are actually
-          asking for.
-        </p>
+        <CapabilityGrid items={PHONE_CAPABILITIES} />
+        <Link
+          href="/products/phone-agent"
+          className="mt-10 inline-block text-sm font-medium text-lumi-700 hover:underline"
+        >
+          See Everything The Phone Agent Does &rarr;
+        </Link>
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -453,7 +411,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
       >
         <div className="max-w-2xl">
           <Eyebrow>Inside The Dashboard</Eyebrow>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+          <h2 className="reveal mt-4 display-section text-gray-900">
             Every Call, Chat And Ranking In One Place
           </h2>
           <p className="mt-3 text-gray-600">
@@ -473,7 +431,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
       {/* ---------------------------------------------------------------- */}
       <Section id="how" className="py-20">
         <Eyebrow>How LumiLink Works</Eyebrow>
-        <h2 className="mt-4 max-w-2xl text-3xl font-semibold tracking-tight text-gray-900">
+        <h2 className="reveal mt-4 max-w-2xl display-section text-gray-900">
           Pick What To Automate. We Handle The Rest.
         </h2>
         <p className="mt-3 max-w-2xl text-gray-600">
@@ -485,8 +443,8 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
 
         <div className="mt-12 grid gap-10 md:grid-cols-3">
           {STEPS.map((s) => (
-            <div key={s.n}>
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-gray-900 text-sm font-semibold text-white">
+            <div key={s.n} className="reveal">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-lumi-600 text-sm font-semibold text-white">
                 {s.n}
               </span>
               <h3 className="mt-4 text-lg font-semibold text-gray-900">
@@ -507,7 +465,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div className="max-w-2xl">
             <Eyebrow>Pricing</Eyebrow>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+            <h2 className="reveal mt-4 display-section text-gray-900">
               Let Us Figure Out What Your Business Needs
             </h2>
             <p className="mt-3 text-gray-600">

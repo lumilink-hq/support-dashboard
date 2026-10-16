@@ -19,10 +19,11 @@
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/shell";
 import {
+  Accent,
   CallLengthPolicy,
   CapabilityGrid,
   Check,
-  ClosingCta,
+  DoneForYouBand,
   Eyebrow,
   FaqList,
   OVERAGE_ANSWER,
@@ -31,6 +32,7 @@ import {
   Section,
   SeoPairing,
   SIGNUP_CTA,
+  SplitCta,
   WebsiteChatBand,
 } from "@/components/marketing/blocks";
 import { StorefrontSupportMockup } from "@/components/marketing/storefront-mockups";
@@ -174,7 +176,7 @@ function LocationScale() {
     <Section className="py-20">
       <div className="max-w-2xl">
         <Eyebrow>Built for one shop or many</Eyebrow>
-        <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+        <h2 className="reveal mt-4 display-section text-gray-900">
           Optimized for a single location or a whole chain
         </h2>
         <p className="mt-3 text-gray-600">
@@ -197,7 +199,7 @@ function LocationScale() {
             ))}
           </ul>
         </div>
-        <div className="rounded-2xl border-2 border-gray-900 bg-white p-8 shadow-sm">
+        <div className="rounded-2xl border-2 border-lumi-600 bg-white p-8 shadow-sm">
           <p className="text-sm font-medium text-gray-500">Multi-location</p>
           <h3 className="mt-2 text-xl font-semibold text-gray-900">
             Every storefront, one account
@@ -227,12 +229,12 @@ function LocationScale() {
 export function RetailSolution() {
   return (
     <MarketingShell>
-      <Section className="pb-20 pt-16 md:pb-28 md:pt-24">
+      <Section className="bg-hero-glow pb-20 pt-16 md:pb-28 md:pt-24">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
             <Eyebrow>AI customer service for retail stores</Eyebrow>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
-              Every storefront answered. Every location found.
+            <h1 className="mt-4 display-hero text-gray-900">
+              Every storefront answered. <Accent>Every location found.</Accent>
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-gray-600">
               Whether you run one shop or twenty, Lumi answers each store&rsquo;s
@@ -244,7 +246,7 @@ export function RetailSolution() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 href={SIGNUP_CTA}
-                className="rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-800"
+                className="rounded-md btn-raspberry px-5 py-3 text-sm font-medium"
               >
                 Create your account
               </Link>
@@ -293,10 +295,12 @@ export function RetailSolution() {
         <Pillars items={PILLARS} />
       </Section>
 
+      <DoneForYouBand />
+
       <Section className="py-20">
         <div className="max-w-2xl">
           <Eyebrow>Storefront customer service</Eyebrow>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+          <h2 className="reveal mt-4 display-section text-gray-900">
             The questions your floor staff answer all day
           </h2>
           <p className="mt-3 text-gray-600">
@@ -336,9 +340,10 @@ export function RetailSolution() {
 
       <FaqList items={FAQS} heading="What retailers ask" />
 
-      <ClosingCta
+      <SplitCta
         heading="Give every store a front desk that never closes"
         body="Tell us about your stores, your hours and your busiest questions. We build it, and Lumi starts answering for every location."
+        contactSource="/solutions/retail"
       />
     </MarketingShell>
   );

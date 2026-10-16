@@ -43,7 +43,7 @@ export function DemoToggle({
               onClick={() => setActive(i)}
               className={`rounded-md px-3 py-1.5 text-sm font-medium ${
                 i === active
-                  ? "bg-gray-900 text-white"
+                  ? "bg-lumi-600 text-white"
                   : "text-gray-600 hover:bg-gray-200"
               }`}
             >

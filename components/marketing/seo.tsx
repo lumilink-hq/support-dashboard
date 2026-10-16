@@ -29,13 +29,15 @@
 import Link from "next/link";
 import { MarketingShell, isSignedIn } from "@/components/marketing/shell";
 import {
+  Accent,
   CapabilityGrid,
   Check,
-  ClosingCta,
   Eyebrow,
   FaqList,
   Pillars,
   Section,
+  SplitCta,
+  WorksWith,
 } from "@/components/marketing/blocks";
 import { MockupFrame } from "@/components/marketing/dashboard-mockups";
 import { SEO_EXTRA_LOCATION, SEO_PLANS, seoBundleSavings, seoPlanByKey } from "@/lib/seo-pricing";
@@ -299,7 +301,7 @@ export function SeoPricingSection({
     <Section id={id} className="border-t border-gray-200 py-20">
       <div className="max-w-2xl">
         <Eyebrow>{eyebrow}</Eyebrow>
-        <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+        <h2 className="reveal mt-4 display-section text-gray-900">
           Your Website, Your Locations, Or Both
         </h2>
         <p className="mt-3 text-gray-600">
@@ -326,7 +328,7 @@ export function SeoPricingSection({
             <div
               key={plan.key}
               className={`relative flex flex-col rounded-2xl bg-white p-8 shadow-sm ${
-                featured ? "border-2 border-gray-900" : "border border-gray-200"
+                featured ? "border-2 border-lumi-600" : "border border-gray-200"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -377,7 +379,7 @@ export function SeoPricingSection({
                 href={ctaHref}
                 className={`mt-6 block rounded-md px-4 py-3 text-center text-sm font-medium ${
                   featured
-                    ? "bg-gray-900 text-white hover:bg-gray-800"
+                    ? "btn-raspberry"
                     : "border border-gray-300 text-gray-700 hover:bg-gray-50"
                 }`}
               >
@@ -431,12 +433,12 @@ export async function SeoSolution() {
 
   return (
     <MarketingShell>
-      <Section className="pb-20 pt-16 md:pb-28 md:pt-24">
+      <Section className="bg-hero-glow pb-20 pt-16 md:pb-28 md:pt-24">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
             <Eyebrow>SEO + AI Search</Eyebrow>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
-              Get Found On Google And In AI Search.
+            <h1 className="mt-4 display-hero text-gray-900">
+              Get Found On <Accent>Google</Accent> And In <Accent>AI Search</Accent>.
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-gray-600">
               Your website, every location, and the answers ChatGPT and
@@ -447,7 +449,7 @@ export async function SeoSolution() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 href={primaryHref}
-                className="rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-800"
+                className="rounded-md btn-raspberry px-5 py-3 text-sm font-medium"
               >
                 Get Started
               </Link>
@@ -487,7 +489,7 @@ export async function SeoSolution() {
       {/* AI search gets its own band: it's the part of the product people
           don't expect from an SEO service, and it was one bullet before. */}
       <Section className="py-20">
-        <div className="rounded-2xl bg-gray-900 px-8 py-12 text-white md:px-12">
+        <div className="rounded-2xl bg-ink-gradient px-8 py-12 text-white md:px-12">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
             AI Search
           </p>
@@ -513,7 +515,7 @@ export async function SeoSolution() {
       <Section className="border-t border-gray-200 py-20">
         <div className="max-w-2xl">
           <Eyebrow>What&rsquo;s Included</Eyebrow>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+          <h2 className="reveal mt-4 display-section text-gray-900">
             Audit, Track, Fix, Report
           </h2>
           <p className="mt-3 text-gray-600">
@@ -539,13 +541,20 @@ export async function SeoSolution() {
 
       <SeoPricingSection id="pricing" ctaHref={primaryHref} />
 
+      <WorksWith
+        current="seo"
+        heading="Get Found. Then Never Miss The Call."
+        body="Ranking well brings more calls and more visitors. The phone agent and website chat make sure every one of them gets an answer and a booking."
+      />
+
       <FaqList items={FAQS} heading="What People Ask About SEO + AI Search" />
 
-      <ClosingCta
+      <SplitCta
         heading="Start Ranking Where Your Customers Look"
         body="Add your website and locations, connect Search Console, and your first audit, rankings and AI search check are on the way."
         cta="Get Started"
         href={primaryHref}
+        contactSource="/products/seo"
       />
     </MarketingShell>
   );

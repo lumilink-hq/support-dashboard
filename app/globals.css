@@ -17,16 +17,21 @@
   BRAND LAYER (2026-09-23). The app was stock Tailwind gray on white in Geist,
   which is exactly what create-next-app ships, so it read as a template.
 
-  WARM PAPER, NAVY INK. The light end of the gray scale (surfaces, borders,
-  hovers) is re-tinted warm; the dark end (text, buttons) is left as Tailwind's
-  navy-leaning gray, which already matches the wordmark. Lightness is unchanged
-  step for step, so every contrast ratio in the app is what it was. Overriding
-  the scale here retints ~1,000 `gray-*` usages without touching a component.
+  WARM PAPER, NAVY INK (the dashboard). The light end of the gray scale
+  (surfaces, borders, hovers) is re-tinted warm; the dark end (text, buttons)
+  is left as Tailwind's navy-leaning gray. Lightness is unchanged step for
+  step, so every contrast ratio in the app is what it was. Overriding the
+  scale here retints ~1,000 `gray-*` usages without touching a component.
+  The marketing site re-tints both ends again, see `.marketing` below.
 
-  ONE ACCENT, USED SPARINGLY: eyebrows, the active sidebar marker, focus
-  rings, text selection, the hero glow. Deliberately NOT buttons (they stay
-  ink) and not status colours — amber/green/red keep meaning warning/ok/error.
-  To change the brand colour, change these values and nothing else.
+  ONE ACCENT: RASPBERRY (2026-10-16, was burnt orange). Leadership went off
+  navy-and-orange and picked "blush with raspberry". Used for eyebrows, the
+  active sidebar marker, focus rings, text selection, the hero glow, and on
+  the marketing site the buttons. Not status colours: amber/green/red keep
+  meaning warning/ok/error. To change the brand colour, change these values.
+
+  Contrast: lumi-600 on white is 5.7:1, so it can carry body-size text.
+  lumi-400 is 3.2:1, large display text only (the headline gradient's end).
 */
 @theme {
   --color-gray-50: oklch(98.4% 0.004 80);
@@ -34,12 +39,90 @@
   --color-gray-200: oklch(92.6% 0.008 75);
   --color-gray-300: oklch(87.2% 0.01 70);
 
-  --color-lumi-50: oklch(97.5% 0.02 55);
-  --color-lumi-100: oklch(94.5% 0.045 55);
-  --color-lumi-400: oklch(74% 0.15 50);
-  --color-lumi-500: oklch(67% 0.18 45);
-  --color-lumi-600: oklch(58% 0.18 42);
-  --color-lumi-700: oklch(50% 0.16 40);
+  --color-lumi-50: #fff1f5;
+  --color-lumi-100: #fde4ec;
+  --color-lumi-200: #f9c9d8;
+  --color-lumi-300: #f39bb8;
+  --color-lumi-400: #e8608f;
+  --color-lumi-500: #d6336c;
+  --color-lumi-600: #c2255c;
+  --color-lumi-700: #a3214a;
+  --color-lumi-800: #7d1a3a;
+  --color-lumi-900: #5c1430;
+
+  /* The marketing page background: a faint blush, under white cards. */
+  --color-blush: #fff7f9;
+}
+
+/*
+  BLUSH PAPER, CHARCOAL INK (marketing site only, 2026-10-16). MarketingShell
+  puts `.marketing` on its root, and custom properties set there win over the
+  :root values for everything inside it, so the marketing pages re-tint every
+  gray utility without a component edit, and the dashboard keeps its look.
+
+  Light end: the same lightness steps as above, hue moved to pink.
+  Dark end: a warm charcoal instead of Tailwind's navy, at the same lightness
+  as the navy steps it replaces, so text contrast is unchanged.
+*/
+.marketing {
+  --color-gray-50: oklch(98.4% 0.008 355);
+  --color-gray-100: oklch(96.6% 0.012 355);
+  --color-gray-200: oklch(92.6% 0.015 355);
+  --color-gray-300: oklch(87.2% 0.018 355);
+  --color-gray-400: oklch(70.7% 0.018 355);
+  --color-gray-500: oklch(55.1% 0.02 355);
+  --color-gray-600: oklch(44.6% 0.02 355);
+  --color-gray-700: oklch(37.3% 0.02 355);
+  --color-gray-800: oklch(27.8% 0.018 355);
+  --color-gray-900: oklch(21% 0.015 355);
+  background-color: var(--color-blush);
+}
+
+/*
+  GRADIENTS, "here and there" (leadership, 2026-10-16). Three, each in one
+  place so they stay consistent:
+
+  - text-gradient-accent: the coloured words in headlines (<Accent>).
+    box-decoration-break: clone so a phrase that wraps keeps the gradient on
+    every line instead of stretching one gradient across both.
+  - btn-raspberry: the marketing site's primary buttons.
+  - bg-ink-gradient: the dark bands (Done For You, Enterprise, AI search, the
+    menu side panel), charcoal with a raspberry glow from the top right.
+*/
+@utility text-gradient-accent {
+  background-image: linear-gradient(100deg, var(--color-lumi-600) 0%, var(--color-lumi-500) 45%, var(--color-lumi-400) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+@utility btn-raspberry {
+  background-color: var(--color-lumi-600);
+  background-image: linear-gradient(135deg, var(--color-lumi-600), var(--color-lumi-500));
+  color: white;
+  box-shadow: 0 6px 16px -8px rgb(194 37 92 / 0.6);
+  transition: filter 150ms, box-shadow 150ms;
+  &:hover {
+    filter: brightness(0.94);
+    box-shadow: 0 8px 20px -8px rgb(194 37 92 / 0.7);
+  }
+}
+
+/* Every hero: a soft raspberry glow behind the mockup on the right and a
+   fainter one top left, fading into the blush page. */
+@utility bg-hero-glow {
+  background-image:
+    radial-gradient(ellipse 55% 60% at 78% 45%, var(--color-lumi-100), transparent),
+    radial-gradient(ellipse 40% 45% at 8% 0%, rgb(249 201 216 / 0.45), transparent);
+}
+
+@utility bg-ink-gradient {
+  background-color: oklch(21% 0.015 355);
+  background-image:
+    radial-gradient(110% 130% at 100% 0%, rgb(194 37 92 / 0.55), transparent 60%),
+    linear-gradient(135deg, oklch(21% 0.015 355), oklch(25% 0.05 355));
 }
 
 /* In the base layer so a component's own utilities (tracking-*, outline-none)
@@ -60,6 +143,74 @@
   :focus-visible {
     outline: 2px solid var(--color-lumi-500);
     outline-offset: 2px;
+  }
+}
+
+/*
+  MARKETING DISPLAY TYPE (2026-10-16). Headlines were 48px / 600 and section
+  headings 30px / 600, which read as polite next to competitors running
+  80–96px / 900 (docs/rogiq-site-plan.md §2a). These two utilities are the
+  bigger, heavier scale; the marketing pages use them on the hero h1 and the
+  main section h2s. The dashboard doesn't, so it keeps its compact headings.
+
+  Bricolage Grotesque is a variable font that tops out at 800, so this needs
+  no new font file. clamp() scales smoothly from phone to desktop instead of
+  jumping at a breakpoint.
+*/
+@utility display-hero {
+  font-size: clamp(2.5rem, 1.5rem + 3.4vw, 4.25rem);
+  line-height: 1.02;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+@utility display-section {
+  font-size: clamp(2rem, 1.35rem + 2.2vw, 3.25rem);
+  line-height: 1.06;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+/*
+  LIGHT MOTION (2026-10-16). Leadership asked for "more eye catching, not too
+  crazy", so it is two effects and no library:
+
+  - .reveal: fades and lifts a block as it scrolls into view. CSS scroll-driven
+    animation, so no JavaScript, no hydration and nothing to break. A browser
+    without animation-timeline support (Firefox today) simply shows the block,
+    which is why the visible state is the default and the animation only runs
+    inside @supports.
+  - .rise-in: a one-off entrance on page load, staggered with --rise-delay.
+    Used on the hero mockup's rows, never on the hero headline: the headline
+    is the page's largest paint, and animating it would slow LCP.
+
+  Both are switched off for prefers-reduced-motion.
+*/
+@keyframes lumi-rise {
+  from {
+    opacity: 0;
+    transform: translateY(1.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: lumi-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 60%;
+    }
+  }
+
+  .rise-in {
+    animation: lumi-rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: var(--rise-delay, 0ms);
   }
 }
 

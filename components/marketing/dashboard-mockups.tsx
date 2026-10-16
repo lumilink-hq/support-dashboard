@@ -346,8 +346,14 @@ export function AutomationFeedMockup({
         <Kpi label="Top 3 keywords" value="18" sub="+4 this week" />
       </div>
       <ul className="mt-4 divide-y divide-gray-100">
-        {FEED.map((f) => (
-          <li key={f.title} className="flex items-center gap-3 py-2.5 last:pb-0">
+        {/* Rows arrive one after another on load (.rise-in, globals.css), so
+            the hero reads as a live feed. Off for reduced motion. */}
+        {FEED.map((f, i) => (
+          <li
+            key={f.title}
+            className="rise-in flex items-center gap-3 py-2.5 last:pb-0"
+            style={{ "--rise-delay": `${300 + i * 140}ms` } as React.CSSProperties}
+          >
             <span className="w-[4.75rem] shrink-0 whitespace-nowrap">
               <Pill tone={f.tone === "amber" ? "amber" : "gray"}>{f.product}</Pill>
             </span>
