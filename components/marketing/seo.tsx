@@ -116,11 +116,10 @@ const CAPABILITIES = [
     title: "Google Business Profile",
     body: "Each linked profile's views, calls, direction requests and website clicks, pulled daily, plus a completeness audit. A better description is drafted for you and goes live only after you approve it, with the same rollback as site changes.",
   },
-];
-
-const COMING_SOON = [
-  "Review tracking for each Google Business Profile",
-  "Review replies in your voice, with anything under three stars sent to a person first",
+  {
+    title: "Reviews And Replies",
+    body: "New Google reviews for every location, tracked daily. Replies are drafted in your voice and posted only after you approve them, and anything under three stars goes to a person first.",
+  },
 ];
 
 const FAQS = [
@@ -524,19 +523,6 @@ export async function SeoSolution() {
           </p>
         </div>
         <CapabilityGrid items={CAPABILITIES} />
-
-        <div className="mt-14 rounded-xl border border-dashed border-gray-300 p-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-            Coming Soon
-          </p>
-          <ul className="mt-3 space-y-2">
-            {COMING_SOON.map((item) => (
-              <li key={item} className="text-sm leading-relaxed text-gray-600">
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
       </Section>
 
       <SeoPricingSection id="pricing" ctaHref={primaryHref} />

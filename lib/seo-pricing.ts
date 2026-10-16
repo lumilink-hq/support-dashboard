@@ -49,14 +49,15 @@ export type SeoPlan = {
 // is BUILT (components/marketing/seo.tsx's rule). Of the catalog's Google
 // Business Profile items, the profile description is live since 0079
 // (approval-gated; the only field LumiLink edits, categories went in 0089), so
-// it's a bullet; Google Posts
-// and review replies aren't built yet, so they stay a "coming soon" footnote.
+// it's a bullet, and so are review replies (0090, a feature since 2026-10-16).
+// Google Posts aren't built yet, so they stay a "coming soon" footnote.
 // The Stripe product descriptions carry the catalog's full wording.
 const LOCAL_INCLUDES = [
   "Weekly rank tracking in the local map pack",
   "A geo grid showing where each location ranks",
   "Local competitor tracking",
   "Profile description improved, with your approval",
+  "Review tracking and replies, with your approval",
   "Location-level monthly reporting",
 ];
 
@@ -91,7 +92,7 @@ export const SEO_PLANS: SeoPlan[] = [
     includesWebsite: false,
     stripePriceId: process.env.STRIPE_PRICE_SEO_LOCAL ?? null,
     includes: LOCAL_INCLUDES,
-    footnote: "Google Posts and review replies are coming soon.",
+    footnote: "Google Posts are coming soon.",
   },
   {
     key: "bundle",

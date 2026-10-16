@@ -158,8 +158,9 @@ export default function PrivacyPage() {
           scopes the app requests today (lib/google-oauth.ts). Business
           Profile is read daily (module 3, seo-gbp-sync) and written only for
           an approved description (seo-publish/gbp.ts GBP_WRITABLE; categories
-          were writable 0081-0089 and removed). When review replies or any
-          other field ship, add what they write here BEFORE they go live. */}
+          were writable 0081-0089 and removed) and for approved review
+          replies (module 4 part 3, seo-publish/reviews.ts, 2026-10-16). When
+          any other field ships, add what it writes here BEFORE it goes live. */}
       <Clause heading="Information From Your Google Account">
         <p>
           If you connect your Google account in Settings, we ask Google for
@@ -185,11 +186,14 @@ export default function PrivacyPage() {
           replies to them. We keep that information to show it in your
           dashboard and reports, and to point out what a profile is missing.
           Connecting your Google account is not permission to edit your
-          listings. The only thing we ever change is a profile&rsquo;s
-          description, and only when you approve that specific change. We never
-          change its name, address, phone number, website, hours or categories,
-          and we do not post review replies. You can roll back any change we made
-          from your dashboard.
+          listings. We make only two kinds of change: a profile&rsquo;s
+          description, and replies to its reviews. Each one is drafted for you
+          and posted only when you approve that specific change, and a review
+          under three stars goes to a person before any reply is drafted. We
+          never overwrite a reply you have already posted, and we never change a
+          profile&rsquo;s name, address, phone number, website, hours or
+          categories. You can roll back any change we made from your dashboard;
+          a reply you have since edited on Google is left as it is.
         </p>
         <p>
           Your Google access token is stored in a dedicated secrets vault,
