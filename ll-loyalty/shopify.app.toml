@@ -4,7 +4,8 @@
 
 client_id = "6bfc5441e16cbd1562db482f32edb56c"
 name = "LL Loyalty"
-# The App URL starts the install OAuth (loyalty-oauth edge function, 0201). Not embedded:
+# The App URL is the loyalty-oauth edge function (0201): the install OAuth on first open, then
+# a redirect to the LumiLink dashboard (/loyalty) on every sidebar click. Not embedded:
 # there is no merchant admin UI in Phase 1, so it opens in its own tab.
 application_url = "https://xqsxjxrzpxhosedkmufg.supabase.co/functions/v1/loyalty-oauth"
 embedded = false

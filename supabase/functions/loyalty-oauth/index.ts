@@ -5,8 +5,11 @@
 // discount writes (module 4) use.
 //
 //   GET /loyalty-oauth?shop=<x>.myshopify.com[&hmac=&timestamp=&host=]
-//       Start. Shopify opens this as the app's App URL after install (signed
-//       with hmac); a staff member can also open it with just ?shop=.
+//       Start. Shopify opens this as the app's App URL after install and
+//       every time the app is clicked in the admin sidebar (signed with
+//       hmac). Signed opens for a store that already has its token go
+//       straight to the LumiLink dashboard; otherwise the install runs. A
+//       staff member can also open it with just ?shop= to reinstall.
 //   GET /loyalty-oauth/callback?code=&shop=&state=&hmac=&timestamp=
 //       Shopify's redirect after approval. state must match the cookie, hmac
 //       must verify with the app's secret, then the code is exchanged.
@@ -21,6 +24,7 @@
 //
 // Env: SUPABASE_URL, SUPABASE_SECRET_KEYS (["default"] = service role);
 //      LOYALTY_OAUTH_URL (optional; default `${SUPABASE_URL}/functions/v1/loyalty-oauth`);
+//      LOYALTY_PORTAL_URL (optional; default https://www.lumilinkhub.com/loyalty);
 //      SHOPIFY_SHOP_BASE (optional, test only: mock store for the token exchange).
 // =============================================================================
 
@@ -35,6 +39,7 @@ const SERVICE_ROLE_SECRET = (JSON.parse(rawSecrets) as Record<string, string>)["
 if (!SERVICE_ROLE_SECRET) throw new Error("Missing SUPABASE_SECRET_KEYS['default']");
 
 const SELF_URL = (Deno.env.get("LOYALTY_OAUTH_URL") ?? `${SUPABASE_URL}/functions/v1/loyalty-oauth`).replace(/\/+$/, "");
+const PORTAL_URL = (Deno.env.get("LOYALTY_PORTAL_URL") ?? "https://www.lumilinkhub.com/loyalty").replace(/\/+$/, "");
 const STATE_COOKIE = "ll_loyalty_state";
 const SHOP_BASE = (Deno.env.get("SHOPIFY_SHOP_BASE") ?? "").replace(/\/+$/, "");
 
@@ -61,6 +66,38 @@ async function appBySignature(apps: App[], params: URLSearchParams): Promise<App
   return null;
 }
 
+// Installed = this app has a stored token that Shopify still accepts. A store
+// that uninstalled and reinstalled keeps its old token_ref, so the token is
+// checked (access_scopes, cheap) before skipping the install.
+async function isInstalled(shop: string, clientId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("loyalty_shopify_apps")
+    .select("token_ref, program_id")
+    .eq("shop_domain", shop)
+    .eq("app_client_id", clientId)
+    .maybeSingle();
+  if (error) throw new Error(`loading install state failed: ${error.message}`);
+  if (!data?.token_ref) return false;
+  const { data: tok } = await supabase.rpc("get_loyalty_shopify_token", { p_program: data.program_id });
+  const token = (tok as { access_token?: string } | null)?.access_token;
+  if (!token) return false;
+  try {
+    const res = await fetch(SHOP_BASE ? `${SHOP_BASE}/${shop}/admin/oauth/access_scopes.json` : `https://${shop}/admin/oauth/access_scopes.json`, {
+      headers: { "X-Shopify-Access-Token": token, Accept: "application/json" },
+    });
+    await res.body?.cancel();
+    return res.status !== 401 && res.status !== 403;
+  } catch {
+    return true; // Shopify unreachable: a reinstall would fail too, so open the dashboard.
+  }
+}
+
+function toPortal(clearCookie = false): Response {
+  const headers: Record<string, string> = { Location: PORTAL_URL, "Cache-Control": "no-store" };
+  if (clearCookie) headers["Set-Cookie"] = `${STATE_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
+  return new Response(null, { status: 302, headers });
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
@@ -84,6 +121,8 @@ async function start(params: URLSearchParams): Promise<Response> {
   if (params.has("hmac")) {
     app = await appBySignature(apps, params);
     if (!app) return page("Signature check failed", "Shopify's signature didn't check out. Open the app again from Shopify admin.", 401);
+    // Sidebar click on an installed store: open the dashboard, not a reinstall.
+    if (await isInstalled(shop, app.clientId)) return toPortal();
   } else {
     const wanted = params.get("app");
     app = wanted ? (apps.find((a) => a.clientId === wanted) ?? null) : apps.length === 1 ? apps[0] : null;
@@ -143,7 +182,7 @@ async function callback(req: Request, params: URLSearchParams): Promise<Response
     return page("Install didn't finish", "Connected to Shopify, but saving the connection failed. Try again.", 500);
   }
   console.log(`loyalty-oauth ${shop}: installed app ${app.clientId}, scopes ${result.scopes.join(",")}`);
-  return page("LL Loyalty is connected", `${shop} is connected. You can close this tab.`);
+  return toPortal(true);
 }
 
 Deno.serve(async (req) => {
