@@ -105,16 +105,17 @@ export function SeoCheckoutForm({
           <input
             id="seo_location_count"
             type="number"
-            min={1}
+            min={Math.max(initialLocationCount, 1)}
             max={1000}
             value={locationCount}
-            onChange={(e) => setLocationCount(Math.max(Number(e.target.value) || 1, 1))}
+            onChange={(e) => setLocationCount(Math.max(Number(e.target.value) || 1, initialLocationCount, 1))}
             className="mt-1 w-32 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
           />
           {initialLocationCount > 0 ? (
             <p className="mt-1 text-xs text-gray-400">
-              Matches the {initialLocationCount} location{initialLocationCount === 1 ? "" : "s"} you&rsquo;ve
-              already added. Change it if that&rsquo;s not right.
+              Matches the {initialLocationCount} location{initialLocationCount === 1 ? "" : "s"}{" "}you&rsquo;ve
+              already added. You can pay for more, but not fewer: remove a
+              location first if you don&rsquo;t need it.
             </p>
           ) : (
             <p className="mt-1 text-xs text-gray-400">

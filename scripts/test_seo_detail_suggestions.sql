@@ -38,7 +38,9 @@ declare
   v_denied boolean;
 begin
   insert into clients (name, slug, is_active) values ('Suggest A', 'suggest-a', true) returning id into v_a;
+  insert into entitlements (client_id, feature, status) values (v_a, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
   insert into clients (name, slug, is_active) values ('Suggest B', 'suggest-b', true) returning id into v_b;
+  insert into entitlements (client_id, feature, status) values (v_b, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
   insert into seo_locations (client_id, name, website_url, created_at) values (v_a, 'A1', 'https://a.example', now() - interval '2 days') returning id into v_la;
   insert into seo_locations (client_id, name, website_url, created_at) values (v_a, 'A2', 'https://a.example', now() - interval '1 day') returning id into v_la2;
   insert into seo_locations (client_id, name, website_url) values (v_b, 'B1', 'https://b.example') returning id into v_lb;

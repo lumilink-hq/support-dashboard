@@ -31,6 +31,17 @@ async function main() {
     { price: "price_extra", quantity: 3 },
   ]);
 
+  // Checkout never sells fewer locations than are already active (0092).
+  assert.equal(p.seoCheckoutLocationError("local", 3, 3), null);
+  assert.equal(p.seoCheckoutLocationError("local", 5, 3), null);
+  assert.match(p.seoCheckoutLocationError("local", 2, 3) ?? "", /at least 3/);
+  assert.equal(p.seoCheckoutLocationError("local", 0, 1), null); // bills 1 anyway
+  assert.equal(p.seoCheckoutLocationError("bundle", 1, 1), null);
+  assert.match(p.seoCheckoutLocationError("bundle", 1, 2) ?? "", /at least 2/);
+  assert.equal(p.seoCheckoutLocationError("website", 0, 1), null);
+  assert.equal(p.seoCheckoutLocationError("website", 0, 0), null);
+  assert.match(p.seoCheckoutLocationError("website", 0, 2) ?? "", /one website/);
+
   // Subscription items -> plan and locations.
   const items = (x: [string, number][]) => x.map(([priceId, quantity]) => ({ priceId, quantity }));
   assert.equal(p.seoPlanFromItems(items([["price_web", 1]])), "website");

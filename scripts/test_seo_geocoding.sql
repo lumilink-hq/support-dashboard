@@ -41,6 +41,7 @@ declare
   v_user      uuid;
 begin
   insert into clients (name, slug, is_active) values ('Geocode Test', 'geocode-test', true) returning id into v_client;
+  insert into entitlements (client_id, feature, status) values (v_client, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
 
   insert into seo_locations (client_id, name, address_line1, city, region, postal_code, country_code)
   values (v_client, 'Complete US', '100 Main St', 'Springfield', 'IL', '62701', 'US') returning id into v_complete;

@@ -37,7 +37,9 @@ declare
   t          text;
 begin
   insert into clients (name, slug, is_active) values ('GBP Test A', 'gbp-test-a', true) returning id into v_client_a;
+  insert into entitlements (client_id, feature, status) values (v_client_a, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
   insert into clients (name, slug, is_active) values ('GBP Test B', 'gbp-test-b', true) returning id into v_client_b;
+  insert into entitlements (client_id, feature, status) values (v_client_b, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
 
   insert into seo_locations (client_id, name) values (v_client_a, 'A one') returning id into v_loc_a1;
   insert into seo_locations (client_id, name) values (v_client_a, 'A two') returning id into v_loc_a2;

@@ -24,6 +24,7 @@
 // =============================================================================
 
 import {
+  isAppCreatedStripeObject,
   parseStripeEvent,
   parseStripeSignatureHeader,
   parseWebhookSecrets,
@@ -292,14 +293,22 @@ console.log("\ntenant routing — the wrong-tenant guard");
 {
   const CLIENT = "8f2c1e00-0000-0000-0000-000000000000";
 
+  // client_id + feature TOGETHER marks an app-created subscription, which is
+  // ignored here (see "app-created purchases" below), so each is read alone.
   const viaMetadata = parseStripeEvent(
     evt("customer.subscription.created", {
       object: "subscription",
-      metadata: { client_id: CLIENT, feature: "voice" },
+      metadata: { client_id: CLIENT },
     }),
   );
   ok("reads client_id from metadata", viaMetadata?.clientId === CLIENT);
-  ok("reads feature from metadata", viaMetadata?.feature === "voice");
+  const featureMeta = parseStripeEvent(
+    evt("customer.subscription.created", {
+      object: "subscription",
+      metadata: { feature: "voice" },
+    }),
+  );
+  ok("reads feature from metadata", featureMeta?.feature === "voice");
 
   const viaRef = parseStripeEvent(
     evt("checkout.session.completed", {
@@ -314,7 +323,7 @@ console.log("\ntenant routing — the wrong-tenant guard");
 
   const viaSubDetails = parseStripeEvent(
     evt("invoice.paid", {
-      subscription_details: { metadata: { client_id: CLIENT, feature: "voice" } },
+      subscription_details: { metadata: { client_id: CLIENT } },
     }),
   );
   ok(
@@ -339,6 +348,69 @@ console.log("\ntenant routing — the wrong-tenant guard");
     "an unrecognised feature string is dropped, not passed through",
     bogusFeature?.feature === null,
     bogusFeature?.feature,
+  );
+}
+
+// ---------------------------------------------------------------------------
+console.log("\napp-created purchases — left to app/api/webhooks/stripe (ACH-safe)");
+// ---------------------------------------------------------------------------
+{
+  const CLIENT = "8f2c1e00-0000-0000-0000-000000000000";
+  const appSub = { object: "subscription", metadata: { client_id: CLIENT, feature: "voice", plan_tier: "growth" } };
+
+  // The bug this guards: the app's ACH checkout completes before the debit
+  // clears; granting here would hand out the plan unpaid.
+  const appSession = parseStripeEvent(
+    evt("checkout.session.completed", {
+      object: "checkout.session",
+      mode: "subscription",
+      payment_link: null,
+      client_reference_id: CLIENT,
+      metadata: {},
+    }),
+  );
+  ok("the app's checkout session (no payment_link) is IGNORED", appSession?.type === "ignored", appSession?.type);
+
+  for (const t of ["customer.subscription.created", "customer.subscription.deleted"]) {
+    const p = parseStripeEvent(evt(t, appSub));
+    ok(`${t} for an app subscription is IGNORED`, p?.type === "ignored", p?.type);
+  }
+  for (const t of ["invoice.paid", "invoice.payment_succeeded", "invoice.payment_failed"]) {
+    const p = parseStripeEvent(
+      evt(t, { object: "invoice", subscription_details: { metadata: { client_id: CLIENT, feature: "seo" } } }),
+    );
+    ok(`${t} for an app subscription is IGNORED`, p?.type === "ignored", p?.type);
+  }
+
+  // Legacy Payment Link purchases keep working exactly as before.
+  const linkSession = parseStripeEvent(
+    evt("checkout.session.completed", {
+      object: "checkout.session",
+      mode: "subscription",
+      payment_link: "plink_legacy",
+      client_reference_id: CLIENT,
+      metadata: { feature: "voice", plan_tier: "growth" },
+    }),
+  );
+  ok(
+    "a Payment Link session still activates, routed by client_reference_id",
+    linkSession?.type === "subscription_activated" && linkSession?.clientId === CLIENT && linkSession?.planTier === "growth",
+    linkSession,
+  );
+  const legacySub = parseStripeEvent(evt("customer.subscription.created", { object: "subscription", metadata: {} }));
+  ok("a legacy subscription with no metadata still activates", legacySub?.type === "subscription_activated", legacySub?.type);
+  const legacyRenewal = parseStripeEvent(
+    evt("invoice.paid", { object: "invoice", subscription_details: { metadata: { feature: "voice", plan_tier: "scale" } } }),
+  );
+  ok("a legacy renewal (feature, no client_id) still renews", legacyRenewal?.type === "subscription_renewed", legacyRenewal?.type);
+  const legacyCancel = parseStripeEvent(evt("customer.subscription.deleted", { object: "subscription", metadata: {} }));
+  ok("a legacy cancellation still cancels", legacyCancel?.type === "subscription_canceled", legacyCancel?.type);
+
+  // client_id alone (a hand-edited link) or an unknown feature isn't the app's mark.
+  ok(
+    "client_id without a known feature is not treated as app-created",
+    !isAppCreatedStripeObject({ object: "subscription", metadata: { client_id: CLIENT, feature: "other" } }) &&
+      !isAppCreatedStripeObject({ object: "subscription", metadata: { client_id: "  " , feature: "voice" } }),
   );
 }
 

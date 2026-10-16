@@ -375,6 +375,9 @@ export async function addSeoLocation(formData: FormData) {
     phone_number: str("phone_number"),
     website_url: websiteUrl,
   });
+  // 0092's seat trigger: a paying client already has as many active
+  // locations as their plan covers.
+  if (error?.message === "seo_location_limit") redirect("/onboarding?step=seo_locations&error=limit");
   if (error) throw new Error(error.message);
 
   revalidatePath("/onboarding");

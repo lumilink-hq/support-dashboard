@@ -413,6 +413,27 @@ function extractPeriodEnd(obj: Record<string, any>): string | null {
 }
 
 /**
+ * Whether a Stripe object belongs to a purchase the dashboard app made, which
+ * this function leaves to app/api/webhooks/stripe (2026-10-15). Legacy
+ * customers bought through Payment Links and stay here.
+ *
+ * - A Checkout Session: the app's have no payment_link. Every completed legacy
+ *   session in live mode came from a Payment Link (checked 2026-10-15). The
+ *   app's sessions carry client_reference_id but no metadata (it sits on
+ *   subscription_data), so metadata alone wouldn't catch them.
+ * - A subscription or invoice: the app writes client_id AND feature into the
+ *   subscription's metadata (an invoice carries a copy in
+ *   subscription_details). No live legacy subscription has client_id
+ *   metadata (checked 2026-10-15: all five carry none).
+ */
+export function isAppCreatedStripeObject(obj: Record<string, any>): boolean {
+  if (obj?.object === "checkout.session") return !obj?.payment_link;
+  const meta = collectMetadata(obj);
+  const clientId = typeof meta.client_id === "string" ? meta.client_id.trim() : "";
+  return clientId !== "" && ["seo", "voice", "email"].includes(String(meta.feature));
+}
+
+/**
  * Map a raw Stripe event body into the canonical shape, or `ignored`.
  *
  * Tenant routing, in priority order:
@@ -442,6 +463,14 @@ export function parseStripeEvent(rawBody: string): CanonicalEvent | null {
   }
 
   const livemode = typeof e?.livemode === "boolean" ? e.livemode : null;
+
+  // Created by the dashboard app (lib/services/billing.ts): its own webhook,
+  // app/api/webhooks/stripe, owns these and only grants once the invoice is
+  // paid (ACH, lib/billing-activation.ts). Acting here as well would grant
+  // access on checkout before an ACH debit clears.
+  if (type !== "ignored" && isAppCreatedStripeObject(obj)) {
+    type = "ignored";
+  }
 
   if (type === "ignored") return { externalEventId: id, type: "ignored", livemode };
 

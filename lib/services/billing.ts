@@ -17,6 +17,11 @@
 import Stripe from "stripe";
 import { addonForStripePriceId, ADDONS } from "@/lib/addons";
 import {
+  subscriptionAction,
+  subscriptionIdFromInvoice,
+  type LatestInvoiceState,
+} from "@/lib/billing-activation";
+import {
   PLAN_TIERS,
   planTierForStripePriceId,
   type Feature,
@@ -368,6 +373,59 @@ export async function removeAddonFromClient(input: {
 // entitlements/provisioning working exactly as before by ending in a call to
 // the existing apply_billing_event RPC.
 // -----------------------------------------------------------------------------
+/**
+ * Whether the client has a subscription for `feature` whose first payment is
+ * still clearing (ACH). The entitlement doesn't exist yet in that window, so
+ * /billing would otherwise offer the same plan again; it shows "payment
+ * processing" instead, and seo-checkout refuses a second purchase.
+ */
+export async function paymentProcessingForClient(clientId: string, feature: Feature): Promise<boolean> {
+  const client = await getClientRow(clientId);
+  if (!client.stripe_customer_id) return false;
+  const subs = await stripeClient().subscriptions.list({
+    customer: client.stripe_customer_id,
+    status: "all",
+    limit: 20,
+    expand: ["data.latest_invoice"],
+  });
+  return subs.data.some((s) => {
+    if (featureFromSubscription(s) !== feature) return false;
+    if (!["incomplete", "active", "trialing"].includes(s.status)) return false;
+    const inv = s.latest_invoice;
+    const state = inv && typeof inv !== "string" ? { status: inv.status } : null;
+    return subscriptionAction(s.status, state) === "await_payment";
+  });
+}
+
+/** The subscription's latest invoice status, expanded or fetched. */
+async function latestInvoiceState(subscription: Stripe.Subscription): Promise<LatestInvoiceState> {
+  const ref = subscription.latest_invoice;
+  if (!ref) return null;
+  if (typeof ref !== "string") return { status: ref.status };
+  const invoice = await stripeClient().invoices.retrieve(ref);
+  return { status: invoice.status };
+}
+
+/**
+ * invoice.paid / invoice.payment_failed: re-read the invoice's subscription
+ * and sync it. invoice.paid is what grants access once an ACH debit clears
+ * (the subscription events around it may still show the invoice as open).
+ * A one-off invoice (no subscription) is ignored.
+ */
+export async function syncClientFromStripeInvoice(
+  invoice: Stripe.Invoice,
+  externalEventId: string,
+): Promise<void> {
+  const subscriptionId = subscriptionIdFromInvoice(
+    invoice as unknown as Parameters<typeof subscriptionIdFromInvoice>[0],
+  );
+  if (!subscriptionId) return;
+  const subscription = await stripeClient().subscriptions.retrieve(subscriptionId, {
+    expand: ["latest_invoice"],
+  });
+  await syncClientFromStripeSubscription(subscription, externalEventId);
+}
+
 export async function syncClientFromStripeSubscription(
   subscription: Stripe.Subscription,
   externalEventId: string,
@@ -438,10 +496,27 @@ export async function syncClientFromStripeSubscription(
     console.error(`Failed to update clients for ${clientId}:`, updateError.message);
   }
 
+  // Paid yet? (lib/billing-activation.ts: ACH can leave a subscription active
+  // with its first invoice still processing.) Only active/trialing need the
+  // invoice; every other status decides on its own. Checked after the clients
+  // update so the customer id is saved even while a debit clears (/billing
+  // uses it to show "payment processing").
+  const latestInvoice =
+    subscription.status === "active" || subscription.status === "trialing"
+      ? await latestInvoiceState(subscription)
+      : null;
+  const action = subscriptionAction(subscription.status, latestInvoice);
+  if (action === "await_payment" || action === "ignore") {
+    console.log(
+      `Stripe subscription ${subscription.id} (${feature}) is ${subscription.status}, latest invoice ${latestInvoice?.status ?? "none"}: ${action}`,
+    );
+    return;
+  }
+
   const { error: rpcError } = await supabase.rpc("apply_billing_event", {
     p_processor: "stripe",
     p_external_event_id: externalEventId,
-    p_event_type: subscription.status === "past_due" ? "payment_failed" : "subscription_activated",
+    p_event_type: action === "payment_failed" ? "payment_failed" : "subscription_activated",
     p_client_id: clientId,
     p_feature: feature,
     p_subscription_ref: subscription.id,
@@ -452,6 +527,24 @@ export async function syncClientFromStripeSubscription(
   });
   if (rpcError) {
     console.error(`apply_billing_event failed for ${clientId}:`, rpcError.message);
+    return;
+  }
+
+  // A paid subscription taking over a hand-granted trial (PACKS): the row
+  // stayed active, apply_billing_event attached this subscription to it, and
+  // from now on it is a paid entitlement. Matching on the subscription id
+  // means only the row this payment actually took over changes.
+  if (action === "activate") {
+    const { error: takeoverError } = await supabase
+      .from("entitlements")
+      .update({ source: "checkout" })
+      .eq("client_id", clientId)
+      .eq("feature", feature)
+      .eq("source", "trial")
+      .eq("external_subscription_ref", subscription.id);
+    if (takeoverError) {
+      console.error(`trial takeover failed for ${clientId}:`, takeoverError.message);
+    }
   }
 }
 

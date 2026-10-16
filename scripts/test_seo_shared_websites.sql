@@ -53,7 +53,9 @@ begin
   -- Fixtures
   -- ---------------------------------------------------------------------------
   insert into clients (name, slug, is_active) values ('Shared Site A', 'shared-site-a', true) returning id into v_a;
+  insert into entitlements (client_id, feature, status) values (v_a, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
   insert into clients (name, slug, is_active) values ('Shared Site B', 'shared-site-b', true) returning id into v_b;
+  insert into entitlements (client_id, feature, status) values (v_b, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
 
   insert into seo_locations (client_id, name, website_url, is_active, created_at)
   values (v_a, 'Old (closed)', 'https://acme.example', false, now() - interval '30 days') returning id into v_old;

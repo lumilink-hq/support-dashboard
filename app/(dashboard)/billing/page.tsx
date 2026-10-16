@@ -10,9 +10,11 @@ import { getMembership, isAdmin } from "@/lib/roles";
 import {
   activeAddonsForClient,
   hasStripeCustomerForClient,
+  paymentProcessingForClient,
   seoSubscriptionForClient,
 } from "@/lib/services/billing";
 import { addProductHref } from "@/lib/catalog";
+import { isRunningTrial } from "@/lib/billing-activation";
 import { availableSeoPlans, isSeoCheckoutConfigured, SEO_PLANS, seoPlanByKey } from "@/lib/seo-pricing";
 import {
   FEATURES,
@@ -132,7 +134,7 @@ export default async function BillingPage({
     clientId ? activeAddonsForClient(clientId) : Promise.resolve([]),
     clientId ? hasStripeCustomerForClient(clientId) : Promise.resolve(false),
     supabase.from("clients").select("business_type, products").maybeSingle(),
-    supabase.from("seo_locations").select("id", { count: "exact", head: true }),
+    supabase.from("seo_locations").select("id", { count: "exact", head: true }).eq("is_active", true),
   ]);
   const activeAddonKeys = new Set(activeAddons.map((a) => a.key));
   const seoEntitlement = ent.seo;
@@ -144,6 +146,16 @@ export default async function BillingPage({
   // quotes against the locations that setup collects.
   const isSeoClient =
     readProfile(clientRow.data).products.includes("seo") || seoState !== "locked";
+  // Phone plans, phone add-ons and the call-minutes notes are hidden from an
+  // SEO-only workspace like PACKS (user, 2026-10-15), by the sidebar's rule
+  // (app/(dashboard)/layout.tsx): shown when the workspace set the phone
+  // agent up or holds any voice entitlement, and also when it still owns an
+  // add-on, so nothing it pays for disappears. Adding the phone agent goes
+  // through /products/voice.
+  const showPhone =
+    readProfile(clientRow.data).products.includes("voice") ||
+    featureState(ent.voice) !== "locked" ||
+    activeAddons.length > 0;
   // Which plan they're on, read live from Stripe (like add-ons). null for a
   // hand-granted entitlement with no subscription, or a PACKS/enterprise one.
   const seoSub =
@@ -151,6 +163,15 @@ export default async function BillingPage({
       ? await seoSubscriptionForClient(clientId).catch(() => null)
       : null;
   const seoPlanName = seoSub?.plan ? seoPlanByKey(seoSub.plan).name : null;
+  // A hand-granted trial (PACKS) is offered checkout too
+  // (lib/billing-activation.ts).
+  const seoTrial = isRunningTrial(seoEntitlement);
+  // ACH: paid for but not cleared yet, so no paid entitlement yet. Don't
+  // offer the plan again (lib/billing-activation.ts).
+  const seoPaymentProcessing =
+    clientId && hasStripeCustomer && (seoState === "locked" || seoTrial)
+      ? await paymentProcessingForClient(clientId, "seo").catch(() => false)
+      : false;
 
   return (
     <div className="max-w-4xl">
@@ -170,6 +191,7 @@ export default async function BillingPage({
         </div>
       ) : null}
 
+      {showPhone ? (
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         {FEATURES.map((f) => {
           const row = ent[f.key];
@@ -293,6 +315,7 @@ export default async function BillingPage({
           );
         })}
       </div>
+      ) : null}
 
       {/* ------------------------------------------------------------------ */}
       {/* Local SEO — deliberately NOT in the FEATURES loop above. Every card */}
@@ -304,7 +327,7 @@ export default async function BillingPage({
       {/* ------------------------------------------------------------------ */}
       {/* id="seo": the sidebar's "Add Local SEO" row links to /billing#seo */}
       {/* (addProductHref in lib/catalog.ts). */}
-      <div id="seo" className="mt-10 max-w-md scroll-mt-6">
+      <div id="seo" className={`${showPhone ? "mt-10" : "mt-6"} max-w-md scroll-mt-6`}>
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-gray-900">SEO + AI Search</h2>
           <span
@@ -346,6 +369,33 @@ export default async function BillingPage({
           <p className="mt-4 text-sm text-gray-400">
             SEO checkout isn&rsquo;t configured on this environment yet.
           </p>
+        ) : seoTrial ? (
+          <div className="mt-4 space-y-4">
+            <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
+              <p className="font-medium text-gray-900">
+                Trial &middot; {seoEntitlement?.seat_count ?? "—"} location
+                {seoEntitlement?.seat_count === 1 ? "" : "s"}
+              </p>
+              <p className="mt-1 text-gray-500">
+                SEO is running on a trial we set up for you. Choose a plan to
+                move to paid billing. SEO keeps running while your payment clears.
+              </p>
+            </div>
+            {seoPaymentProcessing ? (
+              <div className="rounded-lg border border-gray-200 bg-white p-4">
+                <p className="text-sm font-medium text-gray-900">Your bank payment is processing</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Bank (ACH) payments take up to 4 business days to clear. Your
+                  trial carries on until then.
+                </p>
+              </div>
+            ) : canBill ? (
+              <SeoCheckoutForm
+                plans={availableSeoPlans().map((p) => p.key)}
+                initialLocationCount={seoLocationCount.count ?? 0}
+              />
+            ) : null}
+          </div>
         ) : seoState === "active" || seoState === "past_due" ? (
           <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4 text-sm">
             {seoState === "past_due" ? (
@@ -367,8 +417,11 @@ export default async function BillingPage({
                 : "Active on your workspace."}
             </p>
             <p className="mt-2 text-xs text-gray-400">
-              Add or remove locations from the dashboard — billing adjusts
-              automatically, prorated.
+              Need more locations?{" "}
+              <Link href="/contact" className="underline">
+                Contact us
+              </Link>{" "}
+              and we&rsquo;ll add them to your plan.
             </p>
           </div>
         ) : seoState === "setup" ? (
@@ -381,6 +434,14 @@ export default async function BillingPage({
             </button>
             <p className="mt-2 text-xs text-gray-400">
               Payment received. We&rsquo;re provisioning this now.
+            </p>
+          </div>
+        ) : seoPaymentProcessing ? (
+          <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-sm font-medium text-gray-900">Your bank payment is processing</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Bank (ACH) payments take up to 4 business days to clear. SEO
+              switches on automatically as soon as it does.
             </p>
           </div>
         ) : (
@@ -408,7 +469,7 @@ export default async function BillingPage({
       {/* a local mirror — there is nothing here that can drift from what     */}
       {/* Stripe actually has.                                               */}
       {/* ------------------------------------------------------------------ */}
-      {availableAddons().length > 0 ? (
+      {showPhone && availableAddons().length > 0 ? (
         <div className="mt-10">
           <h2 className="text-base font-semibold text-gray-900">
             Build Out Your Plan
@@ -473,6 +534,7 @@ export default async function BillingPage({
         understand what they will be charged. A billing page that contradicts
         /legal/terms is worse than one that says nothing.
       */}
+      {showPhone ? (
       <div className="mt-10 rounded-lg border border-gray-200 bg-gray-50 p-4">
         <h2 className="text-sm font-medium text-gray-900">How Usage Works</h2>
         <ul className="mt-2 space-y-1 text-xs text-gray-600">
@@ -505,8 +567,9 @@ export default async function BillingPage({
           </li>
         </ul>
       </div>
+      ) : null}
 
-      {!entitlementsEnforced() ? (
+      {showPhone && !entitlementsEnforced() ? (
         <p className="mt-6 text-xs text-gray-400">
           Feature access is currently open for all workspaces during rollout.
         </p>

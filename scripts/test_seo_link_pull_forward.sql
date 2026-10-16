@@ -37,6 +37,7 @@ declare
 begin
   -- Two locations on one website: the older one is the primary (0070).
   insert into clients (name, slug, is_active) values ('Link Pull Test', 'link-pull-test', true) returning id into v_client;
+  insert into entitlements (client_id, feature, status) values (v_client, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
   insert into seo_locations (client_id, name, website_url, created_at)
     values (v_client, 'Primary', 'https://pull.example.com', now() - interval '60 days') returning id into v_primary;
   insert into seo_locations (client_id, name, website_url, created_at)

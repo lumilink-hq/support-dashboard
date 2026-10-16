@@ -33,7 +33,9 @@ declare
   v_row      job_attempts%rowtype;
 begin
   insert into clients (name, slug, is_active) values ('Links Test A', 'links-test-a', true) returning id into v_client_a;
+  insert into entitlements (client_id, feature, status) values (v_client_a, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
   insert into clients (name, slug, is_active) values ('Links Test B', 'links-test-b', true) returning id into v_client_b;
+  insert into entitlements (client_id, feature, status) values (v_client_b, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
   insert into seo_locations (client_id, name, website_url) values (v_client_a, 'A', 'https://a.example.com') returning id into v_loc_a;
   insert into seo_locations (client_id, name, website_url) values (v_client_b, 'B', 'https://b.example.com') returning id into v_loc_b;
   insert into seo_locations (client_id, name) values (v_client_a, 'A no site') returning id into v_loc_c;

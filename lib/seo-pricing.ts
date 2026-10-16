@@ -180,6 +180,27 @@ export function seoMonthlyUsd(key: SeoPlanKey, locationCount: number): number {
   return plan.monthlyUsd + extra * SEO_EXTRA_LOCATION.monthlyUsd;
 }
 
+/**
+ * Why a checkout can't be sold as asked, or null when it can. Once paid,
+ * 0092's trigger caps active locations at greatest(seat_count, 1), so selling
+ * fewer than the client already has would leave locations nobody pays for.
+ */
+export function seoCheckoutLocationError(
+  key: SeoPlanKey,
+  locationCount: number,
+  activeLocations: number,
+): string | null {
+  if (key === "website") {
+    return activeLocations > 1
+      ? `Website SEO + AI Search covers one website, and you have ${activeLocations} locations. Remove the extras, or pick a plan with locations.`
+      : null;
+  }
+  const billed = seoBilledLocations(key, locationCount);
+  return billed < activeLocations
+    ? `You have ${activeLocations} locations set up. Pay for at least ${activeLocations}, or remove some first.`
+    : null;
+}
+
 /** Stripe line items for a new SEO subscription. */
 export function seoCheckoutLineItems(
   key: SeoPlanKey,

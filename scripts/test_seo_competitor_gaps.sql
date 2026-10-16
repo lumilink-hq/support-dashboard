@@ -39,7 +39,9 @@ declare
   v_gap      record;
 begin
   insert into clients (name, slug, is_active) values ('Gap Test A', 'gap-test-a', true) returning id into v_client_a;
+  insert into entitlements (client_id, feature, status) values (v_client_a, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
   insert into clients (name, slug, is_active) values ('Gap Test B', 'gap-test-b', true) returning id into v_client_b;
+  insert into entitlements (client_id, feature, status) values (v_client_b, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
 
   insert into seo_locations (client_id, name, website_url) values (v_client_a, 'A Main', 'https://a.example.com') returning id into v_loc_a;
   insert into seo_locations (client_id, name, website_url) values (v_client_a, 'A No Comps', 'https://a.example.com') returning id into v_loc_a2;

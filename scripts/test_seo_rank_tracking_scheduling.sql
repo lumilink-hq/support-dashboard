@@ -21,6 +21,7 @@ declare
 begin
   insert into clients (name, slug, is_active) values ('Rank Test Co', 'rank-test-co', true)
   returning id into v_client;
+  insert into entitlements (client_id, feature, status) values (v_client, 'seo', 'active'); -- 0092: scheduled SEO work needs a paying client
   insert into seo_locations (client_id, name) values (v_client, 'Loc A')
   returning id into v_loc;
 
