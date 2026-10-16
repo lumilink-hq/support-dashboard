@@ -30,7 +30,7 @@ Update the module checklist and the session log as work lands. Committed on the 
 | Shopify token | Issued by OAuth on install, stored in Supabase Vault | Same storage pattern as `seo-publish`. Do **not** reuse the SEO custom-app token. |
 | Settings-driven | All rules, tiers, rewards and copy read from config tables, nothing Tsunami-specific in code | Games and Phase 2 reuse it |
 | Admin UI | Staff-only. Never client-facing in the LumiLink portal. `/loyalty`, not in the sidebar. Staff = `platform_staff` (added by SQL only, `scripts/add-platform-staff.sql`), not a workspace role: Tsunami's own admin can't open it. Enforced inside SECURITY DEFINER RPCs under the user's own session (no service role), pages 404 for everyone else | Phase 2 merchants get an embedded admin inside Shopify instead. Workspace roles are per client, so they can't mean "LumiLink staff" |
-| Pricing | Out of scope for now | Boss asked to focus on cost |
+| Pricing | **Proposed, not approved** (2026-10-16): four plans + four add-ons, §7 | Boss asked to focus on cost first; the proposal is written down so Phase 2 billing has a target |
 | Who is a member | **Every Shopify customer with a customer record** (`enroll_guests = true`): sign-ups and guest checkouts alike. Signup bonus to every customer created after go-live. Decided 2026-10-13 | Tsunami uses new customer accounts (code sign-in): `customer.state` never becomes `enabled`, so "created an account" can't be detected. Found in the dev-store rehearsal (sign-up webhook came back `not_member`). With code sign-in any customer can log in with their email anyway |
 | Joy data source | **Klaviyo**: `scripts/klaviyo-joy-export.ts` reads Joy's synced properties from the three tier segments. Without activity dates in the file, the import starts expiry/demotion clocks at the export (0208) | Joy's REST API needs the Ultimate plan ($499/mo); the read-only key only works through Joy's OAuth MCP connection; the in-app export wasn't available. Klaviyo already holds every member's points, tier and birthday (2026-10-14: 4,456 members, 0 problems) |
 | Joy import | Each import **sets** members to Joy's balance and tier (one ledger entry for the gap, both numbers in the note). Day 0 = opening balances; cutover = final true-up. A snapshot applies once; an older one than the last applied is refused. Compare is read-only | Joy redemptions/claims between install and cutover never reach our ledger, so balances drift by design; only a set-to-Joy at cutover lands exact. Adding Joy's balance would double count orders both systems saw |
@@ -173,6 +173,34 @@ theme block packaging; listing and review prep. $19 one-time App Store registrat
 
 **Merchant admin scope:** what Joy lets a merchant create and edit, field by field, is in
 [JOY-MERCHANT-CONFIG.md](JOY-MERCHANT-CONFIG.md) (with a suggested build order).
+
+**Proposed pricing (2026-10-16, NOT approved).** From `LumiLink-Loyalty-Pricing-Brief.docx`
+(one level above this repo). Each plan sits at or below the matching rival plan's price with more
+orders included. VIP tiers are free on every plan: Joy, Smile and BON gate them at $129-199.
+USD per month; annual billing = two months free (proposed).
+
+| Plan | Price | Orders / overage | Includes | Rival plans it beats |
+|---|---|---|---|---|
+| Free | $0 | 300 / upgrade prompt | Points, unlimited referrals, 3 VIP tiers, birthday, rewards page, Klaviyo sync | Joy Starter (250, 30 referrals), Smile Free (200), BON Free (150) |
+| Starter | $15 | 750 / $10 per 100 | Free + redeem in cart, thank-you and account blocks, expiry, demotion, milestones, Shopify POS (not built) | Joy Essential $29/500, BON Basic $29/500, Smile Essential $15/500 |
+| Growth | $79 | 2,500 / $8 per 100 | Starter + bonus campaigns, badges, streaks, challenges, automations, holdout ROI report, cashback, paid VIP membership, Wallet passes (last three not built), free Joy import | Joy Advanced $129/2,000, BON Growth $129, Smile Growth $199/2,500 |
+| Pro | $249 | 10,000 / $4 per 100 | Growth + games (not built), API and webhooks (not built), 3 linked stores, Klaviyo flow pack, free Joy import | Joy Ultimate $499/7,000, Rivo Plus $499, Smile Plus $999/7,500 |
+
+| Add-on | Type | Price | Our cost |
+|---|---|---|---|
+| AI loyalty assistant (shopper chat and voice, merchant campaign builder) | Monthly | $49-99 | Model fees per conversation; reuses the concierge stack |
+| Linked store beyond Pro's 3, shared balance | Monthly | $29/store | Same per-store cost as today |
+| Klaviyo flow pack, built for the merchant (in Pro) | One-time | $299 | 3-5 staff hrs |
+| Points, tier and birthday import from Joy via Klaviyo (free on Growth and Pro) | One-time | $199-499 | 2-4 staff hrs |
+
+- **Unit cost:** about $1/store/month (Supabase compute share + under $0.10 per 1,000 orders), plus
+  Shopify Billing's 2.9% fee. Paid plans keep 90-96% before labor. Invocations and disk per order
+  are estimates, not measured.
+- **Joy import, not "migration":** works only when the merchant's Klaviyo holds Joy's synced
+  properties (free check before signup). No activity history, so expiry/demotion clocks restart.
+  Smile and BON export paths are unchecked.
+- **Before approval:** don't sell a feature marked not built; confirm the Free cap (300 or 250);
+  decide whether POS stays in Starter.
 
 **Merchant access (noted 2026-10-16, build when a second store is signing up).** `platform_staff`
 stays LumiLink-only: it sees every program, so a paying merchant can never be added to it.
@@ -339,3 +367,4 @@ Then update the Dev Dashboard answers.
 | 2026-10-16 | LumiLink | App URL: clicking LL Loyalty in the Shopify admin sidebar now opens `https://www.lumilinkhub.com/loyalty` once the store is installed (signed open + stored token that Shopify still accepts, checked via `access_scopes`). Otherwise the install OAuth runs, and a finished install also lands on the dashboard. `loyalty-oauth` deployed (v2, `verify_jwt` false). Not yet clicked from the Tsunami admin. Signed-out users land on `/login` with no return path. Tsunami staff who are not `platform_staff` get the 404 |
 | 2026-10-16 | LumiLink | 0221 program editor: `/loyalty/program` (Loyalty nav: Program) edits points per $1, expiry and demotion clocks, demotion warning, balance reminder, near-tier %, gross margin; tier thresholds, multipliers and perks text (all tiers in one save, order checked; lowering a threshold promotes qualifying members quietly, raising never demotes); $-off rewards (create/edit, points cost, value, min order, max per code, on/off; the referral coupon stays free); earning rule points and on/off. Tier names/keys stay read-only (customer tags, Klaviyo values). Staff + MFA RPCs, one `program_save` access-log row per save with before/after. `test_loyalty_program_editor.sql` (mutation-checked: quiet promotion, threshold order); 19/19 loyalty SQL tests; typecheck clean. Not seen in a browser (MFA step). Not pushed |
 | 2026-10-16 | LumiLink | 0221 first push failed in statement 0 ("syntax error at or near d"): the SQL ran fine on production in a rolled-back transaction, so `db push` split the file wrongly on the header comment (a semicolon after an unmatched apostrophe, outside any function body). Fixed by keeping top-level comments free of `;` and apostrophes. **Rule for migrations: no `;` or apostrophes in comments outside function bodies.** Second push applied |
+| 2026-10-16 | LumiLink | Pricing proposal written into §7 (NOT approved): Free / Starter $15 / Growth $79 / Pro $249 and four add-ons, from `LumiLink-Loyalty-Pricing-Brief.docx`. §1 Pricing row points to it. Docs only |
