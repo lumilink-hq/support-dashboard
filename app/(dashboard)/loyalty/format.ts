@@ -23,6 +23,12 @@ export function when(iso: string | null | undefined, timeZone = "America/Los_Ang
   });
 }
 
+/** A timestamp as a store-local date only ("Oct 20, 2026"); "—" when missing. */
+export function dateOnly(iso: string | null | undefined, timeZone = "America/Los_Angeles"): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US", { timeZone, month: "short", day: "numeric", year: "numeric" });
+}
+
 /** A plain date (YYYY-MM-DD) as "Oct 20, 1990"; no time zone shift. */
 export function day(date: string | null | undefined): string {
   if (!date) return "—";
