@@ -59,7 +59,7 @@ export function PartnerHero({
         <div className="mt-8 flex flex-wrap gap-3">
           <a
             href={primaryHref}
-            className="rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-800"
+            className="rounded-md btn-raspberry px-5 py-3 text-sm font-medium"
           >
             {primaryLabel}
           </a>
@@ -111,7 +111,7 @@ export function PartnerClosingCta({
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <a
             href={ctaHref}
-            className="rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white hover:bg-gray-800"
+            className="rounded-md btn-raspberry px-6 py-3 text-sm font-medium"
           >
             {ctaLabel}
           </a>

@@ -190,7 +190,7 @@ export function EcommerceSolution() {
       {/* ------------------------------------------------------------------ */}
       {/* Hero                                                               */}
       {/* ------------------------------------------------------------------ */}
-      <Section className="pb-20 pt-16 md:pb-28 md:pt-24">
+      <Section className="bg-hero-glow pb-20 pt-16 md:pb-28 md:pt-24">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
             <Eyebrow>AI order support for online stores</Eyebrow>
@@ -207,7 +207,7 @@ export function EcommerceSolution() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 href={SIGNUP_CTA}
-                className="rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-800"
+                className="rounded-md btn-raspberry px-5 py-3 text-sm font-medium"
               >
                 Create your account
               </Link>

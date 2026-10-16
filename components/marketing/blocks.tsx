@@ -107,12 +107,12 @@ export function Eyebrow({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * One or two key words in a headline, in the brand accent ("Get found on
- * <Accent>Google</Accent>"). Display sizes only: lumi-600 on white clears the
- * 3:1 large-text contrast bar, not the 4.5:1 one body text needs.
+ * One or two key words in a headline, in the raspberry gradient ("Get found
+ * on <Accent>Google</Accent>"). Display sizes only: the gradient's light end
+ * (lumi-400) clears the 3:1 large-text contrast bar, not body text's 4.5:1.
  */
 export function Accent({ children }: { children: React.ReactNode }) {
-  return <span className="text-lumi-600">{children}</span>;
+  return <span className="text-gradient-accent">{children}</span>;
 }
 
 export function Check() {
@@ -224,7 +224,7 @@ export async function PricingGrid({
             key={tier.label}
             className={`flex flex-col rounded-xl bg-white p-6 shadow-sm ${
               tier.mostPopular
-                ? "border-2 border-gray-900"
+                ? "border-2 border-lumi-600"
                 : "border border-gray-200"
             }`}
           >
@@ -233,7 +233,7 @@ export async function PricingGrid({
                 {tier.label}
               </h3>
               {tier.mostPopular ? (
-                <span className="shrink-0 rounded-full bg-gray-900 px-2.5 py-0.5 text-xs font-medium text-white">
+                <span className="shrink-0 rounded-full bg-lumi-600 px-2.5 py-0.5 text-xs font-medium text-white">
                   Most Popular
                 </span>
               ) : null}
@@ -266,7 +266,7 @@ export async function PricingGrid({
               href={ctaHref}
               className={`block rounded-md px-4 py-2.5 text-center text-sm font-medium ${
                 tier.mostPopular
-                  ? "bg-gray-900 text-white hover:bg-gray-800"
+                  ? "btn-raspberry"
                   : "border border-gray-300 text-gray-700 hover:bg-gray-50"
               }`}
             >
@@ -376,7 +376,7 @@ export function EnterpriseBand({
   ];
   return (
     <Section id={id} className="py-20">
-      <div className="rounded-2xl bg-gray-900 px-8 py-12 text-white md:px-12">
+      <div className="rounded-2xl bg-ink-gradient px-8 py-12 text-white md:px-12">
         <div className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-widest text-lumi-400">
@@ -420,7 +420,7 @@ export function EnterpriseBand({
 export function CallLengthPolicy({ closing }: { closing: string }) {
   return (
     <Section className="pb-20">
-      <div className="rounded-2xl bg-gray-900 px-8 py-12 text-white md:px-12">
+      <div className="rounded-2xl bg-ink-gradient px-8 py-12 text-white md:px-12">
         <div className="max-w-3xl">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
             Automate The Repetitive. Escalate What Matters.
@@ -497,7 +497,7 @@ export function ClosingCta({
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link
             href={href}
-            className="rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white hover:bg-gray-800"
+            className="rounded-md btn-raspberry px-6 py-3 text-sm font-medium"
           >
             {cta}
           </Link>
@@ -617,8 +617,8 @@ export function SeoPairing({
         </div>
 
         <div>
-          <div className="rounded-2xl border-2 border-gray-900 bg-white p-8 shadow-sm">
-            <span className="rounded-full bg-gray-900 px-2.5 py-0.5 text-xs font-semibold text-white">
+          <div className="rounded-2xl border-2 border-lumi-600 bg-white p-8 shadow-sm">
+            <span className="rounded-full bg-lumi-600 px-2.5 py-0.5 text-xs font-semibold text-white">
               Recommended For {audience}
             </span>
             <p className="mt-4 text-sm font-medium text-gray-500">{plan.name}</p>
@@ -644,7 +644,7 @@ export function SeoPairing({
             </ul>
             <Link
               href="/products/seo#pricing"
-              className="mt-6 block rounded-md bg-gray-900 px-4 py-3 text-center text-sm font-medium text-white hover:bg-gray-800"
+              className="mt-6 block rounded-md btn-raspberry px-4 py-3 text-center text-sm font-medium"
             >
               See SEO + AI Search
             </Link>
@@ -803,7 +803,7 @@ export function WorksWith({
             <Link
               key={c.key}
               href={c.href}
-              className="reveal group flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-gray-900 hover:shadow-md"
+              className="reveal group flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-lumi-400 hover:shadow-md"
             >
               <span className="w-max rounded-full bg-lumi-50 px-2.5 py-0.5 text-xs font-semibold text-lumi-700">
                 {c.tag}
@@ -863,12 +863,12 @@ export function SplitCta({
           </p>
           <Link
             href={href}
-            className="mt-6 rounded-md bg-gray-900 px-5 py-3 text-center text-sm font-medium text-white hover:bg-gray-800"
+            className="mt-6 rounded-md btn-raspberry px-5 py-3 text-center text-sm font-medium"
           >
             {cta}
           </Link>
         </div>
-        <div className="reveal flex flex-col rounded-2xl bg-gray-900 p-8 text-white shadow-sm">
+        <div className="reveal flex flex-col rounded-2xl bg-ink-gradient p-8 text-white shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-widest text-lumi-400">
             For Groups And Agencies
           </p>
@@ -1073,7 +1073,7 @@ export function DoneForYouBand({ className = "" }: { className?: string }) {
   ];
   return (
     <Section className={`py-20 ${className}`}>
-      <div className="rounded-3xl bg-gray-900 px-8 py-12 text-white md:px-12 md:py-16">
+      <div className="rounded-3xl bg-ink-gradient px-8 py-12 text-white md:px-12 md:py-16">
         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-lumi-400">
           <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-lumi-400" />
           Done For You, Included

@@ -120,7 +120,7 @@ const FAQS = [
 export function AgenciesSolution() {
   return (
     <MarketingShell>
-      <Section className="bg-[radial-gradient(ellipse_55%_60%_at_78%_45%,var(--color-lumi-100),transparent)] pb-20 pt-16 md:pb-28 md:pt-24">
+      <Section className="bg-hero-glow pb-20 pt-16 md:pb-28 md:pt-24">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
             <Eyebrow>For Agencies &amp; Resellers</Eyebrow>
@@ -135,7 +135,7 @@ export function AgenciesSolution() {
             <div className="mt-8 flex flex-wrap gap-3">
               <a
                 href={CONTACT}
-                className="rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-800"
+                className="rounded-md btn-raspberry px-5 py-3 text-sm font-medium"
               >
                 Talk To Us
               </a>
@@ -194,7 +194,7 @@ export function AgenciesSolution() {
         <div className="mt-12 grid gap-10 md:grid-cols-3">
           {STEPS.map((s) => (
             <div key={s.n} className="reveal">
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-gray-900 text-sm font-semibold text-white">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-lumi-600 text-sm font-semibold text-white">
                 {s.n}
               </span>
               <h3 className="mt-4 text-lg font-semibold text-gray-900">{s.title}</h3>
