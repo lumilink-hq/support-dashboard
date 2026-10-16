@@ -2,8 +2,8 @@
   Wave Rewards points on product pages (LL Loyalty): "Earn 270 points with this
   item". Pure Liquid from the shop's ll_loyalty.program metafield (points per $1,
   tier multipliers) and the signed-in member's ll_loyalty.tier metafield, so it
-  costs no request. Same rounding as the earn engine (0200, loyalty_order_points):
-  floor(price in cents x points per $1 x tier multiplier / 100). It shows the
+  costs no request. Same rounding as the earn engine (0218, loyalty_order_points):
+  round(price in cents x points per $1 x tier multiplier / 100). It shows the
   variant price; the order earns on the subtotal after discounts.
   assets/wave-rewards-points.js updates the number when the variant changes.
 {% endcomment %}
@@ -22,7 +22,7 @@
     endfor
   endif
   assign v = product.selected_or_first_available_variant
-  assign pts = v.price | times: ppd | times: mult | divided_by: 100 | floor
+  assign pts = v.price | times: ppd | times: mult | divided_by: 100.0 | round
 
   if customer == blank
     assign tpl = 'wave_rewards.pp_guest' | t: points: '__N__', program: prog.name

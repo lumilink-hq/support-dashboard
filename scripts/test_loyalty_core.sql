@@ -77,7 +77,10 @@ begin
   assert (select referred_by from loyalty_members where id = v_bob) = v_alice, 'enroll: referrer recorded';
 
   -- --- order points: $100.99 at Bronze = floor(100.99 x 3 x 1.0) = 302 ---
-  assert loyalty_order_points(v_alice, 10099) = 302, 'points: bronze 3/$ floors';
+  -- Nearest point, like Joy (0218): 302.97 -> 303, 300.48 -> 300, 301.5 -> 302.
+  assert loyalty_order_points(v_alice, 10099) = 303, 'points: bronze 3/$ rounds up past .5';
+  assert loyalty_order_points(v_alice, 10016) = 300, 'points: bronze 3/$ rounds down below .5';
+  assert loyalty_order_points(v_alice, 10050) = 302, 'points: 301.5 rounds half up';
   v_r := loyalty_post_entry(v_alice, 302, 'order', 'order:1:earn', 10099, null, 'shopify_order', '1', null, 'system', '2026-07-02');
   assert (v_r->>'duplicate')::boolean = false and (v_r->>'points_balance')::int = 302
      and (v_r->>'paid_order_count')::int = 1, 'order: posted, balance 302, 1 order';

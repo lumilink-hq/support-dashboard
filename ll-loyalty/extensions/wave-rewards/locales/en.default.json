@@ -129,6 +129,9 @@
     "ln_guest_note": "Already a member? Sign in to see your points.",
     "pp_earn": "Earn {points} points with this item",
     "pp_earn_tier": "Earn {points} points with this item as {tier}",
-    "pp_guest": "Join {program} and earn {points} points with this item"
+    "pp_guest": "Join {program} and earn {points} points with this item",
+    "units_label": "Amount",
+    "units_option": "{amount} off · {points} points",
+    "units_hint": "Every {points} points = {amount} off. Combine them into one code."
   }
 }

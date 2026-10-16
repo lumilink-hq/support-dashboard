@@ -34,7 +34,7 @@
       {%- if t.name == ll_tier_name -%}{%- assign ll_tier = t -%}{%- assign ll_seen = true -%}{%- endif -%}
     {%- endfor -%}
 
-    {%- assign ll_earn = ll_total | times: llp.points_per_dollar | times: ll_tier.multiplier | divided_by: 100 | floor -%}
+    {%- assign ll_earn = ll_total | times: llp.points_per_dollar | times: ll_tier.multiplier | divided_by: 100.0 | round -%}
     {%- assign ll_nudges = false -%}
     {%- if llp.nudges_live and ll_group == 'treatment' -%}{%- assign ll_nudges = true -%}{%- endif -%}
 
@@ -90,7 +90,7 @@
       <p class="ll-cart-loyalty__status" data-ll-status role="status" aria-live="polite"></p>
     </div>
   {%- else -%}
-    {%- assign ll_earn = ll_total | times: llp.points_per_dollar | times: ll_entry.multiplier | divided_by: 100 | floor -%}
+    {%- assign ll_earn = ll_total | times: llp.points_per_dollar | times: ll_entry.multiplier | divided_by: 100.0 | round -%}
     {%- if ll_earn > 0 -%}
       <div class="ll-cart-loyalty">
         <p class="ll-cart-loyalty__line">

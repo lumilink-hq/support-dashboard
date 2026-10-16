@@ -11,9 +11,9 @@ Legend: **LL now** = what LL Loyalty has today (✅ editable in the app, SQL = c
 
 | Joy behaviour | LL today | Action |
 |---|---|---|
-| Order points **round to the nearest** point ("Rounding method") | `floor()` in `loyalty_order_points` | Match Joy (round) or expect ≤1 point differences per order in the parallel run |
-| "Points for discounts" is a **dynamic amount**: 750 points = $5, a member can spend any multiple (1,500 = $10) | One fixed $5 reward | Add a dynamic reward (or $10/$15 steps) before cutover, or members with 1,500+ lose an option they have today |
-| Demotion **moves tier progress down** to the previous tier's threshold | Tier spend kept; member regains the tier on the next order | Answers PLAN §9 open question: match Joy (reset spend to previous threshold) |
+| Order points **round to the nearest** point ("Rounding method") | ☑ 0218: `round()` (refund claw-back stays floor) | Done; product block, cart snippet and checkout estimate round too |
+| "Points for discounts" is a **dynamic amount**: 750 points = $5, a member can spend any multiple (1,500 = $10) | ☑ 0218: `loyalty_rewards.max_units` (null = no cap), `loyalty_redeem(..., p_units)`, amount picker on the rewards page and launcher | Done; `five_off` set to no cap in the setup script |
+| Demotion **moves tier progress down** to the previous tier's threshold | ☑ 0218: zero-point `adjust` entry lowers spend to the new tier's threshold | Done |
 | Spent points are **not refunded** when a reward order is cancelled ("Refund points": Off) | We refund only a failed code issue | Same outcome; nothing to do |
 | Every member gets the Shopify tag **`joy_tag_member`** ("Sync joy_tag_member tag": On) | We tag tier only | Check Klaviyo segments / Flow for `joy_tag_member` before cutover |
 | Tier counts: Bronze 4,838 · Silver 22 · Gold 3 (spend $0 / $500 / $1,200) | Same thresholds | Tiers are effectively unused; part of the reward-ladder conversation |

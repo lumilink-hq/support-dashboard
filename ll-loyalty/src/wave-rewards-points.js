@@ -11,7 +11,7 @@
   function update(el, id) {
     var prices = JSON.parse(el.querySelector('[data-llrp="prices"]').textContent), c = prices[id];
     if (c == null) return;
-    var d = el.dataset, pts = Math.floor((c * Number(d.ppd) * Number(d.mult)) / 100);
+    var d = el.dataset, pts = Math.round((c * Number(d.ppd) * Number(d.mult)) / 100);
     el.querySelector('[data-llrp="text"]').textContent = d.tpl.replace("__N__", pts.toLocaleString("en-US"));
   }
 

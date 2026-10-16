@@ -27,6 +27,20 @@ window.LLR_MEMBER = function (P, U) {
     return H`<button type="button" class="llr-btn ${cls || ""}" data-act="redeem" data-key="${r.key}" data-cost="${r.points_cost}"${this.m.points < r.points_cost ? H` disabled` : ""}>${this.t("redeem")}</button>`;
   };
 
+  // Dynamic rewards (0218: max_units, null = no cap) can be bought several at
+  // once in one code. How many this member can afford, capped by the reward;
+  // the picker lists at most 50.
+  P.maxUnits = function (r) {
+    var can = Math.floor(this.m.points / r.points_cost);
+    return Math.min(r.max_units == null ? can : r.max_units, can, 50);
+  };
+  P.units = function (r) {
+    var self = this, k = this.maxUnits(r), o = [];
+    if (k < 2) return "";
+    for (var i = 1; i <= k; i++) o.push(H`<option value="${i}">${self.t("units_option", { amount: money(r.value_cents * i), points: n(r.points_cost * i) })}</option>`);
+    return H`<label class="llr-units"><span>${this.t("units_label")}</span><select name="units">${o}</select></label>`;
+  };
+
   P.rewards = function () {
     var self = this, m = this.m;
     var cards = (this.s.rewards || []).filter(function (r) { return r.points_cost; }).map(function (r) {
@@ -35,7 +49,8 @@ window.LLR_MEMBER = function (P, U) {
         <div class="llr-reward__cost">${self.t("points_cost", { points: n(r.points_cost) })}</div>
         <div class="llr-bar llr-bar--sm"><i style="width:${pct(m.points, r.points_cost)}%"></i></div>
         <p class="llr-muted">${short > 0 ? self.t("points_to_go", { points: n(short) }) : self.t("next_reward_ready", { reward: r.name })}</p>
-        ${self.redeemBtn(r)}</div>`;
+        ${r.max_units !== 1 ? H`<p class="llr-muted">${self.t("units_hint", { points: n(r.points_cost), amount: money(r.value_cents) })}</p>` : ""}
+        ${self.units(r)}${self.redeemBtn(r)}</div>`;
     });
     var codes = (m.codes || []).map(function (c) {
       return H`<li><code>${c.code}</code><span class="llr-muted">${self.t("amount_off", { amount: money(c.value_cents) })}${c.status === "pending" ? " · " + self.t("being_created") : ""}</span>
@@ -70,15 +85,16 @@ window.LLR_MEMBER = function (P, U) {
   };
 
   P.redeem = function (b) {
-    var self = this;
-    if (!b.dataset.armed) {
-      b.dataset.armed = 1;
-      b.textContent = this.t("confirm_spend", { points: n(b.dataset.cost) });
+    var self = this, sel = b.parentNode.querySelector('select[name="units"]'), u = sel ? Number(sel.value) : 1;
+    // First tap (or the amount changed since): say what it costs.
+    if (b.dataset.armed != u) {
+      b.dataset.armed = u;
+      b.textContent = this.t("confirm_spend", { points: n(b.dataset.cost * u) });
       return;
     }
     b.disabled = true;
     b.textContent = this.t("redeeming");
-    this.api("/redeem", { reward_key: b.dataset.key, request_key: rkey() }).then(function (x) {
+    this.api("/redeem", { reward_key: b.dataset.key, request_key: rkey(), units: u }).then(function (x) {
       if (x.status !== "redeemed") {
         b.disabled = false;
         delete b.dataset.armed;

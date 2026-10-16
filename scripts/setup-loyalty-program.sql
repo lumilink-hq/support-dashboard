@@ -78,12 +78,15 @@ begin
      set kind = excluded.kind, points = excluded.points, order_count = excluded.order_count,
          claimable = excluded.claimable;
 
-  insert into loyalty_rewards (program_id, key, name, kind, points_cost, value_cents, min_order_cents) values
-    (v_prog, 'five_off',           '$5 off',                    'amount_off_order', 750,  500,  0),
-    (v_prog, 'referral_friend',    '$10 off your first order',  'amount_off_order', null, 1000, 0)
+  -- five_off is Joy's dynamic discount: any multiple of 750 points = $5 in one
+  -- code, no cap (max_units null, 0218).
+  insert into loyalty_rewards (program_id, key, name, kind, points_cost, value_cents, min_order_cents, max_units) values
+    (v_prog, 'five_off',           '$5 off',                    'amount_off_order', 750,  500,  0, null),
+    (v_prog, 'referral_friend',    '$10 off your first order',  'amount_off_order', null, 1000, 0, 1)
   on conflict (program_id, key) do update
      set name = excluded.name, kind = excluded.kind, points_cost = excluded.points_cost,
-         value_cents = excluded.value_cents, min_order_cents = excluded.min_order_cents;
+         value_cents = excluded.value_cents, min_order_cents = excluded.min_order_cents,
+         max_units = excluded.max_units;
 
   -- Tier perks: automatic Shopify discounts for the tier and above (0203).
   -- Gold "members-only discounts on select products" is not offered yet (no

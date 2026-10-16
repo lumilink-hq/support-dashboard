@@ -4,7 +4,7 @@
 //
 //   GET  /state      program rules; the shopper's own state when logged in,
 //                    plus their badges / streak / challenges (0216, treatment only)
-//   POST /redeem     {reward_key, request_key}   spend points, get a code
+//   POST /redeem     {reward_key, request_key, units?}   spend points, get a code
 //   POST /birthday   {birthday: "YYYY-MM-DD"}    once
 //   POST /claim      {key}                       honor-system action (Instagram follow)
 //   POST /referral   {ref, email}                referred friend's form -> their code
@@ -118,9 +118,11 @@ Deno.serve(async (req) => {
     if (r === "redeem") {
       const reward = parseKey(body.reward_key);
       const requestKey = parseRequestKey(body.request_key);
-      if (!reward || !requestKey) return json({ status: "invalid" }, 400);
+      // How many of a dynamic reward in one code (0218); absent = 1.
+      const units = body.units == null ? 1 : Number(body.units);
+      if (!reward || !requestKey || !Number.isInteger(units) || units < 1 || units > 1000) return json({ status: "invalid" }, 400);
       const res = await rpc<{ status: string; code_id?: string; code?: string; code_status?: string }>("loyalty_redeem", {
-        p_member: memberId, p_reward_key: reward, p_request_key: requestKey,
+        p_member: memberId, p_reward_key: reward, p_request_key: requestKey, p_units: units,
       });
       if (res.status === "pending" && res.code_id) {
         return json({ status: "redeemed", code: res.code, code_status: await issueNow(programId, res.code_id) });

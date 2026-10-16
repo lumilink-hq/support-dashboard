@@ -99,6 +99,15 @@
     return (this.s.rewards || []).filter(function (r) { return r.points_cost; }).sort(function (a, b) { return a.points_cost - b.points_cost; })[0];
   };
   P.find = function (list, key) { return (this.s[list] || []).filter(function (r) { return r.key === key; })[0]; };
+  // Dynamic rewards (0218: max_units, null = no cap): a picker when the member
+  // can afford 2+ in one code; at most 50 options.
+  P.units = function (r) {
+    var self = this, can = Math.floor(this.m.points / r.points_cost), o = [];
+    var k = Math.min(r.max_units == null ? can : r.max_units, can, 50);
+    if (k < 2) return "";
+    for (var i = 1; i <= k; i++) o.push(H`<option value="${i}">${self.t("units_option", { amount: money(r.value_cents * i), points: n(r.points_cost * i) })}</option>`);
+    return H`<label class="llrl-units"><span>${this.t("units_label")}</span><select name="units">${o}</select></label>`;
+  };
   P.all = function () { return H`<a class="llrl-all" href="${this.ds.page}">${this.t("ln_see_all")} &rarr;</a>`; };
 
   P.guest = function () {
@@ -132,7 +141,7 @@
         <p class="llrl-note">${nt ? this.t("spend_more", { amount: money(nt.remaining_cents), tier: nt.name }) : this.t("top_tier")}</p>
       </div>
       ${nx ? H`<div class="llrl-next">${m.points >= nx.points_cost
-        ? H`<span>${this.t("next_reward_ready", { reward: nx.name })}</span>
+        ? H`<span>${this.t("next_reward_ready", { reward: nx.name })}</span>${this.units(nx)}
             <button type="button" class="llrl-b" data-act="redeem" data-key="${nx.key}" data-cost="${nx.points_cost}">${this.t("redeem")}</button>`
         : H`<span>${this.t("next_reward_progress", { points: n(nx.points_cost - m.points), reward: nx.name })}</span>
             <div class="llrl-bar llrl-bar--sm"><i style="width:${pct(m.points, nx.points_cost)}%"></i></div>`}</div>` : ""}
@@ -153,14 +162,15 @@
         setTimeout(function () { b.textContent = t; }, 1500);
       });
     } else if (b.dataset.act === "redeem") {
-      if (!b.dataset.armed) { // two taps: the first one says what it costs
-        b.dataset.armed = 1;
-        b.textContent = this.t("confirm_spend", { points: n(b.dataset.cost) });
+      var sel = b.parentNode.querySelector('select[name="units"]'), u = sel ? Number(sel.value) : 1;
+      if (b.dataset.armed != u) { // two taps: the first one (or a new amount) says what it costs
+        b.dataset.armed = u;
+        b.textContent = this.t("confirm_spend", { points: n(b.dataset.cost * u) });
         return;
       }
       b.disabled = true;
       b.textContent = this.t("redeeming");
-      this.api("/redeem", { reward_key: b.dataset.key, request_key: rkey() }).then(function (x) {
+      this.api("/redeem", { reward_key: b.dataset.key, request_key: rkey(), units: u }).then(function (x) {
         if (x.status !== "redeemed") {
           b.disabled = false;
           delete b.dataset.armed;

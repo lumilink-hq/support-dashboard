@@ -96,7 +96,7 @@ export function OrderBlock({ state, subtotalCents }) {
 
   const m = state.member;
   const earned = state.order?.recorded ? state.order.points_earned : null;
-  const estimate = earned === null && subtotalCents ? Math.floor((subtotalCents / 100) * state.rate) : null;
+  const estimate = earned === null && subtotalCents ? Math.round((subtotalCents / 100) * state.rate) : null;
 
   return (
     <s-section heading={name}>
