@@ -12,7 +12,7 @@
     var prices = JSON.parse(el.querySelector('[data-llrp="prices"]').textContent), c = prices[id];
     if (c == null) return;
     var d = el.dataset, pts = Math.floor((c * Number(d.ppd) * Number(d.mult)) / 100);
-    el.querySelector('[data-llrp="text"]').textContent = d.tpl.replace("{points}", pts.toLocaleString("en-US"));
+    el.querySelector('[data-llrp="text"]').textContent = d.tpl.replace("__N__", pts.toLocaleString("en-US"));
   }
 
   // The variant id in the product form of the block's own section (or the page's first).

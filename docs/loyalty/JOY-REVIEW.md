@@ -32,7 +32,7 @@ Confirmed on tsunami.store's live page: `Avada-Joy_FloatingButton`, `Avada-Joy-m
 
 | Surface | Joy | LL Loyalty today |
 |---|---|---|
-| **Floating launcher + panel on every page** (balance, ways to earn, rewards, referral, orders) | ✅ live | ❌ only the `/pages/loyalty` page |
+| Floating launcher + panel on every page (balance, ways to earn, rewards, referral, orders) | Enabled, but **Tsunami keeps it hidden** (no room on the layout, J 2026-10-16) | ✅ app embed, off by default (`ll-loyalty-10`) |
 | Rewards page | ✅ | ✅ (redesigned, stronger) |
 | **Points calculator on product pages** ("earn 270 points") | ✅ live | ❌ |
 | Redeem in cart | ✅ live (V1 block) | ◐ built (cart snippet), not installed in Tinker |
@@ -75,10 +75,11 @@ Confirmed on tsunami.store's live page: `Avada-Joy_FloatingButton`, `Avada-Joy-m
    300 points, so it lands on the first or second order) and a product reward (the free "Test Kit"
    Joy has set up but switched off). Needs: Tsunami's margin call. This is the change most likely to
    move redemption off 0.93%.
-2. ◐ *Built 2026-10-16, not deployed.* **Floating launcher on every page** (theme app embed): balance, next reward with progress,
-   ways to earn, referral link, redeem. Joy's biggest reach advantage; without it LL is less
-   visible than Joy after cutover. Lazy-loaded so it stays inside the JS budget.
-3. ◐ *Built 2026-10-16, not deployed.* **Points on product pages**: a small app block, "Earn 270 points (324 as Gold)". Cheap, and
+2. ☑ *Released in `ll-loyalty-10`, off by default.* **Floating launcher on every page** (theme app embed): balance, next reward with progress,
+   ways to earn, referral link, redeem. Not a parity gap after all: Tsunami hides Joy's widget
+   because there is no room for it. Kept for Phase 2 stores; for Tsunami, a header icon or account
+   menu link that opens the same panel would fit the layout better.
+3. ☑ *Released in `ll-loyalty-10`, not placed yet.* **Points on product pages**: a small app block, "Earn 270 points (324 as Gold)". Cheap, and
    it's what Joy shows shoppers today, so removing it at cutover is a visible step back.
 4. **Install the cart snippet and place the checkout / account blocks** (already built). Joy's
    redeem-in-cart is live; ours must be in before Joy is turned off.
