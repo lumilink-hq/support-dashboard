@@ -182,7 +182,7 @@ Merchants need access scoped to their own program:
    records which kind of user acted. Keep MFA (aal2) for both.
 2. Staff-only even then: cross-program search, data requests, the program setup script, gross
    margin and anything billing-related.
-3. The sidebar's "Loyalty admin" section (layout reads `loyalty_staff_access`) shows for merchant
+3. The sidebar's Loyalty section's admin rows (layout reads `loyalty_staff_access`) shows for merchant
    admins too, limited to their own program, with no program picker.
 The embedded Shopify admin (above) and the portal pages would call the same RPCs and check.
 
