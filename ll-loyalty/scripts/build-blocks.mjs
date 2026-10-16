@@ -22,14 +22,14 @@ const collapse = {
 
 const out = "extensions/wave-rewards/assets";
 await build({
-  entryPoints: ["src/wave-rewards.js", "src/wave-rewards-member.js", "src/wave-rewards-ref.js", "src/wave-rewards-ach.js"],
+  entryPoints: ["src/wave-rewards.js", "src/wave-rewards-member.js", "src/wave-rewards-ref.js", "src/wave-rewards-ach.js", "src/wave-rewards-launcher.js", "src/wave-rewards-points.js"],
   outdir: out,
   minify: true,
   target: "es2019",
   plugins: [collapse],
   logLevel: "warning",
 });
-for (const f of ["wave-rewards.js", "wave-rewards-member.js", "wave-rewards-ref.js", "wave-rewards-ach.js"]) {
+for (const f of ["wave-rewards.js", "wave-rewards-member.js", "wave-rewards-ref.js", "wave-rewards-ach.js", "wave-rewards-launcher.js", "wave-rewards-points.js"]) {
   const size = statSync(`${out}/${f}`).size;
-  console.log(`${f.padEnd(22)} ${size} bytes${f === "wave-rewards.js" && size >= 10000 ? "  OVER the 10 KB block limit" : ""}`);
+  console.log(`${f.padEnd(26)} ${size} bytes${(f === "wave-rewards.js" || f === "wave-rewards-launcher.js") && size >= 10000 ? "  OVER the 10 KB block limit" : ""}`);
 }

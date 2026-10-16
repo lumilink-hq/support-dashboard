@@ -1,0 +1,4 @@
+/* Wave Rewards points on product pages (blocks/product-points.liquid). */
+.llrp { display: flex; align-items: center; gap: 8px; margin: 10px 0; color: var(--llrp-color); font-size: 15px; font-weight: 600; line-height: 1.35; }
+.llrp-ico { width: 18px; height: 18px; flex: none; }
+.llrp a.llrp-text { color: inherit; text-decoration: underline; text-underline-offset: 3px; }

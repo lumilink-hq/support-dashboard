@@ -1,0 +1,110 @@
+{% comment %}
+  Wave Rewards launcher (LL Loyalty): a floating button on every page that opens
+  a small rewards panel. App embed (Theme settings -> App embeds). The button
+  label comes from Liquid (the member's points metafield, synced by
+  loyalty-shopify, so it can lag a minute); the panel loads the live state from
+  the app proxy on first open (assets/wave-rewards-launcher.js). Hidden on the
+  Wave Rewards page itself, which already shows everything.
+{% endcomment %}
+
+{%- liquid
+  assign pts = blank
+  if customer
+    assign pts = customer.metafields.ll_loyalty.points.value
+  endif
+-%}
+
+<div
+  class="llrl llrl--{{ block.settings.position }}"
+  hidden
+  data-proxy="{{ block.settings.proxy_path | default: '/apps/loyalty' | escape }}"
+  data-page="{{ block.settings.page_path | default: '/pages/wave-rewards' | escape }}"
+  data-login-url="{{ routes.account_login_url }}"
+  data-register-url="{{ routes.account_register_url }}"
+  data-label="{{ block.settings.label | escape }}"
+  {% if pts != blank %}data-points="{{ pts }}"{% endif %}
+  style="
+    --llrl-accent: {{ block.settings.accent }};
+    --llrl-accent-text: {{ block.settings.accent_text }};
+    --llrl-head-bg: {{ block.settings.head_bg }};
+    --llrl-head-text: {{ block.settings.head_text }};
+  "
+>
+  <button type="button" class="llrl-btn" aria-expanded="false" aria-controls="llrl-panel" aria-label="{{ 'wave_rewards.ln_open' | t }}" data-llrl="toggle">
+    <svg class="llrl-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20 7h-2.2A3 3 0 0 0 12 3.8 3 3 0 0 0 6.2 7H4a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-6-1.5a1.5 1.5 0 1 1 0 3h-1V6.5c0-.6.4-1 1-1Zm-5.5 1.5a1.5 1.5 0 0 1 2.5-1v2.5h-1a1.5 1.5 0 0 1-1.5-1.5ZM5 9h6v2H5V9Zm1 4h5v6H6v-6Zm7 6v-6h5v6h-5Zm6-8h-6V9h6v2Z"/></svg>
+    <span class="llrl-label" data-llrl="label">{% if pts != blank %}{{ 'wave_rewards.ln_pts' | t: points: pts }}{% else %}{{ block.settings.label | escape }}{% endif %}</span>
+  </button>
+  <div class="llrl-panel" id="llrl-panel" role="dialog" aria-labelledby="llrl-title" hidden data-llrl="panel">
+    <div class="llrl-head">
+      <b id="llrl-title">{{ block.settings.title | escape }}</b>
+      <button type="button" class="llrl-x" aria-label="{{ 'wave_rewards.ln_close' | t }}" data-llrl="close">&times;</button>
+    </div>
+    <div class="llrl-body" data-llrl="body"></div>
+  </div>
+  <p class="llrl-status" role="status" aria-live="polite" data-llrl="status"></p>
+  <script type="application/json" data-llrl="copy">{
+"unavailable":{{ 'wave_rewards.unavailable' | t | json }},
+"loading":{{ 'wave_rewards.loading' | t | json }},
+"hi":{{ 'wave_rewards.hi' | t | json }},
+"member_card_label":{{ 'wave_rewards.member_card_label' | t | json }},
+"points_balance":{{ 'wave_rewards.points_balance' | t | json }},
+"spend_more":{{ 'wave_rewards.spend_more' | t | json }},
+"top_tier":{{ 'wave_rewards.top_tier' | t | json }},
+"setting_up":{{ 'wave_rewards.setting_up' | t | json }},
+"next_reward_ready":{{ 'wave_rewards.next_reward_ready' | t | json }},
+"next_reward_progress":{{ 'wave_rewards.next_reward_progress' | t | json }},
+"points_cost":{{ 'wave_rewards.points_cost' | t | json }},
+"redeem":{{ 'wave_rewards.redeem' | t | json }},
+"confirm_spend":{{ 'wave_rewards.confirm_spend' | t | json }},
+"redeeming":{{ 'wave_rewards.redeeming' | t | json }},
+"code_ready":{{ 'wave_rewards.code_ready' | t | json }},
+"code_pending":{{ 'wave_rewards.code_pending' | t | json }},
+"not_enough":{{ 'wave_rewards.not_enough' | t | json }},
+"failed":{{ 'wave_rewards.failed' | t | json }},
+"your_codes":{{ 'wave_rewards.your_codes' | t | json }},
+"amount_off":{{ 'wave_rewards.amount_off' | t | json }},
+"copy":{{ 'wave_rewards.copy' | t | json }},
+"copied":{{ 'wave_rewards.copied' | t | json }},
+"copy_link":{{ 'wave_rewards.copy_link' | t | json }},
+"your_link":{{ 'wave_rewards.your_link' | t | json }},
+"join_cta":{{ 'wave_rewards.join_cta' | t | json }},
+"sign_in":{{ 'wave_rewards.sign_in' | t | json }},
+"order_title":{{ 'wave_rewards.order_title' | t | json }},
+"chip_earn":{{ 'wave_rewards.chip_earn' | t | json }},
+"rule_signup_title":{{ 'wave_rewards.rule_signup_title' | t | json }},
+"rule_instagram_follow_title":{{ 'wave_rewards.rule_instagram_follow_title' | t | json }},
+"rule_newsletter_title":{{ 'wave_rewards.rule_newsletter_title' | t | json }},
+"rule_birthday_title":{{ 'wave_rewards.rule_birthday_title' | t | json }},
+"rule_anniversary_title":{{ 'wave_rewards.rule_anniversary_title' | t | json }},
+"rule_referral_title":{{ 'wave_rewards.rule_referral_title' | t | json }},
+"ln_pts":{{ 'wave_rewards.ln_pts' | t | json }},
+"ln_ways":{{ 'wave_rewards.ln_ways' | t | json }},
+"ln_rewards":{{ 'wave_rewards.ln_rewards' | t | json }},
+"ln_see_all":{{ 'wave_rewards.ln_see_all' | t | json }},
+"ln_refer":{{ 'wave_rewards.ln_refer' | t | json }},
+"ln_guest_note":{{ 'wave_rewards.ln_guest_note' | t | json }}
+}</script>
+</div>
+
+{% schema %}
+{
+  "name": "Wave Rewards launcher",
+  "target": "body",
+  "javascript": "wave-rewards-launcher.js",
+  "stylesheet": "wave-rewards-launcher.css",
+  "settings": [
+    { "type": "text", "id": "label", "label": "Button label", "default": "Rewards", "info": "Signed-in members see their points instead." },
+    { "type": "text", "id": "title", "label": "Panel title", "default": "Wave Rewards" },
+    {
+      "type": "select", "id": "position", "label": "Position", "default": "right",
+      "options": [{ "value": "right", "label": "Bottom right" }, { "value": "left", "label": "Bottom left" }]
+    },
+    { "type": "text", "id": "page_path", "label": "Rewards page path", "default": "/pages/wave-rewards", "info": "The page with the Wave Rewards page block. Referral links point here." },
+    { "type": "color", "id": "accent", "label": "Button", "default": "#1A5AAD" },
+    { "type": "color", "id": "accent_text", "label": "Button text", "default": "#FFFFFF" },
+    { "type": "color", "id": "head_bg", "label": "Panel header", "default": "#173E71" },
+    { "type": "color", "id": "head_text", "label": "Panel header text", "default": "#FFFFFF" },
+    { "type": "text", "id": "proxy_path", "label": "App proxy path", "default": "/apps/loyalty", "info": "Only change this if the app proxy URL was customized in Shopify admin." }
+  ]
+}
+{% endschema %}

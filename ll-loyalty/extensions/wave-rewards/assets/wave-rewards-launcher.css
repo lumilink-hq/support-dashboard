@@ -1,0 +1,82 @@
+/* Wave Rewards launcher (blocks/launcher.liquid). Loaded on every page, so it is
+   kept small and scoped to .llrl. Pixel sizes and explicit colors: themes set
+   html { font-size: 62.5% } and color headings, which would leak in here.
+   z-index 9: above Tinker's sticky header (8), below its overlays and drawers (10+). */
+.llrl[hidden], .llrl [hidden] { display: none !important; }
+.llrl {
+  --llrl-ink: #0f1b2d; --llrl-muted: #5b6575; --llrl-line: #e3e7ee; --llrl-gap: 20px;
+  position: fixed; z-index: var(--llrl-z, 9); bottom: var(--llrl-gap); right: var(--llrl-gap);
+  font-size: 15px; line-height: 1.45; color: var(--llrl-ink);
+}
+.llrl--left { right: auto; left: var(--llrl-gap); }
+.llrl *, .llrl *::before, .llrl *::after { box-sizing: border-box; }
+.llrl h3, .llrl p, .llrl ul { margin: 0; padding: 0; list-style: none; }
+.llrl button, .llrl input { font: inherit; letter-spacing: normal; text-transform: none; }
+
+.llrl-btn {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 18px 0 14px; border: 0; border-radius: 999px;
+  background: var(--llrl-accent); color: var(--llrl-accent-text); font-weight: 700; font-size: 15px; cursor: pointer;
+  box-shadow: 0 6px 20px rgba(15, 27, 45, 0.22);
+}
+.llrl-btn:hover { filter: brightness(1.07); }
+.llrl-btn:focus-visible, .llrl-b:focus-visible, .llrl-x:focus-visible { outline: 2px solid var(--llrl-accent); outline-offset: 2px; }
+.llrl-ico { width: 22px; height: 22px; flex: none; }
+
+.llrl-panel {
+  position: absolute; bottom: 60px; right: 0; width: 360px; max-height: min(620px, calc(100vh - 100px)); overflow: auto;
+  background: #fff; border-radius: 16px; box-shadow: 0 16px 48px rgba(15, 27, 45, 0.25);
+}
+.llrl--left .llrl-panel { right: auto; left: 0; }
+.llrl-head {
+  position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px 14px 20px; background: var(--llrl-head-bg); color: var(--llrl-head-text); font-size: 17px;
+}
+.llrl-x { width: 32px; height: 32px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.15); color: inherit; font-size: 22px; line-height: 1; cursor: pointer; }
+.llrl-body { display: grid; gap: 14px; padding: 18px 20px 20px; }
+.llrl-body h3 { margin-top: 4px; font-size: 14px; font-weight: 700; color: var(--llrl-ink); text-transform: uppercase; letter-spacing: 0.04em; }
+.llrl-muted { color: var(--llrl-muted); font-size: 14px; }
+
+.llrl-b {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 8px 16px; border: 2px solid var(--llrl-accent);
+  border-radius: 999px; background: var(--llrl-accent); color: var(--llrl-accent-text); font-weight: 700; font-size: 14px; text-decoration: none; cursor: pointer;
+}
+.llrl-b--ghost { background: transparent; color: var(--llrl-accent); }
+.llrl-b--sm { min-height: 32px; padding: 4px 12px; font-size: 13px; }
+.llrl-b:disabled { opacity: 0.6; cursor: default; }
+.llrl-cta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.llrl-list li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--llrl-line); }
+.llrl-list li:last-child { border-bottom: 0; }
+.llrl-list b { color: var(--llrl-accent); white-space: nowrap; }
+
+.llrl-card { padding: 16px; border-radius: 12px; background: var(--llrl-head-bg); color: var(--llrl-head-text); }
+.llrl-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; }
+.llrl-tier { padding: 2px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.18); font-weight: 700; font-size: 13px; }
+.llrl-pts { margin: 8px 0 10px !important; font-size: 14px; opacity: 0.9; }
+.llrl-pts b { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; margin-right: 4px; }
+.llrl-note { margin-top: 8px !important; font-size: 13px; opacity: 0.85; }
+.llrl-bar { height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.25); overflow: hidden; }
+.llrl-bar i { display: block; height: 100%; border-radius: inherit; background: currentColor; }
+.llrl-next { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--llrl-line); border-radius: 12px; font-weight: 600; }
+.llrl-bar--sm { height: 6px; background: var(--llrl-line); color: var(--llrl-accent); }
+
+.llrl-codes li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--llrl-line); }
+.llrl-codes code { font-weight: 700; }
+.llrl-ref { display: flex; gap: 8px; }
+.llrl-ref input { flex: 1; min-width: 0; height: 36px; padding: 0 10px; border: 1px solid var(--llrl-line); border-radius: 8px; font-size: 13px; color: var(--llrl-ink); background: #fff; }
+.llrl-all { color: var(--llrl-accent); font-weight: 700; font-size: 14px; text-decoration: none; }
+.llrl-all:hover { text-decoration: underline; }
+
+.llrl-status:empty { display: none; }
+.llrl-status {
+  position: absolute; bottom: 60px; right: 0; width: max-content; max-width: min(360px, calc(100vw - 32px)); padding: 10px 14px;
+  border-radius: 10px; background: var(--llrl-ink); color: #fff; font-size: 14px;
+}
+.llrl--left .llrl-status { right: auto; left: 0; }
+
+/* Phones: the panel becomes a bottom sheet. */
+@media (max-width: 749px) {
+  .llrl { --llrl-gap: 14px; }
+  .llrl-btn { min-height: 44px; padding: 0 14px 0 12px; }
+  .llrl-panel { position: fixed; left: 0; right: 0; bottom: 0; width: auto; max-height: 85vh; border-radius: 16px 16px 0 0; }
+}

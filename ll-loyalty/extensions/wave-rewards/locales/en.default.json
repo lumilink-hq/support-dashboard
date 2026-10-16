@@ -118,6 +118,17 @@
     "badges_title": "Badges",
     "badge_earned": "Earned",
     "badge_earned_pts": "Earned: +{points} points",
-    "progress": "{have} of {need}"
+    "progress": "{have} of {need}",
+    "ln_open": "Open rewards",
+    "ln_close": "Close",
+    "ln_pts": "{points} pts",
+    "ln_ways": "Ways to earn",
+    "ln_rewards": "Rewards",
+    "ln_see_all": "See all rewards and ways to earn",
+    "ln_refer": "Give {amount}, get {points} points",
+    "ln_guest_note": "Already a member? Sign in to see your points.",
+    "pp_earn": "Earn {points} points with this item",
+    "pp_earn_tier": "Earn {points} points with this item as {tier}",
+    "pp_guest": "Join {program} and earn {points} points with this item"
   }
 }

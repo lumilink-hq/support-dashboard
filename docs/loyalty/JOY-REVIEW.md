@@ -75,10 +75,10 @@ Confirmed on tsunami.store's live page: `Avada-Joy_FloatingButton`, `Avada-Joy-m
    300 points, so it lands on the first or second order) and a product reward (the free "Test Kit"
    Joy has set up but switched off). Needs: Tsunami's margin call. This is the change most likely to
    move redemption off 0.93%.
-2. **Floating launcher on every page** (theme app embed): balance, next reward with progress,
+2. ◐ *Built 2026-10-16, not deployed.* **Floating launcher on every page** (theme app embed): balance, next reward with progress,
    ways to earn, referral link, redeem. Joy's biggest reach advantage; without it LL is less
    visible than Joy after cutover. Lazy-loaded so it stays inside the JS budget.
-3. **Points on product pages**: a small app block, "Earn 270 points (324 as Gold)". Cheap, and
+3. ◐ *Built 2026-10-16, not deployed.* **Points on product pages**: a small app block, "Earn 270 points (324 as Gold)". Cheap, and
    it's what Joy shows shoppers today, so removing it at cutover is a visible step back.
 4. **Install the cart snippet and place the checkout / account blocks** (already built). Joy's
    redeem-in-cart is live; ours must be in before Joy is turned off.

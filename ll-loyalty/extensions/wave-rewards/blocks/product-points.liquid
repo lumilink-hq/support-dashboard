@@ -1,0 +1,70 @@
+{% comment %}
+  Wave Rewards points on product pages (LL Loyalty): "Earn 270 points with this
+  item". Pure Liquid from the shop's ll_loyalty.program metafield (points per $1,
+  tier multipliers) and the signed-in member's ll_loyalty.tier metafield, so it
+  costs no request. Same rounding as the earn engine (0200, loyalty_order_points):
+  floor(price in cents x points per $1 x tier multiplier / 100). It shows the
+  variant price; the order earns on the subtotal after discounts.
+  assets/wave-rewards-points.js updates the number when the variant changes.
+{% endcomment %}
+
+{%- liquid
+  assign prog = shop.metafields.ll_loyalty.program.value
+  assign ppd = prog.points_per_dollar | default: 0
+  assign mult = 1
+  assign tier = blank
+  if customer
+    assign tier = customer.metafields.ll_loyalty.tier.value
+    for t in prog.tiers
+      if t.name == tier
+        assign mult = t.multiplier
+      endif
+    endfor
+  endif
+  assign v = product.selected_or_first_available_variant
+  assign pts = v.price | times: ppd | times: mult | divided_by: 100 | floor
+
+  if customer == blank
+    assign tpl = 'wave_rewards.pp_guest' | t: points: '{points}', program: prog.name
+  elsif mult > 1
+    assign tpl = 'wave_rewards.pp_earn_tier' | t: points: '{points}', tier: tier
+  else
+    assign tpl = 'wave_rewards.pp_earn' | t: points: '{points}'
+  endif
+-%}
+
+{%- if ppd > 0 and product -%}
+  <div
+    class="llrp"
+    data-ppd="{{ ppd }}"
+    data-mult="{{ mult }}"
+    data-tpl="{{ tpl | escape }}"
+    style="--llrp-color: {{ block.settings.color }};"
+    {{ block.shopify_attributes }}
+  >
+    <svg class="llrp-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2 9.2 8.3 2 9.2l5.4 4.8L5.8 21 12 17.3 18.2 21l-1.6-7 5.4-4.8-7.2-.9L12 2Z"/></svg>
+    {%- if block.settings.link and block.settings.page_path != blank -%}
+      <a class="llrp-text" href="{{ block.settings.page_path | escape }}" data-llrp="text">{{ tpl | replace: '{points}', pts }}</a>
+    {%- else -%}
+      <span class="llrp-text" data-llrp="text">{{ tpl | replace: '{points}', pts }}</span>
+    {%- endif -%}
+    <script type="application/json" data-llrp="prices">{
+      {%- for x in product.variants -%}"{{ x.id }}":{{ x.price }}{% unless forloop.last %},{% endunless %}{%- endfor -%}
+    }</script>
+  </div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Wave Rewards points",
+  "target": "section",
+  "enabled_on": { "templates": ["product"] },
+  "javascript": "wave-rewards-points.js",
+  "stylesheet": "wave-rewards-points.css",
+  "settings": [
+    { "type": "color", "id": "color", "label": "Text color", "default": "#1A5AAD" },
+    { "type": "checkbox", "id": "link", "label": "Link to the rewards page", "default": true },
+    { "type": "text", "id": "page_path", "label": "Rewards page path", "default": "/pages/wave-rewards" }
+  ]
+}
+{% endschema %}
