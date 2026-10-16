@@ -1,11 +1,14 @@
-# LL Loyalty: Joy migration, parallel run and cutover
+# LL Loyalty: Joy migration and cutover
 
 Runbook for module 8. Read [PLAN.md](PLAN.md) first. Scripts referenced here:
 `scripts/setup-loyalty-program.sql`, `scripts/provision-loyalty-shopify-app.sql`,
 `scripts/joy-import.ts`, `scripts/add-platform-staff.sql`.
 
-**Rule:** Joy stays on until the daily compare shows our balances and tiers match Joy's for every
-member, or every difference is explained. Then switch.
+**Rule (changed 2026-10-16, J):** no 30-day parallel run. Joy drives almost no revenue ($150 of
+$31,009 in 30 days, JOY-REVIEW.md), so matching it for a month buys little. Install (B), check on
+the real store for a few days (C), then switch the same way as before (D). Members' Joy balances
+and tiers still come across: the D2 true-up sets every member to Joy's final numbers, so whatever
+our ledger scored in between doesn't matter for balances.
 
 ---
 
@@ -80,33 +83,24 @@ Do B1-B4 in one sitting so the Joy export is as close to install time as possibl
 5. **Spot-check 10 members** in `/loyalty` against Joy's admin: points, tier, birthday.
 6. Purge the import snapshot: `npx tsx scripts/joy-import.ts --purge <snapshot>`.
 
-## C. Parallel run (30 days)
+## C. Before switching (a few days, not 30)
 
 Joy is still the customer-facing program. Ours runs silently: the Wave Rewards block is **not**
-on the live page yet, Klaviyo is off.
+on the live page yet, Klaviyo is off. Our ledger scores real orders in this window; D2 overwrites
+balances with Joy's anyway.
 
-**Daily** (or every few days):
-
-1. Run `scripts/klaviyo-joy-export.ts` again, then `joy-import.ts --kind compare --apply`. Read the
-   summary and the top differences. (Klaviyo lags Joy by minutes, so a few very recent changes show
-   as timing differences.)
-2. Sort each difference into one of these:
-   - **Expected:** the member redeemed, claimed Instagram, set a birthday or got a staff
-     adjustment *in Joy*. Our ledger never sees those, so they're fine, and the cutover true-up
-     absorbs them. Check in Joy's admin for that member.
-   - **Timing:** an order or refund in the minutes around the export. It disappears next day.
-   - **A bug:** an order, refund, milestone or tier promotion we scored differently. Look at the
-     member's history in `/loyalty` and fix it before cutover.
-3. `select topic, outcome, error from loyalty_webhook_receipts where error is not null order by received_at desc;`
+1. Run the QA below on the real store.
+2. `select topic, outcome, error from loyalty_webhook_receipts where error is not null order by received_at desc;`
    should be empty.
-4. `select status, count(*) from loyalty_discount_codes group by 1;` and
+3. `select status, count(*) from loyalty_discount_codes group by 1;` and
    `select key, last_error from loyalty_perks;` show no failures.
-5. Purge each compare snapshot once read.
+4. Optional sanity check, once: a Klaviyo export + `joy-import.ts --kind compare --apply` on a
+   handful of members who ordered since B. Differences should only be Joy-side redemptions,
+   claims or birthdays. Purge the snapshot.
 
-**Exit criteria:** five consecutive compares with zero bug-type differences, and every
-`points_only` / `tier_only` row explained.
+**Exit criteria:** QA passes and the checks above are clean.
 
-### QA on the real store (once, early in the parallel run)
+### QA on the real store
 
 Use a test customer account on tsunami.store and a hidden duplicate page (e.g.
 `/pages/wave-rewards-ll`, not linked anywhere) with the Wave Rewards block on it.
