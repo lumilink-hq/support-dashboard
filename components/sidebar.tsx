@@ -40,6 +40,7 @@ const LOYALTY_ADMIN_PAGES: DashboardPage[] = [
   { href: "/loyalty", label: "Members" },
   { href: "/loyalty/insights", label: "Insights" },
   { href: "/loyalty/campaigns", label: "Campaigns" },
+  { href: "/loyalty/program", label: "Program" },
 ];
 
 // One Loyalty section. A workspace with a loyalty program gets its own results
