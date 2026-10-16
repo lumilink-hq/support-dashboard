@@ -11,6 +11,7 @@ api_version = "2026-07"
 type = "ui_extension"
 name = "Wave Rewards UI"
 handle = "wave-rewards-ui"
+uid = "0fbec458-57a9-7266-4cec-95175241c55846d0645e"
 
   # Thank-you page: points this order earns; for treatment, next tier + next reward.
   [[extensions.targeting]]
