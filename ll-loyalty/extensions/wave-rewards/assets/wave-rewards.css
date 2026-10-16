@@ -226,6 +226,27 @@
 .llr-plus { color: #13804a; font-weight: 800; }
 .llr-minus { color: #b42318; font-weight: 800; }
 
+/* Badges, streak, challenges (0216, Phase 1b module 13; treatment members only) */
+.llr-streak { max-width: 640px; margin: 0 auto 8px !important; text-align: center; font-size: 17px; }
+.llr-h3 { margin: 28px 0 14px !important; font-size: 20px; font-weight: 700; }
+.llr-badges { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.llr-bdg {
+  display: flex; gap: 12px; align-items: flex-start; padding: 16px;
+  background: var(--llr-surface); border: 1px solid var(--llr-line); border-radius: var(--llr-radius);
+}
+.llr-bdg b { display: block; font-size: 16px; }
+.llr-bdg p { margin-top: 4px !important; font-size: 14px; color: var(--llr-muted); }
+.llr-bdg .llr-bar--sm { margin: 10px 0 6px; }
+.llr-bdg .llr-done { margin-top: 6px !important; font-size: 14px; }
+.llr-bdg__ico { flex: none; position: relative; width: 36px; height: 36px; border-radius: 50%; background: var(--llr-line); }
+.llr-bdg__ico::after {
+  content: ""; position: absolute; inset: 9px; background: #fff;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l3 6.6 7 .7-5.3 4.7 1.6 7L12 17.3 5.7 21l1.6-7L2 9.3l7-.7Z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l3 6.6 7 .7-5.3 4.7 1.6 7L12 17.3 5.7 21l1.6-7L2 9.3l7-.7Z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.llr-bdg.is-earned { border-color: color-mix(in srgb, var(--llr-accent) 40%, var(--llr-line)); background: color-mix(in srgb, var(--llr-accent) 4%, #fff); }
+.llr-bdg.is-earned .llr-bdg__ico { background: var(--llr-accent); }
+
 /* Toast */
 .llr-status:empty { display: none; }
 .llr-status {

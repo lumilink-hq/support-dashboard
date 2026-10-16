@@ -121,6 +121,28 @@ export const COLLECTION_PRODUCTS = `query LoyaltyCollectionProducts($id: ID!, $a
   }
 }`;
 
+// Product types for order lines (0216): up to 250 products per request.
+export const PRODUCT_TYPES = `query LoyaltyProductTypes($ids: [ID!]!) {
+  nodes(ids: $ids) {
+    ... on Product { id productType }
+  }
+}`;
+
+export const productGid = (id: number) => `gid://shopify/Product/${id}`;
+
+/**
+ * The fetched items for every id asked for: a deleted product (null node)
+ * comes back with an empty type, so it isn't asked for again.
+ */
+export function productTypeItems(ids: number[], nodes: unknown): { product_id: number; product_type: string }[] {
+  const found = new Map<number, string>();
+  for (const n of Array.isArray(nodes) ? nodes : []) {
+    const id = productIdFromGid((n as { id?: unknown } | null)?.id);
+    if (id) found.set(id, String((n as { productType?: unknown }).productType ?? "").trim());
+  }
+  return ids.map((id) => ({ product_id: id, product_type: found.get(id) ?? "" }));
+}
+
 /** Search syntax for an exact tag; quotes and backslashes escaped. */
 export const tagSearch = (tag: string) => `tag:"${tag.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 

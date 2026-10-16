@@ -13,7 +13,8 @@
 //   4. pending reward / referral codes -> discountCodeBasicCreate
 //   5. order tags on paid orders that used our codes (0204; needs write_orders)
 //   6. members whose tier, points, tier spend or group changed -> tier tag + metafields
-//   7. bonus campaign scopes (0214): a collection's or tag's products -> loyalty_campaign_products
+//   7. bonus campaign and challenge scopes (0214, 0216): a collection's or tag's products
+//   8. product types for new order-line products (0216) -> badges / challenges re-checked
 // pg_cron (run_due_loyalty_shopify) calls it every minute, but only for
 // programs with work. Everything is safe to repeat: a code that already
 // exists in Shopify (an earlier attempt landed) is looked up, not duplicated.
@@ -37,7 +38,10 @@ import {
   type PerkRow,
   COLLECTION_PRODUCTS,
   perkDiscountInput,
+  PRODUCT_TYPES,
+  productGid,
   productIdFromGid,
+  productTypeItems,
   programMetafield,
   SEGMENT_CREATE,
   SHOP_ID,
@@ -193,11 +197,18 @@ async function orderTags(c: Ctx) {
   if (done) c.log.push(`${done} order tags`);
 }
 
-const MAX_CAMPAIGN_PAGES = 20; // 5,000 products per campaign scope
+const MAX_CAMPAIGN_PAGES = 20; // 5,000 products per campaign or challenge scope
 
-async function campaignProducts(c: Ctx) {
-  const due = await rpc<{ id: string; collection_gid: string | null; product_tag: string | null }[]>(
-    "loyalty_campaigns_to_resolve", { p_program: c.programId });
+// Campaign (0214) and tagged-product challenge (0216) scopes: same lookup,
+// different tables.
+const SCOPES = {
+  campaign: { due: "loyalty_campaigns_to_resolve", done: "loyalty_campaign_resolved", idArg: "p_campaign" },
+  challenge: { due: "loyalty_challenges_to_resolve", done: "loyalty_challenge_resolved", idArg: "p_challenge" },
+} as const;
+
+async function scopeProducts(c: Ctx, kind: keyof typeof SCOPES) {
+  const s = SCOPES[kind];
+  const due = await rpc<{ id: string; collection_gid: string | null; product_tag: string | null }[]>(s.due, { p_program: c.programId });
   for (const camp of due) {
     if (!timeLeft(c)) return;
     try {
@@ -222,11 +233,23 @@ async function campaignProducts(c: Ctx) {
         after = conn.pageInfo.endCursor ?? null;
       }
       if (after) throw new Error(`more than ${MAX_CAMPAIGN_PAGES * 250} products in scope`);
-      await rpc("loyalty_campaign_resolved", { p_campaign: camp.id, p_product_ids: ids, p_error: null });
-      c.log.push(`campaign ${camp.id}: ${ids.length} products`);
+      await rpc(s.done, { [s.idArg]: camp.id, p_product_ids: ids, p_error: null });
+      c.log.push(`${kind} ${camp.id}: ${ids.length} products`);
     } catch (e) {
-      await rpc("loyalty_campaign_resolved", { p_campaign: camp.id, p_product_ids: null, p_error: e instanceof Error ? e.message : String(e) });
+      await rpc(s.done, { [s.idArg]: camp.id, p_product_ids: null, p_error: e instanceof Error ? e.message : String(e) });
     }
+  }
+}
+
+// Product types of products seen on order lines (0216); fetching them
+// re-evaluates the members who bought them (badges, challenges).
+async function productTypes(c: Ctx) {
+  while (timeLeft(c)) {
+    const ids = await rpc<number[]>("loyalty_products_to_fetch", { p_program: c.programId, p_limit: 250 });
+    if (!ids.length) return;
+    const data = await gql(c, PRODUCT_TYPES, { ids: ids.map(productGid) });
+    const n = await rpc<number>("loyalty_products_fetched", { p_program: c.programId, p_items: productTypeItems(ids, data.nodes) });
+    c.log.push(`${ids.length} product types (${n} members re-checked)`);
   }
 }
 
@@ -310,7 +333,9 @@ Deno.serve(async (req) => {
     if (timeLeft(c)) await codes(c);
     if (timeLeft(c)) await orderTags(c);
     if (timeLeft(c)) await members(c);
-    if (timeLeft(c)) await campaignProducts(c);
+    if (timeLeft(c)) await scopeProducts(c, "campaign");
+    if (timeLeft(c)) await scopeProducts(c, "challenge");
+    if (timeLeft(c)) await productTypes(c);
 
     console.log(`loyalty-shopify ${c.shop}: ${c.log.join(", ") || "nothing to do"} (${Date.now() - c.started}ms)`);
     return Response.json({ ok: true, did: c.log });

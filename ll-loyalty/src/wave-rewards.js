@@ -2,8 +2,9 @@
  * SOURCE. Edit this file, then `npm run build:blocks` (from ll-loyalty/) writes the
  * minified extensions/wave-rewards/assets/wave-rewards.js (app block JS must be < 10 KB).
  * Lazy chunks, built the same way: src/wave-rewards-member.js (signed-in
- * member views, loaded only for members) and src/wave-rewards-ref.js (the
- * referred friend's form, only on ?ref= visits).
+ * member views, loaded only for members), src/wave-rewards-ach.js (badges,
+ * streak, challenges: only when the proxy sends achievements) and
+ * src/wave-rewards-ref.js (the referred friend's form, only on ?ref= visits).
  *
  * Wave Rewards page (LL Loyalty, module 5). Fills blocks/rewards-page.liquid
  * from the app proxy: GET {proxy}/state, POST {proxy}/redeem|birthday|claim|referral.
@@ -75,9 +76,10 @@
       if (s._s !== 200 || !s.program) throw 0;
       self.s = s;
       self.m = s.member;
-      return s.member ? self.script("LLR_MEMBER", "memberJs") : null;
+      return s.member ? Promise.all([self.script("LLR_MEMBER", "memberJs"), s.achievements ? self.script("LLR_ACH", "achJs") : 0]) : null;
     }).then(function () {
       if (self.m) window.LLR_MEMBER(P, U);
+      if (self.m && self.s.achievements) window.LLR_ACH(P, U);
       self.app.innerHTML = self.view().s;
       self.friend();
     }).catch(function () {
@@ -87,7 +89,7 @@
 
   P.view = function () {
     var m = this.m;
-    return H`${m ? this.card() : this.hero()}<div data-llr="friend"></div>${m ? this.rewards() : this.how()}${this.earn()}${m ? this.refer() : ""}${this.tiers()}${m ? this.history() : ""}`;
+    return H`${m ? this.card() : this.hero()}<div data-llr="friend"></div>${m ? this.rewards() : this.how()}${m && this.s.achievements ? this.ach() : ""}${this.earn()}${m ? this.refer() : ""}${this.tiers()}${m ? this.history() : ""}`;
   };
 
   // Cheapest reward the member can buy with points, for the card's "next reward" line.

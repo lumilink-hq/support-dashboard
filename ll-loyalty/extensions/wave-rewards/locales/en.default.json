@@ -106,6 +106,18 @@
     "you_are_here": "You're here",
     "orders_count": "{count} orders so far",
     "copy_link": "Copy link",
-    "share_title": "Give {amount}, get {points} points"
+    "share_title": "Give {amount}, get {points} points",
+    "achievements_title": "Badges and challenges",
+    "streak_months": "{months}-month streak.",
+    "streak_keep": "Order by {date} to keep it going.",
+    "streak_done": "You've ordered this month. Next order by {date} keeps it going.",
+    "streak_start": "Order this month to start a streak. 3 months in a row earns a badge.",
+    "challenges_title": "Challenges",
+    "challenge_ends": "ends {date}",
+    "challenge_done": "Done! +{points} points",
+    "badges_title": "Badges",
+    "badge_earned": "Earned",
+    "badge_earned_pts": "Earned: +{points} points",
+    "progress": "{have} of {need}"
   }
 }

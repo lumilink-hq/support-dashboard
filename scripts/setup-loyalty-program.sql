@@ -96,12 +96,16 @@ begin
      set tier_key = excluded.tier_key, title = excluded.title, kind = excluded.kind,
          min_subtotal_cents = excluded.min_subtotal_cents;
 
-  raise notice 'program % for % (%): % tiers, % earn rules, % rewards, % perks',
+  -- Badges (0216, Phase 1b): the default five plus the milestones as badges.
+  perform loyalty_seed_default_badges(v_prog);
+
+  raise notice 'program % for % (%): % tiers, % earn rules, % rewards, % perks, % badges',
     v_prog, v_client_name, lower(v_shop),
     (select count(*) from loyalty_tiers where program_id = v_prog),
     (select count(*) from loyalty_earn_rules where program_id = v_prog),
     (select count(*) from loyalty_rewards where program_id = v_prog),
-    (select count(*) from loyalty_perks where program_id = v_prog);
+    (select count(*) from loyalty_perks where program_id = v_prog),
+    (select count(*) from loyalty_badges where program_id = v_prog);
 
   if v_dry_run then
     raise exception 'DRY RUN: rolled back. Set v_dry_run = false to apply.';

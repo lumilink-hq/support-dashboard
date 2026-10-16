@@ -2,7 +2,8 @@
 // loyalty-proxy — the Wave Rewards theme block's backend, reached through the
 // Shopify app proxy (storefront /apps/loyalty/* -> here). 0204.
 //
-//   GET  /state      program rules; the shopper's own state when logged in
+//   GET  /state      program rules; the shopper's own state when logged in,
+//                    plus their badges / streak / challenges (0216, treatment only)
 //   POST /redeem     {reward_key, request_key}   spend points, get a code
 //   POST /birthday   {birthday: "YYYY-MM-DD"}    once
 //   POST /claim      {key}                       honor-system action (Instagram follow)
@@ -81,7 +82,14 @@ Deno.serve(async (req) => {
     if (!programId) return json({ error: "no_program" }, 404);
 
     if (r === "state") {
-      return json(await rpc("loyalty_storefront_state", { p_program: programId, p_customer_id: auth.customerId }));
+      const [state, achievements] = await Promise.all([
+        rpc<Record<string, unknown> | null>("loyalty_storefront_state", { p_program: programId, p_customer_id: auth.customerId }),
+        // Badges, streak, challenges (0216): null for guests, the holdout, or before Phase 1b is live.
+        auth.customerId
+          ? rpc<unknown>("loyalty_storefront_achievements", { p_program: programId, p_customer_id: auth.customerId })
+          : Promise.resolve(null),
+      ]);
+      return json(state ? { ...state, achievements } : state);
     }
 
     let body: Record<string, unknown> = {};

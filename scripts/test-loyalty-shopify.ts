@@ -15,7 +15,9 @@ import {
   memberMetafields,
   METAFIELD_DEFINITIONS,
   perkDiscountInput,
+  productGid,
   productIdFromGid,
+  productTypeItems,
   programMetafield,
   tagSearch,
   tierSegmentQuery,
@@ -77,6 +79,10 @@ function main() {
     METAFIELD_DEFINITIONS.map((d) => `${d.ownerType}:${d.key}:${d.type}`),
     ["CUSTOMER:tier:single_line_text_field", "CUSTOMER:points:number_integer", "CUSTOMER:tier_spend_cents:number_integer",
      "CUSTOMER:group:single_line_text_field", "SHOP:program:json"]);
+  eq("product types: found, missing type, deleted product (null node) -> '' so it isn't asked again",
+    productTypeItems([11, 12, 13], [{ id: "gid://shopify/Product/11", productType: " Glass " }, { id: "gid://shopify/Product/12", productType: null }, null]),
+    [{ product_id: 11, product_type: "Glass" }, { product_id: 12, product_type: "" }, { product_id: 13, product_type: "" }]);
+  eq("product types: gid", productGid(42), "gid://shopify/Product/42");
   eq("campaign scope: exact tag search", tagSearch("New Arrivals"), 'tag:"New Arrivals"');
   eq("campaign scope: quotes and backslashes escaped", tagSearch('Say "hi" \\o/'), 'tag:"Say \\"hi\\" \\\\o/"');
   eq("campaign scope: product gid -> id", productIdFromGid("gid://shopify/Product/8123456789"), 8123456789);

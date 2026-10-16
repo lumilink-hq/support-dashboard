@@ -3,11 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStaffPage } from "../access";
 import { money, num } from "../format";
 import { saveCampaign, setCampaignActive } from "./actions";
+import { BadgeTable, ChallengeForm, ChallengeList, type Badge, type Challenge } from "./challenges";
 
 // Campaign console (Phase 1b module 14, 0215): create, schedule, edit and
 // pause bonus campaigns (0214), see their results, and the points liability
 // + expiry forecast. Staff + MFA only, like every /loyalty page; every change
-// is in the access log. Challenges join this page with module 13.
+// is in the access log. Challenges and the badge list (0216, module 13) are in
+// ./challenges.tsx.
 
 type Campaign = {
   id: string;
@@ -180,9 +182,9 @@ function CampaignForm({ programId, c }: { programId: string; c?: Campaign }) {
 export default async function LoyaltyCampaignsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ program?: string; edit?: string; new?: string; saved?: string; error?: string }>;
+  searchParams: Promise<{ program?: string; edit?: string; new?: string; editch?: string; newch?: string; saved?: string; error?: string }>;
 }) {
-  const { program: programParam, edit, new: isNew, saved, error: errorParam } = await searchParams;
+  const { program: programParam, edit, new: isNew, editch, newch, saved, error: errorParam } = await searchParams;
   await requireStaffPage(`/loyalty/campaigns${programParam ? `?program=${encodeURIComponent(programParam)}` : ""}`);
   const supabase = await createClient();
 
@@ -207,14 +209,18 @@ export default async function LoyaltyCampaignsPage({
     );
   }
 
-  const [con, fc] = await Promise.all([
+  const [con, fc, chl] = await Promise.all([
     supabase.rpc("loyalty_staff_campaigns", { p_program: program.id }),
     supabase.rpc("loyalty_staff_forecast", { p_program: program.id }),
+    supabase.rpc("loyalty_staff_challenges", { p_program: program.id }),
   ]);
-  const error = errorParam ?? con.error?.message ?? fc.error?.message ?? null;
+  const error = errorParam ?? con.error?.message ?? fc.error?.message ?? chl.error?.message ?? null;
   const c = con.data as Console | null;
   const f = fc.data as Forecast | null;
+  const ch = chl.data as { challenges: Challenge[]; badges: Badge[] } | null;
   const editing = c?.campaigns.find((x) => x.id === edit);
+  const editingCh = ch?.challenges.find((x) => x.id === editch);
+  const formOpen = Boolean(isNew || editing || newch || editingCh);
 
   return (
     <div className="max-w-5xl">
@@ -232,13 +238,21 @@ export default async function LoyaltyCampaignsPage({
             </Link>
           </p>
         </div>
-        {!isNew && !editing ? (
-          <Link
-            href={`/loyalty/campaigns?program=${program.id}&new=1`}
-            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
-          >
-            New campaign
-          </Link>
+        {!formOpen ? (
+          <div className="flex gap-2">
+            <Link
+              href={`/loyalty/campaigns?program=${program.id}&new=1`}
+              className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+            >
+              New campaign
+            </Link>
+            <Link
+              href={`/loyalty/campaigns?program=${program.id}&newch=1`}
+              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+            >
+              New challenge
+            </Link>
+          </div>
         ) : null}
       </div>
 
@@ -257,8 +271,15 @@ export default async function LoyaltyCampaignsPage({
           <CampaignForm programId={program.id} c={editing} />
         </section>
       ) : null}
+      {newch || editingCh ? (
+        <section className="mt-5 rounded-lg border border-gray-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-gray-900">{editingCh ? `Edit ${editingCh.name}` : "New challenge"}</h2>
+          <ChallengeForm programId={program.id} c={editingCh} />
+        </section>
+      ) : null}
 
-      <section className="mt-5 space-y-3">
+      <h2 className="mt-6 text-sm font-semibold text-gray-900">Bonus campaigns</h2>
+      <section className="mt-3 space-y-3">
         {(c?.campaigns ?? []).map((x) => (
           <article key={x.id} id={`c-${x.id}`} className="rounded-lg border border-gray-200 bg-white p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -341,6 +362,25 @@ export default async function LoyaltyCampaignsPage({
         ))}
         {c && c.campaigns.length === 0 ? <p className="text-sm text-gray-500">No campaigns yet.</p> : null}
       </section>
+
+      {ch ? (
+        <>
+          <h2 className="mt-6 text-sm font-semibold text-gray-900">Challenges</h2>
+          <p className="mt-0.5 text-xs text-gray-500">A goal within a window; points once when a treatment member reaches it.</p>
+          <div className="mt-3">
+            <ChallengeList programId={program.id} challenges={ch.challenges} />
+          </div>
+
+          <section className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
+            <h2 className="text-sm font-semibold text-gray-900">Badges</h2>
+            <p className="mt-0.5 text-xs text-gray-500">
+              One-time awards, treatment members only. Set by LumiLink in the database (loyalty_badges); milestones show Joy&rsquo;s
+              existing order awards.
+            </p>
+            <BadgeTable badges={ch.badges} />
+          </section>
+        </>
+      ) : null}
 
       {f ? (
         <section className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
