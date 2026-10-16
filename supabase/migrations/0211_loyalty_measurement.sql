@@ -158,8 +158,7 @@ begin
                   and used_at >= v_from and used_at < v_to
                 group by member_id) c on c.member_id = m.id
    where m.program_id = p_program and m.status = 'active' and m.enrolled_at < v_to;
-  -- "where true": PostgREST's pg-safeupdate refuses an UPDATE without a WHERE.
-  update pg_temp.li_per set val = case when v_margin is null then rev - cost else rev * v_margin - cost end where true;
+  update pg_temp.li_per set val = case when v_margin is null then rev - cost else rev * v_margin - cost end;
 
   select coalesce(jsonb_object_agg(grp, s), '{}'::jsonb) into v_groups
     from (select grp, jsonb_build_object(
