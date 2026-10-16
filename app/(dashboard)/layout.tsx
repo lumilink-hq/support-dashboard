@@ -41,13 +41,16 @@ export default async function DashboardLayout({
   // Same two gates the pages themselves use, so the sidebar can't offer a
   // page that then renders locked (or hide one that would open). Voice is
   // only gated once ENFORCE_ENTITLEMENTS=1; SEO always is (lib/seo-access.ts).
-  const [voice, seo, loyaltyRes] = await Promise.all([
+  const [voice, seo, loyaltyRes, staffRes] = await Promise.all([
     featureGate("voice"),
     getSeoAccess(),
     // LL Loyalty results row (0213); false on any error so the shell still renders.
     supabase.rpc("loyalty_client_has_program"),
+    // LL Loyalty admin rows: platform staff only (0206/0210), "none" for everyone else.
+    supabase.rpc("loyalty_staff_access"),
   ]);
   const loyalty = loyaltyRes.data === true;
+  const loyaltyStaff = ["enroll", "verify", "ok"].includes(staffRes.data as string);
   // featureGate("voice") is open for everyone while ENFORCE_ENTITLEMENTS is
   // off — that exists so LEGACY voice tenants keep access. A workspace that
   // never set up the phone agent was never one, so without a voice
@@ -77,13 +80,13 @@ export default async function DashboardLayout({
     <div className="flex min-h-full flex-1">
       {/* Below md the sidebar lives in MobileNav's drawer instead. */}
       <div className="hidden md:flex">
-        <Sidebar clientName={clientName} access={access} loyalty={loyalty} />
+        <Sidebar clientName={clientName} access={access} loyalty={loyalty} loyaltyStaff={loyaltyStaff} />
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 md:px-6">
           <div className="flex min-w-0 items-center gap-2">
-            <MobileNav clientName={clientName} access={access} loyalty={loyalty} />
+            <MobileNav clientName={clientName} access={access} loyalty={loyalty} loyaltyStaff={loyaltyStaff} />
             <div className="truncate text-sm text-gray-500">{displayName}</div>
           </div>
           <form action={signout}>

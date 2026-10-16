@@ -34,23 +34,39 @@ const LOCKED_ROW: Record<Exclude<FeatureState, "active" | "past_due">, (name: st
 };
 
 // LL Loyalty results (0213): only for a workspace with a loyalty program.
-// Aggregates only; the member admin (/loyalty) is staff-only and never listed.
+// Aggregates only.
 const LOYALTY_PAGES: DashboardPage[] = [{ href: "/rewards", label: "Results" }];
+
+// LL Loyalty admin (0206 staff): only for platform staff, so tenants never see
+// it. The pages still check staff + MFA themselves (loyalty/access.ts).
+const LOYALTY_ADMIN_PAGES: DashboardPage[] = [
+  { href: "/loyalty", label: "Members" },
+  { href: "/loyalty/insights", label: "Insights" },
+  { href: "/loyalty/campaigns", label: "Campaigns" },
+  { href: "/loyalty/security", label: "Security" },
+];
 
 export function Sidebar({
   clientName,
   access,
   loyalty = false,
+  loyaltyStaff = false,
 }: {
   clientName: string;
   access: ProductAccess;
   loyalty?: boolean;
+  loyaltyStaff?: boolean;
 }) {
   const pathname = usePathname();
 
   // Longest matching href wins, so /seo/reports lights up Reports and not
   // Overview (/seo) as well.
-  const allHrefs = [...PRODUCTS.flatMap((p) => p.pages), ...(loyalty ? LOYALTY_PAGES : []), ...WORKSPACE_PAGES]
+  const allHrefs = [
+    ...PRODUCTS.flatMap((p) => p.pages),
+    ...(loyalty ? LOYALTY_PAGES : []),
+    ...(loyaltyStaff ? LOYALTY_ADMIN_PAGES : []),
+    ...WORKSPACE_PAGES,
+  ]
     .filter((p) => !p.soon)
     .map((p) => p.href);
   const activeHref = allHrefs
@@ -109,6 +125,17 @@ export function Sidebar({
             <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Loyalty</p>
             <div className="space-y-1">
               {LOYALTY_PAGES.map((page) => (
+                <NavRow key={page.href} page={page} active={page.href === activeHref} />
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {loyaltyStaff ? (
+          <div>
+            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Loyalty admin</p>
+            <div className="space-y-1">
+              {LOYALTY_ADMIN_PAGES.map((page) => (
                 <NavRow key={page.href} page={page} active={page.href === activeHref} />
               ))}
             </div>
