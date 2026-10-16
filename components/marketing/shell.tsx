@@ -153,7 +153,7 @@ function NavMenu({
                 </a>
               ))}
             </div>
-            <div className="flex w-52 shrink-0 flex-col bg-gray-900 p-5 text-white">
+            <div className="flex w-52 shrink-0 flex-col bg-ink-gradient p-5 text-white">
               <p className="text-sm font-semibold">{aside.title}</p>
               <p className="mt-2 flex-1 text-xs leading-relaxed text-gray-300">{aside.body}</p>
               <a
@@ -305,8 +305,10 @@ export async function MarketingShell({
   const groups = navGroups(marketingHome);
 
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-white text-gray-900">
-      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/90 backdrop-blur">
+    // `.marketing` re-tints the gray scale to blush paper and charcoal ink
+    // (globals.css); the dashboard, outside this shell, keeps its own.
+    <div className="marketing flex min-h-full flex-1 flex-col text-gray-900">
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-blush/90 backdrop-blur">
         <div className="relative mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Wordmark href={homeHref} />
 
@@ -330,7 +332,7 @@ export async function MarketingShell({
               // (/seo for an SEO-only client), so the shell needn't look it up.
               <Link
                 href="/"
-                className="whitespace-nowrap rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+                className="whitespace-nowrap rounded-md btn-raspberry px-4 py-2 text-sm font-medium"
               >
                 Go To Dashboard
               </Link>
@@ -346,7 +348,7 @@ export async function MarketingShell({
                 </Link>
                 <Link
                   href="/signup"
-                  className="whitespace-nowrap rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+                  className="whitespace-nowrap rounded-md btn-raspberry px-4 py-2 text-sm font-medium"
                 >
                   Get Started
                 </Link>

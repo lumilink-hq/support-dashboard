@@ -328,7 +328,7 @@ export function SeoPricingSection({
             <div
               key={plan.key}
               className={`relative flex flex-col rounded-2xl bg-white p-8 shadow-sm ${
-                featured ? "border-2 border-gray-900" : "border border-gray-200"
+                featured ? "border-2 border-lumi-600" : "border border-gray-200"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -379,7 +379,7 @@ export function SeoPricingSection({
                 href={ctaHref}
                 className={`mt-6 block rounded-md px-4 py-3 text-center text-sm font-medium ${
                   featured
-                    ? "bg-gray-900 text-white hover:bg-gray-800"
+                    ? "btn-raspberry"
                     : "border border-gray-300 text-gray-700 hover:bg-gray-50"
                 }`}
               >
@@ -433,7 +433,7 @@ export async function SeoSolution() {
 
   return (
     <MarketingShell>
-      <Section className="pb-20 pt-16 md:pb-28 md:pt-24">
+      <Section className="bg-hero-glow pb-20 pt-16 md:pb-28 md:pt-24">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
             <Eyebrow>SEO + AI Search</Eyebrow>
@@ -449,7 +449,7 @@ export async function SeoSolution() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 href={primaryHref}
-                className="rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-800"
+                className="rounded-md btn-raspberry px-5 py-3 text-sm font-medium"
               >
                 Get Started
               </Link>
@@ -489,7 +489,7 @@ export async function SeoSolution() {
       {/* AI search gets its own band: it's the part of the product people
           don't expect from an SEO service, and it was one bullet before. */}
       <Section className="py-20">
-        <div className="rounded-2xl bg-gray-900 px-8 py-12 text-white md:px-12">
+        <div className="rounded-2xl bg-ink-gradient px-8 py-12 text-white md:px-12">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
             AI Search
           </p>

@@ -163,7 +163,7 @@ export default async function ContactPage({
 
               <button
                 type="submit"
-                className="w-full rounded-md bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+                className="w-full rounded-md btn-raspberry px-4 py-2.5 text-sm font-medium"
               >
                 Send
               </button>

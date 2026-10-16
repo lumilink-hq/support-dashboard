@@ -45,7 +45,7 @@ const FLOW = [
 export function ProductsOverview() {
   return (
     <MarketingShell>
-      <Section className="bg-[radial-gradient(ellipse_55%_60%_at_78%_45%,var(--color-lumi-100),transparent)] pb-20 pt-16 md:pb-28 md:pt-24">
+      <Section className="bg-hero-glow pb-20 pt-16 md:pb-28 md:pt-24">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
             <Eyebrow>Products</Eyebrow>
@@ -82,7 +82,7 @@ export function ProductsOverview() {
             <Link
               key={p.title}
               href={p.href}
-              className="reveal group flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-gray-900 hover:shadow-md"
+              className="reveal group flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-lumi-400 hover:shadow-md"
             >
               <span className="w-max rounded-full bg-lumi-50 px-2.5 py-0.5 text-xs font-semibold text-lumi-700">
                 {p.tag}

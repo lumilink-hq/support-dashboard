@@ -165,7 +165,7 @@ function Choice({
       onClick={onClick}
       className={`flex w-full items-start gap-3 rounded-lg border p-3 text-left transition ${
         selected
-          ? "border-gray-900 bg-gray-900 text-white"
+          ? "border-lumi-600 bg-lumi-600 text-white"
           : "border-gray-200 bg-white text-gray-900 hover:border-gray-400"
       }`}
     >
@@ -180,7 +180,7 @@ function Choice({
       <span>
         <span className="block text-sm font-medium">{title}</span>
         {body ? (
-          <span className={`mt-0.5 block text-xs ${selected ? "text-gray-300" : "text-gray-500"}`}>
+          <span className={`mt-0.5 block text-xs ${selected ? "text-white/80" : "text-gray-500"}`}>
             {body}
           </span>
         ) : null}
@@ -317,7 +317,7 @@ export function PlanFinder({
             <div className="mt-auto pt-6">
               <a
                 href={enterpriseHref}
-                className="block rounded-md bg-gray-900 px-4 py-3 text-center text-sm font-medium text-white hover:bg-gray-800"
+                className="block rounded-md btn-raspberry px-4 py-3 text-center text-sm font-medium"
               >
                 Talk To Us About Enterprise
               </a>
@@ -348,7 +348,7 @@ export function PlanFinder({
               </p>
               <Link
                 href={onlySeo ? seoSignupHref : signupHref}
-                className="mt-4 block rounded-md bg-gray-900 px-4 py-3 text-center text-sm font-medium text-white hover:bg-gray-800"
+                className="mt-4 block rounded-md btn-raspberry px-4 py-3 text-center text-sm font-medium"
               >
                 Create Your Account
               </Link>

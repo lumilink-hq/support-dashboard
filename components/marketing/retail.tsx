@@ -199,7 +199,7 @@ function LocationScale() {
             ))}
           </ul>
         </div>
-        <div className="rounded-2xl border-2 border-gray-900 bg-white p-8 shadow-sm">
+        <div className="rounded-2xl border-2 border-lumi-600 bg-white p-8 shadow-sm">
           <p className="text-sm font-medium text-gray-500">Multi-location</p>
           <h3 className="mt-2 text-xl font-semibold text-gray-900">
             Every storefront, one account
@@ -229,7 +229,7 @@ function LocationScale() {
 export function RetailSolution() {
   return (
     <MarketingShell>
-      <Section className="pb-20 pt-16 md:pb-28 md:pt-24">
+      <Section className="bg-hero-glow pb-20 pt-16 md:pb-28 md:pt-24">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
             <Eyebrow>AI customer service for retail stores</Eyebrow>
@@ -246,7 +246,7 @@ export function RetailSolution() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 href={SIGNUP_CTA}
-                className="rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-800"
+                className="rounded-md btn-raspberry px-5 py-3 text-sm font-medium"
               >
                 Create your account
               </Link>

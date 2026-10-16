@@ -204,7 +204,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
       {/* Hero                                                             */}
       {/* ---------------------------------------------------------------- */}
       {/* The faint glow behind the mockup is the "Lumi" in LumiLink; keep it faint. */}
-      <Section className="bg-[radial-gradient(ellipse_55%_60%_at_78%_45%,var(--color-lumi-100),transparent)] pb-20 pt-16 md:pb-28 md:pt-24">
+      <Section className="bg-hero-glow pb-20 pt-16 md:pb-28 md:pt-24">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
             <Eyebrow>AI Automation For Your Whole Business</Eyebrow>
@@ -221,7 +221,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 href={SIGNUP_CTA}
-                className="rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-800"
+                className="rounded-md btn-raspberry px-5 py-3 text-sm font-medium"
               >
                 Create Your Account
               </Link>
@@ -279,7 +279,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
             <Link
               key={p.title}
               href={p.href}
-              className="reveal group flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-gray-900 hover:shadow-md"
+              className="reveal group flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-lumi-400 hover:shadow-md"
             >
               <span className="w-max rounded-full bg-lumi-50 px-2.5 py-0.5 text-xs font-semibold text-lumi-700">
                 {p.tag}
@@ -312,7 +312,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
         <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <Link
             href="/solutions/service"
-            className="reveal group rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-gray-900 hover:shadow-md"
+            className="reveal group rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-lumi-400 hover:shadow-md"
           >
             <h3 className="text-lg font-semibold text-gray-900">Service Businesses</h3>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
@@ -326,7 +326,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
 
           <Link
             href="/solutions/ecommerce"
-            className="reveal group rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-gray-900 hover:shadow-md"
+            className="reveal group rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-lumi-400 hover:shadow-md"
           >
             <h3 className="text-lg font-semibold text-gray-900">Online Stores</h3>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
@@ -340,7 +340,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
 
           <Link
             href="/solutions/retail"
-            className="reveal group rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-gray-900 hover:shadow-md"
+            className="reveal group rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-lumi-400 hover:shadow-md"
           >
             <h3 className="text-lg font-semibold text-gray-900">Retail Locations</h3>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
@@ -354,7 +354,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
 
           <a
             href="#enterprise"
-            className="reveal group rounded-xl border-2 border-gray-900 bg-gray-900 p-6 text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-gray-800"
+            className="reveal group rounded-xl bg-ink-gradient p-6 text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
           >
             <h3 className="text-lg font-semibold">Multi-Location &amp; Enterprise</h3>
             <p className="mt-2 text-sm leading-relaxed text-gray-300">
@@ -444,7 +444,7 @@ export async function Landing({ homeHref = "/" }: { homeHref?: string }) {
         <div className="mt-12 grid gap-10 md:grid-cols-3">
           {STEPS.map((s) => (
             <div key={s.n} className="reveal">
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-gray-900 text-sm font-semibold text-white">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-lumi-600 text-sm font-semibold text-white">
                 {s.n}
               </span>
               <h3 className="mt-4 text-lg font-semibold text-gray-900">
