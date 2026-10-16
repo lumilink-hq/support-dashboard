@@ -12,7 +12,10 @@
 export const SITEMAP_PATHS = [
   "/",
   "/pricing",
+  "/products",
+  "/products/phone-agent",
   "/products/seo",
+  "/solutions/agencies",
   "/solutions/service",
   "/solutions/ecommerce",
   "/solutions/retail",

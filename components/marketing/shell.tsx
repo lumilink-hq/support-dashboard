@@ -31,11 +31,15 @@ type NavItem = { href: string; label: string; blurb?: string };
 function navGroups(marketingHome: string) {
   const home = (href: string) => (href === "/" ? marketingHome : href);
   return {
-    products: PRODUCTS.map((p) => ({
-      href: home(p.marketingHref),
-      label: p.name,
-      blurb: p.blurb,
-    })),
+    // The /products overview closes the menu, like RogIQ's "Platform" card.
+    products: [
+      ...PRODUCTS.map((p) => ({
+        href: home(p.marketingHref),
+        label: p.name,
+        blurb: p.blurb,
+      })),
+      { href: "/products", label: "All Products", blurb: "How everything fits together." },
+    ],
     solutions: SOLUTIONS.map((s) => ({ href: s.href, label: s.name, blurb: s.blurb })),
     // ENTERPRISE IS A TOP-LEVEL LINK (2026-09-28): it used to exist only as
     // a row under the phone plans, which multi-location buyers never found.

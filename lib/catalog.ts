@@ -39,10 +39,9 @@ export const PRODUCTS: Product[] = [
     key: "voice",
     name: "Phone Agent",
     blurb: "Answers every call, books jobs and captures leads, 24/7.",
-    // No product page of its own; the landing page is about this product.
-    // The marketing shell swaps "/" for "/home" when someone is signed in,
-    // because "/" redirects them into the dashboard.
-    marketingHref: "/",
+    // Its own page since 2026-10-16; before that the landing page doubled
+    // as this product's page.
+    marketingHref: "/products/phone-agent",
     pages: [
       { href: "/conversations", label: "Conversations" },
       { href: "/appointments", label: "Appointments" },
@@ -69,8 +68,8 @@ export const PRODUCTS: Product[] = [
 ];
 
 /**
- * Who the customer is: the industry pages under /solutions. Each pitches the
- * products that fit it. The creators landing page (/lp/creator-support) is
+ * Who the customer is: the industry pages under /solutions, plus one for
+ * agencies and resellers. Each pitches the products that fit it. The creators landing page (/lp/creator-support) is
  * deliberately NOT here: it stays a standalone campaign page (user,
  * 2026-09-23).
  */
@@ -89,6 +88,14 @@ export const SOLUTIONS: { name: string; blurb: string; href: string }[] = [
     name: "Service Businesses",
     blurb: "Every call answered and every job on the calendar.",
     href: "/solutions/service",
+  },
+  // WHO, NOT WHAT INDUSTRY (2026-10-16). Agencies and resellers buy for their
+  // clients rather than for themselves, so they get a page of their own next
+  // to the industries (docs/rogiq-site-plan.md item 2).
+  {
+    name: "Agencies & Resellers",
+    blurb: "Phone, chat and SEO for every client, from one account.",
+    href: "/solutions/agencies",
   },
 ];
 

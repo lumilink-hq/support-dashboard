@@ -47,7 +47,7 @@ export function OurStory() {
       <Section className="pb-16 pt-16 md:pb-20 md:pt-24">
         <div className="max-w-2xl">
           <Eyebrow>Our Story</Eyebrow>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
+          <h1 className="mt-4 display-hero text-gray-900">
             We Built This Because We Needed It Ourselves
           </h1>
           <p className="mt-5 text-lg leading-relaxed text-gray-600">

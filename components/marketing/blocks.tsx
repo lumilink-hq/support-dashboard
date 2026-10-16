@@ -106,6 +106,15 @@ export function Eyebrow({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * One or two key words in a headline, in the brand accent ("Get found on
+ * <Accent>Google</Accent>"). Display sizes only: lumi-600 on white clears the
+ * 3:1 large-text contrast bar, not the 4.5:1 one body text needs.
+ */
+export function Accent({ children }: { children: React.ReactNode }) {
+  return <span className="text-lumi-600">{children}</span>;
+}
+
 export function Check() {
   return (
     <span aria-hidden className="mt-0.5 shrink-0 text-green-600">
@@ -124,8 +133,8 @@ export function Pillars({
   return (
     <div className={`mt-10 grid gap-10 ${cols}`}>
       {items.map((p) => (
-        <div key={p.n}>
-          <p className="text-sm font-semibold text-gray-400">{p.n}</p>
+        <div key={p.n} className="reveal">
+          <p className="text-sm font-semibold text-lumi-600">{p.n}</p>
           <h3 className="mt-2 text-lg font-semibold text-gray-900">{p.title}</h3>
           <p className="mt-2 text-sm leading-relaxed text-gray-600">{p.body}</p>
         </div>
@@ -143,7 +152,7 @@ export function CapabilityGrid({
   return (
     <div className="mt-12 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
       {items.map((c) => (
-        <div key={c.title} className="flex gap-3">
+        <div key={c.title} className="reveal flex gap-3">
           <Check />
           <div>
             <h3 className="text-sm font-semibold text-gray-900">{c.title}</h3>
@@ -203,7 +212,7 @@ export async function PricingGrid({
     <Section id="pricing" className="py-20">
       <div className="max-w-2xl">
         <Eyebrow>Pricing</Eyebrow>
-        <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+        <h2 className="reveal mt-4 display-section text-gray-900">
           {heading}
         </h2>
         <p className="mt-3 text-gray-600">{blurb}</p>
@@ -447,7 +456,7 @@ export function FaqList({
   return (
     <Section id="faq" className="border-t border-gray-200 bg-gray-50 py-20">
       <Eyebrow>Questions</Eyebrow>
-      <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+      <h2 className="reveal mt-4 display-section text-gray-900">
         {heading}
       </h2>
 
@@ -481,7 +490,7 @@ export function ClosingCta({
   return (
     <Section className="py-20">
       <div className="rounded-2xl border border-gray-200 bg-white px-8 py-14 text-center shadow-sm md:px-12">
-        <h2 className="text-3xl font-semibold tracking-tight text-gray-900">
+        <h2 className="reveal display-section text-gray-900">
           {heading}
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-gray-600">{body}</p>
@@ -590,7 +599,7 @@ export function SeoPairing({
       <div className="grid gap-12 lg:grid-cols-2">
         <div>
           <Eyebrow>Pair It With SEO + AI Search</Eyebrow>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+          <h2 className="reveal mt-4 display-section text-gray-900">
             {heading}
           </h2>
           <p className="mt-3 leading-relaxed text-gray-600">{body}</p>
@@ -686,7 +695,7 @@ export function WebsiteChatBand({
       <div className="grid items-center gap-12 md:grid-cols-2">
         <div>
           <Eyebrow>Website Chat Widget</Eyebrow>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+          <h2 className="reveal mt-4 display-section text-gray-900">
             {heading}
           </h2>
           <p className="mt-3 leading-relaxed text-gray-600">{body}</p>
@@ -713,6 +722,168 @@ export function WebsiteChatBand({
           greeting={greeting}
           caption="The chat widget on your website"
         />
+      </div>
+    </Section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Product-page blocks (2026-10-16, docs/rogiq-site-plan.md items 1 and 3)
+// ---------------------------------------------------------------------------
+
+type WorksWithKey = "voice" | "chat" | "seo";
+
+/**
+ * "Works better together": the other products, as cards, on each product
+ * page. The cross-sell RogIQ runs as "Part of your complete system". Prices
+ * come from their sources like every other money block, and a card whose
+ * add-on has been pulled drops its price line rather than quote a stale one.
+ */
+export function WorksWith({
+  current,
+  heading,
+  body,
+}: {
+  /** The page's own product, left out of the cards. */
+  current: WorksWithKey;
+  heading: string;
+  body: string;
+}) {
+  const chat = ADDONS.find((a) => a.key === "website_chat");
+  const cheapestTier = Math.min(...PLAN_TIERS.map((t) => t.monthlyUsd));
+  const cards: {
+    key: WorksWithKey;
+    tag: string;
+    title: string;
+    body: string;
+    price: string | null;
+    href: string;
+    cta: string;
+  }[] = [
+    {
+      key: "voice",
+      tag: "Phone",
+      title: "AI Phone Agent",
+      body: "Ranking brings the calls. The phone agent answers every one of them, 24/7, and books the job on your calendar.",
+      price: `From ${usd(cheapestTier)}/mo, free setup`,
+      href: "/products/phone-agent",
+      cta: "See The Phone Agent",
+    },
+    {
+      key: "chat",
+      tag: "Chat",
+      title: "Website Chat",
+      body: "The same agent on your website, so visitors who'd rather type than call still get an answer and a booking.",
+      price: chat?.available ? `+${usd(chat.monthlyUsd)}/mo on any phone plan` : null,
+      href: "/pricing#addons",
+      cta: "See Add-Ons",
+    },
+    {
+      key: "seo",
+      tag: "SEO",
+      title: "SEO + AI Search",
+      body: "An agent that answers every call is worth more when more people call. Get found on Google, in the map pack and in AI answers.",
+      price: `From ${usd(seoPlanByKey("local").monthlyUsd)}/location/mo`,
+      href: "/products/seo",
+      cta: "See SEO + AI Search",
+    },
+  ];
+
+  return (
+    <Section id="works-with" className="border-t border-gray-200 bg-gray-50 py-20">
+      <div className="max-w-2xl">
+        <Eyebrow>Works Better Together</Eyebrow>
+        <h2 className="reveal mt-4 display-section text-gray-900">{heading}</h2>
+        <p className="mt-3 text-gray-600">{body}</p>
+      </div>
+      <div className="mt-10 grid gap-6 md:grid-cols-2">
+        {cards
+          .filter((c) => c.key !== current)
+          .map((c) => (
+            <Link
+              key={c.key}
+              href={c.href}
+              className="reveal group flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-gray-900 hover:shadow-md"
+            >
+              <span className="w-max rounded-full bg-lumi-50 px-2.5 py-0.5 text-xs font-semibold text-lumi-700">
+                {c.tag}
+              </span>
+              <h3 className="mt-4 text-lg font-semibold text-gray-900">{c.title}</h3>
+              <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-600">{c.body}</p>
+              {c.price ? (
+                <p className="mt-5 text-sm font-medium text-gray-900">{c.price}</p>
+              ) : null}
+              <p className="mt-3 text-sm font-medium text-lumi-700 group-hover:underline">
+                {c.cta}{" "}&rarr;
+              </p>
+            </Link>
+          ))}
+      </div>
+      <p className="mt-8 text-sm text-gray-500">
+        One account, one dashboard, and one team that builds all of it for you.
+      </p>
+    </Section>
+  );
+}
+
+/**
+ * The closing block on product and solution pages: two paths instead of one
+ * button. A single business signs up; a multi-location group or an agency
+ * talks to us, because Enterprise is quoted, not self-serve (EnterpriseBand).
+ */
+export function SplitCta({
+  heading,
+  body,
+  cta = "Create Your Account",
+  href = SIGNUP_CTA,
+  contactSource,
+}: {
+  heading: string;
+  body: string;
+  cta?: string;
+  href?: string;
+  /** The page rendering this, so a /contact lead says where it came from. */
+  contactSource: string;
+}) {
+  return (
+    <Section className="py-20">
+      <div className="text-center">
+        <h2 className="reveal display-section text-gray-900">{heading}</h2>
+        <p className="mx-auto mt-4 max-w-xl text-gray-600">{body}</p>
+      </div>
+      <div className="mx-auto mt-10 grid max-w-4xl gap-6 md:grid-cols-2">
+        <div className="reveal flex flex-col rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-widest text-lumi-700">
+            For Business Owners
+          </p>
+          <h3 className="mt-3 text-xl font-semibold text-gray-900">Running One Business?</h3>
+          <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-600">
+            Create your account, tell us how you work, and we build and test it
+            before a customer ever sees it.
+          </p>
+          <Link
+            href={href}
+            className="mt-6 rounded-md bg-gray-900 px-5 py-3 text-center text-sm font-medium text-white hover:bg-gray-800"
+          >
+            {cta}
+          </Link>
+        </div>
+        <div className="reveal flex flex-col rounded-2xl bg-gray-900 p-8 text-white shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-widest text-lumi-400">
+            For Groups And Agencies
+          </p>
+          <h3 className="mt-3 text-xl font-semibold">Many Locations Or Clients?</h3>
+          <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-300">
+            One account across every location, brand or client, with custom
+            limits and a dedicated team. Priced around what you need.
+          </p>
+          <a
+            href={contactHref(contactSource, "Enterprise / White Label")}
+            className="mt-6 rounded-md bg-white px-5 py-3 text-center text-sm font-medium text-gray-900 hover:bg-gray-100"
+          >
+            Talk To Us
+          </a>
+        </div>
       </div>
     </Section>
   );

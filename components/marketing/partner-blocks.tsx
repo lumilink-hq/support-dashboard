@@ -51,7 +51,7 @@ export function PartnerHero({
     <Section className="pb-16 pt-16 md:pb-20 md:pt-24">
       <div className="max-w-2xl">
         <Eyebrow>{kicker}</Eyebrow>
-        <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
+        <h1 className="mt-4 display-hero text-gray-900">
           {headline}
         </h1>
         <p className="mt-5 text-lg leading-relaxed text-gray-600">{subhead}</p>
@@ -104,7 +104,7 @@ export function PartnerClosingCta({
   return (
     <Section className="py-20">
       <div className="rounded-2xl border border-gray-200 bg-white px-8 py-14 text-center shadow-sm md:px-12">
-        <h2 className="text-3xl font-semibold tracking-tight text-gray-900">
+        <h2 className="reveal display-section text-gray-900">
           {heading}
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-gray-600">{body}</p>

@@ -29,13 +29,15 @@
 import Link from "next/link";
 import { MarketingShell, isSignedIn } from "@/components/marketing/shell";
 import {
+  Accent,
   CapabilityGrid,
   Check,
-  ClosingCta,
   Eyebrow,
   FaqList,
   Pillars,
   Section,
+  SplitCta,
+  WorksWith,
 } from "@/components/marketing/blocks";
 import { MockupFrame } from "@/components/marketing/dashboard-mockups";
 import { SEO_EXTRA_LOCATION, SEO_PLANS, seoBundleSavings, seoPlanByKey } from "@/lib/seo-pricing";
@@ -299,7 +301,7 @@ export function SeoPricingSection({
     <Section id={id} className="border-t border-gray-200 py-20">
       <div className="max-w-2xl">
         <Eyebrow>{eyebrow}</Eyebrow>
-        <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+        <h2 className="reveal mt-4 display-section text-gray-900">
           Your Website, Your Locations, Or Both
         </h2>
         <p className="mt-3 text-gray-600">
@@ -435,8 +437,8 @@ export async function SeoSolution() {
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
             <Eyebrow>SEO + AI Search</Eyebrow>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl">
-              Get Found On Google And In AI Search.
+            <h1 className="mt-4 display-hero text-gray-900">
+              Get Found On <Accent>Google</Accent> And In <Accent>AI Search</Accent>.
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-gray-600">
               Your website, every location, and the answers ChatGPT and
@@ -513,7 +515,7 @@ export async function SeoSolution() {
       <Section className="border-t border-gray-200 py-20">
         <div className="max-w-2xl">
           <Eyebrow>What&rsquo;s Included</Eyebrow>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900">
+          <h2 className="reveal mt-4 display-section text-gray-900">
             Audit, Track, Fix, Report
           </h2>
           <p className="mt-3 text-gray-600">
@@ -539,13 +541,20 @@ export async function SeoSolution() {
 
       <SeoPricingSection id="pricing" ctaHref={primaryHref} />
 
+      <WorksWith
+        current="seo"
+        heading="Get Found. Then Never Miss The Call."
+        body="Ranking well brings more calls and more visitors. The phone agent and website chat make sure every one of them gets an answer and a booking."
+      />
+
       <FaqList items={FAQS} heading="What People Ask About SEO + AI Search" />
 
-      <ClosingCta
+      <SplitCta
         heading="Start Ranking Where Your Customers Look"
         body="Add your website and locations, connect Search Console, and your first audit, rankings and AI search check are on the way."
         cta="Get Started"
         href={primaryHref}
+        contactSource="/products/seo"
       />
     </MarketingShell>
   );
