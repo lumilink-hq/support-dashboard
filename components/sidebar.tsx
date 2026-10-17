@@ -33,8 +33,9 @@ const LOCKED_ROW: Record<Exclude<FeatureState, "active" | "past_due">, (name: st
   canceled: () => "Reactivate",
 };
 
-// LL Loyalty admin (0206 staff): only for platform staff, so tenants never see
-// it. The pages still check staff + MFA themselves (loyalty/access.ts), and
+// LL Loyalty admin (0206 staff, 0223 merchants): platform staff, and the
+// admins of a workspace whose program has merchant access on. Everyone else
+// never sees it. The pages still check staff + MFA themselves (loyalty/access.ts), and
 // send you to /loyalty/security for a code when needed, so that page isn't listed.
 const LOYALTY_ADMIN_PAGES: DashboardPage[] = [
   { href: "/loyalty", label: "Members" },
@@ -45,10 +46,12 @@ const LOYALTY_ADMIN_PAGES: DashboardPage[] = [
 
 // One Loyalty section. A workspace with a loyalty program gets its own results
 // page (0213, aggregates only); staff see it as "Client results" after the admin pages.
-function loyaltyPages(loyalty: boolean, staff: boolean): DashboardPage[] {
+export type LoyaltyAdmin = "staff" | "merchant" | null;
+
+function loyaltyPages(loyalty: boolean, admin: LoyaltyAdmin): DashboardPage[] {
   return [
-    ...(staff ? LOYALTY_ADMIN_PAGES : []),
-    ...(loyalty ? [{ href: "/rewards", label: staff ? "Client results" : "Results" }] : []),
+    ...(admin ? LOYALTY_ADMIN_PAGES : []),
+    ...(loyalty ? [{ href: "/rewards", label: admin === "staff" ? "Client results" : "Results" }] : []),
   ];
 }
 
@@ -56,15 +59,15 @@ export function Sidebar({
   clientName,
   access,
   loyalty = false,
-  loyaltyStaff = false,
+  loyaltyAdmin = null,
 }: {
   clientName: string;
   access: ProductAccess;
   loyalty?: boolean;
-  loyaltyStaff?: boolean;
+  loyaltyAdmin?: LoyaltyAdmin;
 }) {
   const pathname = usePathname();
-  const loyaltyNav = loyaltyPages(loyalty, loyaltyStaff);
+  const loyaltyNav = loyaltyPages(loyalty, loyaltyAdmin);
 
   // Longest matching href wins, so /seo/reports lights up Reports and not
   // Overview (/seo) as well.

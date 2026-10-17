@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { requireStaffPage } from "../access";
+import { managerRole, requireStaffPage } from "../access";
 import { num } from "../format";
 import { saveEarnRule, saveReward, saveSettings, saveTiers } from "./actions";
 
@@ -74,6 +74,7 @@ export default async function ProgramEditorPage({
   const { program: programParam, saved, error: actionError } = await searchParams;
   await requireStaffPage(`/loyalty/program${programParam ? `?program=${encodeURIComponent(programParam)}` : ""}`);
   const supabase = await createClient();
+  const isStaff = (await managerRole()) === "staff";
   const { data: programData } = await supabase.rpc("loyalty_staff_programs");
   const programs = (programData ?? []) as Program[];
   const program = programs.find((p) => p.id === programParam) ?? (programs.length === 1 ? programs[0] : undefined);
@@ -146,10 +147,12 @@ export default async function ProgramEditorPage({
                 <span className={labelCls}>&ldquo;Near tier&rdquo; within (% of the next threshold)</span>
                 <input name="near_tier_percent" type="number" min="1" max="50" required defaultValue={config.program.near_tier_percent} className={inputCls} />
               </label>
-              <label>
-                <span className={labelCls}>Gross margin % (for insights; empty = revenue only)</span>
-                <input name="gross_margin_pct" type="number" step="0.1" min="1" max="100" placeholder="Not set" defaultValue={config.program.gross_margin_pct ?? ""} className={inputCls} />
-              </label>
+              {isStaff ? (
+                <label>
+                  <span className={labelCls}>Gross margin % (for insights; empty = revenue only)</span>
+                  <input name="gross_margin_pct" type="number" step="0.1" min="1" max="100" placeholder="Not set" defaultValue={config.program.gross_margin_pct ?? ""} className={inputCls} />
+                </label>
+              ) : null}
               <div className="flex items-end sm:col-span-2">
                 <button type="submit" className={saveCls}>
                   Save settings

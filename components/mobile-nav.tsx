@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Sidebar, type ProductAccess } from "@/components/sidebar";
+import { Sidebar, type LoyaltyAdmin, type ProductAccess } from "@/components/sidebar";
 
 /**
  * The sidebar below `md`: a menu button for the header that opens the same
@@ -15,12 +15,12 @@ export function MobileNav({
   clientName,
   access,
   loyalty = false,
-  loyaltyStaff = false,
+  loyaltyAdmin = null,
 }: {
   clientName: string;
   access: ProductAccess;
   loyalty?: boolean;
-  loyaltyStaff?: boolean;
+  loyaltyAdmin?: LoyaltyAdmin;
 }) {
   const [open, setOpen] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -89,7 +89,7 @@ export function MobileNav({
         className="m-0 h-dvh max-h-none w-full max-w-none bg-transparent p-0 backdrop:bg-gray-900/40 md:hidden"
       >
         <div className="flex h-full">
-          <Sidebar clientName={clientName} access={access} loyalty={loyalty} loyaltyStaff={loyaltyStaff} />
+          <Sidebar clientName={clientName} access={access} loyalty={loyalty} loyaltyAdmin={loyaltyAdmin} />
           {/* The dimmed area beside the panel closes it too. */}
           <div className="flex-1" onClick={() => setOpen(false)}>
             <button

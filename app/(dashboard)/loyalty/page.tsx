@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { requireStaffPage } from "./access";
+import { managerRole, requireStaffPage } from "./access";
 import { dateOnly, money, num, when } from "./format";
 
 // LL Loyalty staff admin: programs and the members table (0206, 0219).
@@ -104,14 +104,16 @@ export default async function LoyaltyAdminPage({
   }
   // Links from the table keep the filters but start again at page 1.
   const base: Params = { ...params, program: program?.id, page: undefined };
-  const { data: requestData } = await supabase.rpc("loyalty_staff_data_requests");
+  // Privacy data requests are LumiLink's to answer (staff only, 0223).
+  const isStaff = (await managerRole()) === "staff";
+  const { data: requestData } = isStaff ? await supabase.rpc("loyalty_staff_data_requests") : { data: [] };
   const requests = (requestData ?? []) as DataRequest[];
 
   return (
     <div className="max-w-6xl">
       <h1 className="text-lg font-semibold text-gray-900">Loyalty</h1>
       <p className="mt-1 text-sm text-gray-500">
-        LumiLink staff only. Every page of members and every member view is recorded in the access log.
+        {isStaff ? "LumiLink staff only. " : ""}Every page of members and every member view is recorded in the access log.
       </p>
 
       {error || listError ? (
@@ -280,27 +282,29 @@ export default async function LoyaltyAdminPage({
         <p className="mt-4 text-sm text-gray-500">Pick a program to see its members.</p>
       ) : null}
 
-      <section className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-gray-900">Privacy data requests</h2>
-        <p className="mt-0.5 text-xs text-gray-500">
-          Shopify customers/data_request webhooks from the last 90 days. Reply to the store with what we hold for that
-          customer (search by their customer ID above).
-        </p>
-        {requests.length ? (
-          <ul className="mt-3 divide-y divide-gray-100 text-sm">
-            {requests.map((r, i) => (
-              <li key={i} className="flex justify-between gap-3 py-2">
-                <span className="text-gray-700">
-                  {r.shop_domain}: {r.outcome ?? "not processed"}
-                </span>
-                <span className="shrink-0 text-xs text-gray-400">{when(r.received_at)}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-3 text-sm text-gray-500">None.</p>
-        )}
-      </section>
+      {isStaff ? (
+        <section className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-gray-900">Privacy data requests</h2>
+          <p className="mt-0.5 text-xs text-gray-500">
+            Shopify customers/data_request webhooks from the last 90 days. Reply to the store with what we hold for that
+            customer (search by their customer ID above).
+          </p>
+          {requests.length ? (
+            <ul className="mt-3 divide-y divide-gray-100 text-sm">
+              {requests.map((r, i) => (
+                <li key={i} className="flex justify-between gap-3 py-2">
+                  <span className="text-gray-700">
+                    {r.shop_domain}: {r.outcome ?? "not processed"}
+                  </span>
+                  <span className="shrink-0 text-xs text-gray-400">{when(r.received_at)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-gray-500">None.</p>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }
