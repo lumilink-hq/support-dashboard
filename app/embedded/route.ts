@@ -43,6 +43,14 @@ ${head}
   .ll-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
   .ll-row { display: grid; gap: 12px; grid-template-columns: 1.2fr 1fr 1fr 2fr; align-items: end; }
   @media (max-width: 640px) { .ll-row { grid-template-columns: 1fr; } }
+  .ll-nav, .ll-pager { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 12px; }
+  .ll-scroll { overflow-x: auto; margin: 12px 0; }
+  .ll-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ll-table th { text-align: left; font-weight: 600; color: #616161; border-bottom: 1px solid #e3e3e3; padding: 6px 8px; white-space: nowrap; }
+  .ll-table td { border-bottom: 1px solid #f1f1f1; padding: 8px; vertical-align: top; }
+  .ll-table a { color: #005bd3; text-decoration: none; }
+  .ll-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .ll-sub { color: #616161; font-size: 12px; }
 </style>
 </head>
 <body>

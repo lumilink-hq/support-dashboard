@@ -5,8 +5,9 @@
 // (shopify.idToken()). The server checks the token and the program; this file
 // only renders what it gets back and posts what the merchant typed.
 //
-// Sections: overview (plan, setup), earning and clocks, tiers, rewards,
-// earning rules. Members come next (plan P4).
+// Views (by URL hash): Program (setup, plan, earning and clocks, tiers,
+// rewards, ways to earn), Members (filters, sort, 50 per page) and one member
+// (stats, adjust points, tier, birthday, history, orders, codes).
 
 (function () {
   "use strict";
@@ -175,23 +176,177 @@
     }).join("") + "</s-section>";
   }
 
-  function render() {
-    var d = state;
-    root.innerHTML = '<s-page heading="' + esc(d.program.name) + '">' +
-      '<div id="ll-flash"></div>' +
-      setupSection(d.program) +
-      planSection(d.plan) +
-      settingsSection(d.config.program) +
-      tiersSection(d.config.tiers) +
-      rewardsSection(d.config.rewards) +
-      rulesSection(d.config.earn_rules) +
-      "</s-page>";
+  // ---------------------------------------------------------------- members
+  // Views by hash: "" program, #members (list, filters in memory), #member/<id>.
+  var list = { filters: {}, sort: "points", dir: "desc", page: 1, data: null };
+  var member = null;
+
+  function date(v) {
+    return v ? String(v).slice(0, 10) : "";
+  }
+  function fullName(m) {
+    return [m.first_name, m.last_name].filter(Boolean).join(" ");
   }
 
+  function nav(active) {
+    var b = function (hash, label) {
+      return '<s-button href="' + hash + '"' + (active === hash ? ' variant="primary"' : "") + ">" + label + "</s-button>";
+    };
+    return '<div class="ll-nav">' + b("#", "Program") + b("#members", "Members") + "</div>";
+  }
+
+  function membersView() {
+    var f = list.filters;
+    var tiers = (state.config.tiers || []).map(function (t) {
+      return '<s-option value="' + esc(t.key) + '"' + (f.tier === t.key ? " selected" : "") + ">" + esc(t.name) + "</s-option>";
+    }).join("");
+    var flag = function (key, label) {
+      return '<s-checkbox name="' + key + '" label="' + esc(label) + '"' + (f[key] ? " checked" : "") + "></s-checkbox>";
+    };
+    var sortOpt = function (v, label) {
+      return '<s-option value="' + v + '"' + (list.sort === v ? " selected" : "") + ">" + label + "</s-option>";
+    };
+    var form = '<form data-action="members"><div class="ll-grid">' +
+      '<s-search-field name="q" label="Search" placeholder="Email, name, customer ID or referral code" value="' + esc(f.q || "") + '"></s-search-field>' +
+      // Polaris treats value="" as no value (select.value becomes the label), hence "all".
+      '<s-select name="tier" label="Tier"><s-option value="all"' + (f.tier ? "" : " selected") + ">All tiers</s-option>" + tiers + "</s-select>" +
+      '<s-select name="sort" label="Sort by">' + sortOpt("points", "Points") + sortOpt("spend", "Tier spend") + sortOpt("last_order", "Last order") + "</s-select>" +
+      '<s-select name="dir" label="Order"><s-option value="desc"' + (list.dir === "desc" ? " selected" : "") + '>Highest / newest first</s-option><s-option value="asc"' + (list.dir === "asc" ? " selected" : "") + ">Lowest / oldest first</s-option></s-select>" +
+      "</div>" + flag("can_redeem", "Can redeem a reward") + flag("demotes_30d", "Drops a tier within 30 days") + flag("expires_30d", "Points expire within 30 days") +
+      '<s-button type="submit" variant="primary">Show members</s-button></form>';
+
+    var d = list.data;
+    var table = "";
+    if (d) {
+      var rows = (d.rows || []).map(function (r) {
+        return "<tr>" +
+          '<td><a href="#member/' + esc(r.id) + '">' + esc(fullName(r) || r.email || "(no name)") + "</a><div class=\"ll-sub\">" + esc(r.email || "") + "</div></td>" +
+          "<td>" + esc(r.tier) + "</td><td class=\"ll-num\">" + esc(num(r.points)) + "</td>" +
+          '<td class="ll-num">$' + esc(num(Math.round((r.tier_spend_cents || 0) / 100))) + '</td><td class="ll-num">' + esc(num(r.orders)) + "</td>" +
+          "<td>" + esc(date(r.last_order_at)) + "</td></tr>";
+      }).join("");
+      var pages = Math.max(Math.ceil((d.total || 0) / (d.page_size || 50)), 1);
+      table = (rows
+        ? '<div class="ll-scroll"><table class="ll-table"><thead><tr><th>Member</th><th>Tier</th><th class="ll-num">Points</th><th class="ll-num">Tier spend</th><th class="ll-num">Orders</th><th>Last order</th></tr></thead><tbody>' + rows + "</tbody></table></div>"
+        : "<s-paragraph>No members match.</s-paragraph>") +
+        '<div class="ll-pager"><s-paragraph>' + esc(num(d.total) + (d.total === 1 ? " member" : " members") + " · page " + d.page + " of " + pages) + "</s-paragraph>" +
+        (d.page > 1 ? '<s-button data-page="' + (d.page - 1) + '">Previous</s-button>' : "") +
+        (d.page < pages ? '<s-button data-page="' + (d.page + 1) + '">Next</s-button>' : "") + "</div>";
+    }
+    return '<s-section heading="Members">' + form + table +
+      '<s-paragraph tone="subdued">Every page of members you open is recorded in the access log.</s-paragraph></s-section>';
+  }
+
+  function memberView() {
+    var d = member;
+    if (!d) return "<s-section><s-spinner></s-spinner></s-section>";
+    var m = d.member;
+    var stat = function (label, value) {
+      return '<div><div class="ll-sub">' + esc(label) + "</div><s-text>" + esc(value) + "</s-text></div>";
+    };
+    var tierOpts = (d.tiers || []).map(function (t) {
+      return '<s-option value="' + esc(t.key) + '"' + (t.key === d.tier.key ? " selected" : "") + ">" + esc(t.name) + "</s-option>";
+    }).join("");
+    var ledger = (d.ledger || []).slice(0, 25).map(function (l) {
+      return "<tr><td>" + esc(date(l.occurred_at)) + "</td><td>" + esc(l.reason + (l.rule_key ? " · " + l.rule_key : "")) + '</td><td class="ll-num">' +
+        esc((l.points > 0 ? "+" : "") + num(l.points)) + '</td><td class="ll-num">' + esc(num(l.balance_after)) + "</td><td>" + esc(l.note || "") + "</td></tr>";
+    }).join("");
+    var orders = (d.orders || []).slice(0, 25).map(function (o) {
+      return "<tr><td>" + esc(date(o.processed_at)) + "</td><td>" + esc(o.name || o.order_id) + '</td><td class="ll-num">$' + esc(money(o.eligible_cents)) +
+        '</td><td class="ll-num">' + esc(num(o.points_earned - o.points_clawed)) + "</td></tr>";
+    }).join("");
+    var codes = (d.codes || []).map(function (c) {
+      return "<tr><td>" + esc(c.code) + "</td><td>$" + esc(money(c.value_cents)) + "</td><td>" + esc(c.status) + "</td><td>" + esc(date(c.created_at)) + "</td></tr>";
+    }).join("");
+    var tbl = function (head, body) {
+      return body ? '<div class="ll-scroll"><table class="ll-table"><thead><tr>' + head + "</tr></thead><tbody>" + body + "</tbody></table></div>" : "<s-paragraph>None yet.</s-paragraph>";
+    };
+    return '<s-section heading="' + esc(fullName(m) || m.email || "Member") + '">' +
+      '<s-paragraph tone="subdued">' + esc((m.email || "") + " · customer " + m.shopify_customer_id + " · " + m.status) + "</s-paragraph>" +
+      '<div class="ll-grid">' + stat("Points", num(m.points_balance)) + stat("Tier", d.tier.name) +
+      stat("Tier spend", "$" + money(m.tier_spend_cents)) + stat("Orders", num(m.paid_order_count)) +
+      stat("Member since", date(m.enrolled_at)) + stat("Last order", date(m.last_order_at) || "None") +
+      stat("Birthday", m.birthday ? m.birthday.slice(5) : "Not set") + stat("Referral code", m.referral_code) + "</div></s-section>" +
+
+      '<s-section heading="Adjust points"><form data-action="adjust" data-member="' + esc(m.id) + '"><div class="ll-grid">' +
+      '<s-number-field name="points" label="Points (negative to remove)" step="1"></s-number-field>' +
+      '<s-text-field name="note" label="Why (shown in the history)"></s-text-field></div>' +
+      '<s-button type="submit" variant="primary">Adjust</s-button></form></s-section>' +
+
+      '<s-section heading="Tier and birthday"><form data-action="set_tier" data-member="' + esc(m.id) + '"><div class="ll-grid">' +
+      '<s-select name="tier" label="Tier">' + tierOpts + "</s-select>" +
+      '<s-text-field name="note" label="Why"></s-text-field></div><s-button type="submit">Change tier</s-button></form>' +
+      '<form data-action="set_birthday" data-member="' + esc(m.id) + '"><div class="ll-grid">' +
+      '<s-date-field name="birthday" label="Birthday" value="' + esc(m.birthday || "") + '"></s-date-field>' +
+      '<s-text-field name="note" label="Why"></s-text-field></div><s-button type="submit">Save birthday</s-button>' +
+      '<s-paragraph tone="subdued">Leave the date empty to clear it, so the customer can set it again.</s-paragraph></form></s-section>' +
+
+      '<s-section heading="Points history">' + tbl("<th>Date</th><th>What</th><th class=\"ll-num\">Points</th><th class=\"ll-num\">Balance</th><th>Note</th>", ledger) + "</s-section>" +
+      '<s-section heading="Orders">' + tbl("<th>Date</th><th>Order</th><th class=\"ll-num\">Counted</th><th class=\"ll-num\">Points</th>", orders) + "</s-section>" +
+      '<s-section heading="Reward codes">' + tbl("<th>Code</th><th>Value</th><th>Status</th><th>Created</th>", codes) + "</s-section>";
+  }
+
+  function render() {
+    var d = state;
+    var hash = location.hash || "#";
+    var body;
+    if (hash === "#members") body = nav("#members") + membersView();
+    else if (hash.indexOf("#member/") === 0) body = nav("#members") + '<s-button href="#members" variant="tertiary">← All members</s-button>' + memberView();
+    else body = nav("#") + setupSection(d.program) + planSection(d.plan) + settingsSection(d.config.program) +
+      tiersSection(d.config.tiers) + rewardsSection(d.config.rewards) + rulesSection(d.config.earn_rules);
+    root.innerHTML = '<s-page heading="' + esc(d.program.name) + '"><div id="ll-flash"></div>' + body + "</s-page>";
+  }
+
+  async function loadMembers() {
+    var r = await call("members", { filters: list.filters, sort: list.sort, dir: list.dir, page: list.page });
+    list.data = r.result;
+  }
+
+  async function route() {
+    var hash = location.hash || "#";
+    try {
+      if (hash === "#members" && !list.data) {
+        render();
+        await loadMembers();
+      } else if (hash.indexOf("#member/") === 0) {
+        var id = hash.slice(8);
+        if (!member || member.member.id !== id) {
+          member = null;
+          render();
+          member = (await call("member", { member: id })).result;
+        }
+      }
+      render();
+    } catch (err) {
+      render();
+      toast(err.message, true);
+    }
+  }
+
+  window.addEventListener("hashchange", route);
+
+  root.addEventListener("click", async function (e) {
+    var btn = e.target.closest("[data-page]");
+    if (!btn) return;
+    list.page = Number(btn.getAttribute("data-page")) || 1;
+    try {
+      await loadMembers();
+      render();
+      window.scrollTo(0, 0);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
   // ---------------------------------------------------------------- save
+  function requestKey() {
+    return "emb-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+  }
+
   function argsFor(form) {
     var v = fields(form);
     var action = form.getAttribute("data-action");
+    var id = form.getAttribute("data-member");
     if (action === "save_settings") return { settings: v };
     if (action === "save_tiers") {
       return {
@@ -217,10 +372,16 @@
     if (action === "save_earn_rule") {
       return { key: form.getAttribute("data-key"), points: Number(v.points), active: !!v.active };
     }
+    if (action === "adjust") return { member: id, points: Number(v.points), note: v.note, request_key: requestKey() };
+    if (action === "set_tier") return { member: id, tier: v.tier, note: v.note };
+    if (action === "set_birthday") return { member: id, birthday: v.birthday || null, note: v.note };
     return {};
   }
 
-  var SAVED = { save_settings: "Settings saved", save_tiers: "Tiers saved", save_reward: "Reward saved", save_earn_rule: "Saved" };
+  var SAVED = {
+    save_settings: "Settings saved", save_tiers: "Tiers saved", save_reward: "Reward saved", save_earn_rule: "Saved",
+    adjust: "Points adjusted", set_tier: "Tier changed", set_birthday: "Birthday saved",
+  };
 
   root.addEventListener("submit", async function (e) {
     var form = e.target.closest("form[data-action]");
@@ -229,7 +390,26 @@
     var action = form.getAttribute("data-action");
     root.setAttribute("aria-busy", "true");
     try {
-      state = await call(action, argsFor(form));
+      if (action === "members") {
+        var v = fields(form);
+        list.filters = { q: String(v.q || "").trim(), tier: v.tier && v.tier !== "all" ? v.tier : "", can_redeem: !!v.can_redeem, demotes_30d: !!v.demotes_30d, expires_30d: !!v.expires_30d };
+        if (list.filters.q.length === 1) throw new Error("Type at least 2 characters to search.");
+        list.sort = v.sort || "points";
+        list.dir = v.dir || "desc";
+        list.page = 1;
+        await loadMembers();
+        render();
+        return;
+      }
+      var r = await call(action, argsFor(form));
+      if (r.member) {
+        member = r.member;
+        list.data = null; // balances changed: reload the list next time
+        render();
+        toast(action === "set_tier" && r.result === false ? "They're already on that tier" : SAVED[action]);
+        return;
+      }
+      state = r;
       render();
       var promoted = action === "save_tiers" && state.result && state.result.promoted;
       toast(promoted ? SAVED[action] + ": " + promoted + " moved up a tier" : SAVED[action]);
@@ -244,7 +424,7 @@
     root.innerHTML = '<s-page heading="LL Loyalty"><s-section><s-spinner accessibility-label="Loading"></s-spinner></s-section></s-page>';
     try {
       state = await call("load");
-      render();
+      await route();
     } catch (err) {
       root.innerHTML = '<s-page heading="LL Loyalty"><s-banner tone="critical">' + esc(err.message) + "</s-banner></s-page>";
     }

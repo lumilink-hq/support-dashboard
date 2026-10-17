@@ -144,15 +144,67 @@ const ACTIONS: Record<string, { rpc: string; args: (programId: string, a: Args) 
   },
 };
 
-export const ACTION_NAMES = ["load", ...Object.keys(ACTIONS)];
+// Member actions return only their own data, not the whole program. The
+// member id comes from the browser: each RPC checks it belongs to the shop.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const FILTER_KEYS = ["q", "tier", "status", "group", "can_redeem", "demotes_30d", "expires_30d"];
 
-/** load: program + plan + config. Anything else: one RPC from ACTIONS, then a fresh load. */
+function memberId(a: Args): string {
+  const id = String(a.member ?? "");
+  if (!UUID.test(id)) throw new EmbeddedError(400, "bad_member");
+  return id;
+}
+
+const MEMBER_ACTIONS: Record<string, { rpc: string; args: (programId: string, a: Args) => Args; then?: "member" }> = {
+  members: {
+    rpc: "loyalty_staff_members",
+    args: (p, a) => {
+      const raw = (a.filters ?? {}) as Record<string, unknown>;
+      const filters: Record<string, unknown> = {};
+      for (const k of FILTER_KEYS) if (raw[k] !== undefined && raw[k] !== "" && raw[k] !== false) filters[k] = raw[k];
+      return { p_program: p, p_filters: filters, p_sort: String(a.sort ?? "points"), p_dir: String(a.dir ?? "desc"), p_page: Math.max(Number(a.page) || 1, 1) };
+    },
+  },
+  member: { rpc: "loyalty_staff_member", args: (_p, a) => ({ p_member: memberId(a) }) },
+  adjust: {
+    rpc: "loyalty_staff_adjust",
+    args: (_p, a) => ({ p_member: memberId(a), p_points: Number(a.points), p_note: String(a.note ?? ""), p_request_key: String(a.request_key ?? "") }),
+    then: "member",
+  },
+  set_tier: {
+    rpc: "loyalty_staff_set_tier",
+    args: (_p, a) => ({ p_member: memberId(a), p_tier_key: String(a.tier ?? ""), p_note: String(a.note ?? "") }),
+    then: "member",
+  },
+  set_birthday: {
+    rpc: "loyalty_staff_set_birthday",
+    args: (_p, a) => ({ p_member: memberId(a), p_birthday: a.birthday ? String(a.birthday) : null, p_note: String(a.note ?? "") }),
+    then: "member",
+  },
+};
+
+export const ACTION_NAMES = ["load", ...Object.keys(ACTIONS), ...Object.keys(MEMBER_ACTIONS)];
+
+/**
+ * load: program + plan + config. A config save: one RPC from ACTIONS, then a
+ * fresh load. A member action: its RPC only (plus the member after a change).
+ */
 export async function runAction(session: AdminSession, action: string, args: Args): Promise<Record<string, unknown>> {
   const db = actorClient(session);
   const prog = await db.rpc("loyalty_embedded_program");
   if (prog.error) throw new Error(`loading program failed: ${prog.error.message}`);
   const program = prog.data as { id: string } | null;
   if (!program) throw new EmbeddedError(403, "no_access");
+
+  const m = MEMBER_ACTIONS[action];
+  if (m) {
+    const r = await db.rpc(m.rpc, m.args(program.id, args));
+    if (r.error) throw new EmbeddedError(r.error.message === "not_staff" ? 403 : 400, r.error.message);
+    if (m.then !== "member") return { result: r.data };
+    const detail = await db.rpc("loyalty_staff_member", { p_member: memberId(args) });
+    if (detail.error) throw new EmbeddedError(400, detail.error.message);
+    return { result: r.data, member: detail.data };
+  }
 
   let result: unknown = null;
   if (action !== "load") {
