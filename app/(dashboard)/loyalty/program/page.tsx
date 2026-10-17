@@ -2,12 +2,14 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { managerRole, requireStaffPage } from "../access";
 import { num } from "../format";
-import { saveEarnRule, saveReward, saveSettings, saveTiers } from "./actions";
+import { saveEarnRule, saveReward, saveSettings, saveTiers, setPlan } from "./actions";
 
 // Program editor (0221): earn rate, expiry and demotion clocks, tiers, rewards
 // and earning rules, which used to need SQL. Staff + MFA only like every
 // /loyalty page; each save is one access-log row with before and after.
 // Changes reach the storefront through the shop metafield within minutes.
+// The plan card (0224) shows the plan and this month's orders; staff can switch
+// the plan for stores billed outside Shopify.
 
 type Settings = {
   id: string;
@@ -36,6 +38,18 @@ type Reward = {
 type Rule = { key: string; kind: "action" | "milestone" | "referral"; points: number; order_count: number | null; is_active: boolean; title: string | null };
 type Config = { program: Settings; tiers: Tier[]; rewards: Reward[]; earn_rules: Rule[] };
 type Program = { id: string; name: string; shop_domain: string };
+type PlanCard = {
+  plan: string;
+  plan_name: string;
+  source: "staff" | "shopify";
+  price_cents: number;
+  included_orders: number;
+  overage_cents_per_100: number | null;
+  orders: number;
+  over_cap: boolean;
+  month: string;
+  plans: { key: string; name: string; price_cents: number; included_orders: number }[];
+};
 
 const inputCls =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900";
@@ -80,10 +94,15 @@ export default async function ProgramEditorPage({
   const program = programs.find((p) => p.id === programParam) ?? (programs.length === 1 ? programs[0] : undefined);
 
   let config: Config | null = null;
+  let plan: PlanCard | null = null;
   let loadError: string | null = null;
   if (program) {
-    const res = await supabase.rpc("loyalty_staff_program_config", { p_program: program.id });
+    const [res, planRes] = await Promise.all([
+      supabase.rpc("loyalty_staff_program_config", { p_program: program.id }),
+      supabase.rpc("loyalty_staff_plan", { p_program: program.id }),
+    ]);
     config = (res.data ?? null) as Config | null;
+    plan = (planRes.data ?? null) as PlanCard | null;
     loadError = res.error?.message ?? null;
   }
 
@@ -115,6 +134,44 @@ export default async function ProgramEditorPage({
       ) : null}
 
       {!program ? <p className="mt-4 text-sm text-gray-500">Pick a program to edit.</p> : null}
+
+      {plan ? (
+        <section id="plan" className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-semibold text-gray-900">
+              Plan: {plan.plan_name}
+              {plan.price_cents ? ` · $${dollars(plan.price_cents)}/month` : " · free"}
+            </h2>
+            <span className="text-xs text-gray-500">{plan.source === "shopify" ? "Billed by Shopify" : "Billed by LumiLink"}</span>
+          </div>
+          <p className={`mt-2 text-sm ${plan.over_cap ? "text-amber-700" : "text-gray-700"}`}>
+            {num(plan.orders)} of {num(plan.included_orders)} orders included this month ({plan.month}).
+            {plan.over_cap
+              ? plan.overage_cents_per_100
+                ? ` Orders over the limit are $${dollars(plan.overage_cents_per_100)} per 100.`
+                : " Over the Free limit: upgrade to keep growing. Points keep working."
+              : ""}
+          </p>
+          {isStaff && plan.source === "staff" ? (
+            <form action={setPlan} className="mt-3 flex flex-wrap items-end gap-2">
+              <input type="hidden" name="program_id" value={program?.id} />
+              <label>
+                <span className={labelCls}>Change plan (stores billed outside Shopify)</span>
+                <select name="plan_key" defaultValue={plan.plan} className={inputCls}>
+                  {plan.plans.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.name} · {p.price_cents ? `$${dollars(p.price_cents)}` : "free"} · {num(p.included_orders)} orders
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button type="submit" className={saveCls}>
+                Change plan
+              </button>
+            </form>
+          ) : null}
+        </section>
+      ) : null}
 
       {config ? (
         <>

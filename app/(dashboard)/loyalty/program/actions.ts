@@ -69,6 +69,17 @@ export async function saveSettings(formData: FormData) {
   done(programId, "settings", "Program settings saved.");
 }
 
+// Plan (0224): staff only, for stores billed outside Shopify. Public-app
+// stores change plan in Shopify; the next plan check overwrites this.
+export async function setPlan(formData: FormData) {
+  const programId = programFrom(formData);
+  const back = page(programId);
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("loyalty_staff_set_plan", { p_program: programId, p_plan_key: str(formData, "plan_key") });
+  if (error) fail(back, message(error));
+  done(programId, "plan", "Plan changed.");
+}
+
 export async function saveTiers(formData: FormData) {
   const programId = programFrom(formData);
   const back = page(programId);
