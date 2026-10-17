@@ -19,7 +19,7 @@ api_version = "2026-10"
 # so Shopify never delivers to a missing endpoint.
 
 [[webhooks.subscriptions]]
-topics = [ "orders/paid", "refunds/create", "customers/create", "customers/update" ]
+topics = [ "orders/paid", "refunds/create", "customers/create", "customers/update", "app/uninstalled" ]
 uri = "https://xqsxjxrzpxhosedkmufg.supabase.co/functions/v1/loyalty-webhooks"
 
 [[webhooks.subscriptions]]

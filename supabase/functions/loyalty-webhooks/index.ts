@@ -9,6 +9,7 @@
 //     customers/redact        delete the member (privacy, plan §8b L1-8)
 //     shop/redact             delete the store's program (48h after uninstall)
 //     customers/data_request  logged for staff to answer by hand
+//     app/uninstalled         drop the token, pause the program if no app is left (0222)
 //
 // AUTH: Shopify's HMAC over the raw body with the app's client secret, looked
 // up by X-Shopify-Shop-Domain in loyalty_shopify_apps. Not x-voice-tool-secret,
@@ -24,7 +25,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { parseAppCredentials, validShop } from "../shopify-oauth/lib.ts";
-import { asTopic, parseCustomer, parseOrder, parseRedactCustomerId, parseRefund, verifyWebhook, type Topic } from "./lib.ts";
+import { asTopic, parseCustomer, parseOrder, parseRedactCustomerId, parseRefund, signedBy, type Topic } from "./lib.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const rawSecrets = Deno.env.get("SUPABASE_SECRET_KEYS");
@@ -46,7 +47,8 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
 }
 
 /** Does the work for one verified delivery. Returns a short outcome for the receipt. */
-async function handle(topic: Topic, shop: string, programId: string, payload: unknown): Promise<string> {
+async function handle(topic: Topic, shop: string, app: AppRow, payload: unknown): Promise<string> {
+  const programId = app.program_id;
   switch (topic) {
     case "orders/paid": {
       const order = parseOrder(payload);
@@ -103,6 +105,10 @@ async function handle(topic: Topic, shop: string, programId: string, payload: un
       console.warn(`loyalty-webhooks ${shop}: customers/data_request for customer ${id ?? "?"}, needs a manual reply`);
       return `manual: data request, customer ${id ?? "unknown"}`;
     }
+    case "app/uninstalled": {
+      const paused = await rpc<boolean>("loyalty_mark_uninstalled", { p_shop: shop, p_app_client_id: app.app_client_id });
+      return paused ? "uninstalled, program paused" : "uninstalled";
+    }
   }
 }
 
@@ -122,9 +128,11 @@ Deno.serve(async (req) => {
     console.error(`loyalty-webhooks ${shop}: ${e instanceof Error ? e.message : String(e)}`);
     return new Response("Error", { status: 500 });
   }
-  // Same 401 for "unknown shop" and "bad signature".
-  const secrets = apps.map((a) => parseAppCredentials(a.credentials)?.clientSecret ?? "").filter(Boolean);
-  if (!(await verifyWebhook(body, req.headers.get("x-shopify-hmac-sha256"), secrets))) {
+  // Same 401 for "unknown shop" and "bad signature". The app whose secret
+  // signed it is the one the delivery is about (app/uninstalled needs it).
+  const secrets = apps.map((a) => parseAppCredentials(a.credentials)?.clientSecret ?? "");
+  const signer = await signedBy(body, req.headers.get("x-shopify-hmac-sha256"), secrets);
+  if (signer < 0) {
     return new Response("Unauthorized", { status: 401 });
   }
   if (!topic) return new Response("OK (topic not handled)", { status: 200 });
@@ -146,7 +154,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const outcome = await handle(topic, shop, apps[0].program_id, payload);
+    const outcome = await handle(topic, shop, apps[signer], payload);
     await rpc("loyalty_webhook_finish", { p_shop: shop, p_webhook_id: webhookId, p_outcome: outcome, p_error: null });
     return new Response("OK", { status: 200 });
   } catch (e) {

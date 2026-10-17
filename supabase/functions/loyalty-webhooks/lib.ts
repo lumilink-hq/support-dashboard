@@ -14,6 +14,7 @@ export const TOPICS = [
   "customers/data_request",
   "customers/redact",
   "shop/redact",
+  "app/uninstalled",
 ] as const;
 export type Topic = (typeof TOPICS)[number];
 
@@ -39,13 +40,19 @@ function constantTimeEqual(a: string, b: string): boolean {
 
 /** True when the header is Shopify's signature of the body under any of the secrets. */
 export async function verifyWebhook(body: Uint8Array<ArrayBuffer>, header: string | null, secrets: string[]): Promise<boolean> {
+  return (await signedBy(body, header, secrets)) >= 0;
+}
+
+/** Index of the secret that signed the body, or -1. Checks every secret (no early exit). */
+export async function signedBy(body: Uint8Array<ArrayBuffer>, header: string | null, secrets: string[]): Promise<number> {
   const given = (header ?? "").trim();
-  if (!/^[A-Za-z0-9+/]{43}=$/.test(given)) return false;
-  let ok = false;
-  for (const s of secrets) {
-    if (s && constantTimeEqual(await hmacBase64(s, body), given)) ok = true;
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(given)) return -1;
+  let found = -1;
+  for (let i = 0; i < secrets.length; i++) {
+    const s = secrets[i];
+    if (s && constantTimeEqual(await hmacBase64(s, body), given) && found < 0) found = i;
   }
-  return ok;
+  return found;
 }
 
 /** "12.3" -> 1230, "12.345" -> 1235 (half up), exact: no floating point. Null if not a decimal. */

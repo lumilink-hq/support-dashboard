@@ -17,6 +17,7 @@ import {
   parseOrder,
   parseRedactCustomerId,
   parseRefund,
+  signedBy,
   verifyWebhook,
 } from "../supabase/functions/loyalty-webhooks/lib.ts";
 
@@ -49,6 +50,12 @@ async function main() {
   eq("verify: hex digest is not accepted", await verifyWebhook(body, "a".repeat(64), ["s3cret"]), false);
   const tampered = new TextEncoder().encode('{"id":2,"note":"héllo"}');
   eq("verify: tampered body", await verifyWebhook(tampered, want, ["s3cret"]), false);
+  // signedBy: which app's secret signed it (app/uninstalled needs the app, 0222).
+  eq("signedBy: second of three", await signedBy(body, want, ["a", "s3cret", "b"]), 1);
+  eq("signedBy: empty secret skipped", await signedBy(body, want, ["", "s3cret"]), 1);
+  eq("signedBy: none", await signedBy(body, want, ["a", "b"]), -1);
+  eq("signedBy: bad header", await signedBy(body, "nope", ["s3cret"]), -1);
+  eq("topic: app/uninstalled", asTopic("app/uninstalled"), "app/uninstalled");
 
   eq("topic: known", asTopic("Orders/Paid"), "orders/paid");
   eq("topic: unknown", asTopic("products/update"), null);

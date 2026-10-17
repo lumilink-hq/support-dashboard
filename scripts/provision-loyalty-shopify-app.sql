@@ -2,6 +2,19 @@
 -- provision-loyalty-shopify-app.sql — operator runbook: connect a store to
 -- LL Loyalty (0201). Once per store, after scripts/setup-loyalty-program.sql.
 --
+-- SELF-SERVE APP (0222, Phase 2): for a new paying store, skip the setup
+-- script and steps 2-4. Put the new app's credentials in Vault (step 1, name
+-- 'll-loyalty-app:<app handle>'), then register the APP, not the store:
+--   insert into loyalty_apps (app_client_id, label, distribution, self_serve, app_secret_ref, scopes)
+--   values ('<client id>', 'LL Loyalty for <store>', 'custom', true, 'll-loyalty-app:<app handle>',
+--           'read_orders,write_orders,read_all_orders,read_customers,write_customers,write_discounts,read_products,write_app_proxy');
+-- The install creates the workspace and program (generic defaults), stores
+-- the token and starts the backfill. Then link the program to an existing
+-- LumiLink workspace if the merchant already has one, adjust the program in
+-- /loyalty/program, and continue from step 6. Check:
+--   select p.name, p.timezone, p.created_via, b.status from loyalty_programs p
+--     left join loyalty_backfills b on b.program_id = p.id where p.shop_domain = '<store>.myshopify.com';
+--
 -- This is a TEMPLATE: replace every <placeholder>. Never paste a real secret
 -- into chat, a ticket, or a committed file.
 --
