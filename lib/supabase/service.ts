@@ -7,7 +7,10 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
  * (a validated edit to an SEO draft, 0074; see that file for why) and
  * lib/services/team-invites.ts (auth-admin calls for /team, 0082, each made
  * only after an admin-scoped RPC has passed) and lib/services/google-token.ts
- * (the Google access token, read only after a role check, 0088). Per app/onboarding/actions.ts:
+ * (the Google access token, read only after a role check, 0088) and
+ * lib/services/loyalty-embedded.ts (LL Loyalty inside Shopify admin, 0225: no
+ * LumiLink session exists there, so it runs only after the Shopify session
+ * token verifies, and the loyalty RPCs scope it to that shop). Per app/onboarding/actions.ts:
  * "a wizard that could write as service_role is a wizard one bug away from
  * writing to somebody else's row." Every other Server Component/Action/Route
  * Handler in this app uses lib/supabase/server.ts instead, which runs under

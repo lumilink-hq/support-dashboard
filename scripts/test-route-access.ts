@@ -56,6 +56,10 @@ ok(
   isPublicPath("/api/billing/checkout"),
 );
 
+ok("/embedded (LL Loyalty in Shopify admin: token checked by its API)", isPublicPath("/embedded"));
+ok("/embedded/app.js", isPublicPath("/embedded/app.js"));
+ok("/loyalty stays private", !isPublicPath("/loyalty"));
+
 ok("/sitemap.xml", isPublicPath("/sitemap.xml"));
 ok("/robots.txt", isPublicPath("/robots.txt"));
 ok("/blog (index)", isPublicPath("/blog"));

@@ -45,6 +45,11 @@ export const PUBLIC_PREFIXES = [
   "/lp",
   // The blog: /blog and /blog/<slug> (lib/blog.ts). Indexable.
   "/blog",
+  // LL Loyalty embedded admin (0225): /embedded (the shell) and
+  // /embedded/app.js, loaded inside Shopify admin where there is no LumiLink
+  // session. Its only data path is /api/loyalty/embedded, which verifies the
+  // Shopify session token itself. The shell holds no data.
+  "/embedded",
   // API Route Handlers, not pages — a session-cookie redirect to /login makes
   // no sense for a fetch() caller (it'd try to parse an HTML login page as
   // JSON) and is actively wrong for /api/webhooks/stripe, which Stripe calls
